@@ -10,3 +10,7 @@ curriculum development.
 
 If you're trying to put together a new build environment, start with the
 README in `bdc`.
+
+This software is copyright © 2017 Databricks, Inc., and is released under
+the [Apache License, version 2.0](https://www.apache.org/licenses/). See
+`LICENSE.txt` for details.

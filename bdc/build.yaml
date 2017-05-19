@@ -1,0 +1,256 @@
+# Template for bdc build YAML file.
+#
+# NOTE: This file contains only the configuration information for a particular
+# class. bdc uses a separate configuration file to define the build environment
+# for ALL courseware builds.
+
+# course_info: Basic information about the course being built.
+#
+# FIELDS:
+#
+# name            - the name of the course (e.g., Spark-Programming). Should
+#                   not have any white space in the name, as the name will be
+#                   used to construct file names. REQUIRED.
+# version         - semantic version number of the course (e.g., 1.0.1). See
+#                   semver.org for a discussion of semantic versioning.
+#                   REQUIRED.
+# class_setup     - path to the (PDF) class setup instructions (for site
+#                   managers of a given training site) on how to prepare the
+#                   classroom environment. For Databricks and New Circle
+#                   classes, a survey exists for this purpose. However, for
+#                   partners, this document summarizes the minimum needs.
+#                   The path is relative to the directory containing this build
+#                   file. This file will be copied to the top of the destination
+#                   directory. OPTIONAL.
+# schedule        - path to a document (PDF, spreadsheet) that describes the
+#                   recommended teaching schedule for the class. The path
+#                   is relative to the directory containing this build file.
+#                   This file will be copied to "InstructorFiles/<schedule>"
+#                   in the destination directory. OPTIONAL.
+# prep            - path to a Markdown document that outlines any instructor
+#                   preparation that must be done before teaching the class.
+#                   This file is copied to "InstructorFiles/Preparation.md" in
+#                   the destination directory, and it is converted to HTML and
+#                   copied to "InstructorFiles/Preparation.html". OPTIONAL.
+# deprecated      - If present and true, this field marks the course as
+#                   deprecated (i.e., no longer used). Attempts to build the
+#                   course will fail.
+course_info:
+  name: coursename
+  version: version
+  deprecated: false
+
+# Markdown configuration
+#
+# html_stylesheet - path to an HTML stylesheet to include, inline, in any HTML
+#                   generated from Markdown. OPTIONAL.
+markdown:
+  #html_stylesheet:
+
+# src_base: Location of the base directory for the source curriculum
+# material, relative to the location of THIS FILE. This will almost always
+# be "../../modules". REQUIRED.
+src_base: ../../modules
+
+# misc_files: Files that should be copied to the course directory. Paths
+# are relative to THIS FILE (not to <src_base>). These files are copied to
+# the destination directory and, if Markdown, also converted to HTML.
+#
+# FIELDS:
+#
+# src   - source path to the file to be copied, relative to the directory
+#         containing this build file
+# dest  - destination path, relative to the top course directory
+# SUBSTITIONS:
+#
+# In the <dest> value, the following substitution tokens are permitted:
+#
+# ${basename}  - the base file name of the source, WITHOUT the extension
+# ${filename}  - the base file name of the source, WITH the extension
+# ${extension} - the file extension
+misc_files:
+  -
+    src: ClassSetup.pdf
+    dest: $filename
+  -
+    src: InstructorFiles/Schedule.pdf
+    dest: InstructorFiles/$filename
+  -
+    src: InstructorFiles/Preparation.md
+    dest: InstructorFiles/$filename
+
+
+# notebooks: The notebooks to be included in the courseware. These notebooks
+# will be parsed and stored in a DBC file. In addition, any files within
+# the notebook directories that start with "Instructor-Notes" will be copied,
+# as well.
+#
+# WARNING: The notebooks should be encoded in ASCII or UTF-8. Other encodings
+# (e.g., ISO-8859.1) will cause the build to abort.
+#
+# FIELDS:
+#
+# src        - path to the notebook, relative to <src_base>. REQUIRED.
+#
+# dest       - the destination path within the DBC file and within the
+#              StudentFiles/Labs directory.
+#
+#              For a non-master notebook, this destination is the path to the
+#              notebook's destination (relative to StudentFiles/Labs) and must
+#              be a file.
+#
+#              For a master notebook, this value must be a directory and
+#              specifies the base directory for the output notebooks (relative
+#              to the top of the DBC file and StudentFiles/Labs). Individual
+#              language notebook destinations can be further controlled within
+#              the "master" section. (Note that answer notebooks, if enabled,
+#              are always moved to InstructorFiles/Answer-Labs and placed in
+#              the instructor's DBC file, not the students' DBC file.)
+#
+#              REQUIRED.
+#
+# master     - If this section is present, it marks the notebook as a master
+#              notebook to be processed by the master parse tool, and it
+#              contain master parse parameters. If this section is missing,
+#              then the notebook is not preprocessed; it's simply copied.
+#              the master parse tool; false otherwise. OPTIONAL.
+#
+#              The following parameters are supported.
+#
+#   enabled      - true to enable master processing, false to disable.
+#                  Default: false.
+#
+#                  The easiest way to enable master processing with all the
+#                  defaults is:
+#
+#                  master:
+#                    enabled: true
+#
+#   scala        - true to generate a Scala notebook. True by default.
+#   scala_path   - path for the Scala notebook should go, relative to <dest>.
+#                  Default: <dest>/Scala/$basename.scala
+#                  Substitutions apply (see below).
+#   python       - true to generate a Python notebook. True by default.
+#   python_path  - path for the Python notebook should go, relative to <dest>.
+#                  Default: <dest>/Python/$basename.py
+#                  Substitutions apply (see below).
+#   r            - true to generate an R notebook. False by default.
+#   r_path       - path for the R notebook should go, relative to <dest>.
+#                  Default: <dest>/R/$basename.r
+#                  Substitutions apply (see below).
+#   sql          - true to generate an SQL notebook. False by default.
+#   sql_path     - path for the SQL notebook should go, relative to <dest>.
+#                  Default: <dest>/SQL/$basename.sql
+#                  Substitutions apply (see below).
+#   answers      - true to generate answer (i.e., instructor) notebooks. True
+#                  by default. Any answer notebooks are copied into the
+#                  instructor subfolder.
+#   student      - true to generate student notebooks. True by by default.
+#   encoding_in  - the encoding to use when reading the master notebook.
+#                  Defaults to UTF-8
+#   encoding_out - the encoding to use when writing the output notebooks.
+#                  Defaults to UTF-8
+#
+# run_test   - Whether or not to test the dataset by running it in a cluster
+#              within a shard. The shard and cluster configuration are specified
+#              in the build tool's master configuration, which is separate
+#              from this courseware build manifest. OPTIONAL. Defaults to false.
+#              (NOTE: NOT YET SUPPORTED.)
+#
+# SUBSTITUTIONS:
+#
+# In the <dest> value, the following substitution tokens are permitted:
+#
+# ${basename}  - the base file name of the source, WITHOUT the extension
+# ${filename}  - the base file name of the source, WITH the extension
+# ${extension} - the file extension
+# ${lang}      - substitute the notebook language (Scala, R, etc.)
+notebooks:
+  -
+    src: Overview-History/Introductions.py
+    dest: Overview-History
+    master:
+      enabled: true
+      r: false
+      scala: true
+      sql: true
+      python: true
+      answers: true
+      student: true
+  -
+    src: Overview-History/Welcome.py
+    dest: Python/01-${basename} ($lang).py
+    run_test: true
+  -
+    src: RDD-Fundamentals/lab01-Washington-Crime/Python/Lab.py
+    dest: Python/RDD-Fundamentals/01-${basename} ($lang).py
+    run_test: true
+  -
+    src: RDD-Fundamentals/lab01-Washington-Crime/Python/Solutions.py
+    dest: Python/RDD-Fundamentals/01-${basename} ($lang).py
+    run_test: true
+  -
+    src: RDD-Fundamentals/lab01-Washington-Crime/Scala/Lab.scala
+    dest: Scala/RDD-Fundamentals/01-${basename} ($lang).scala
+    run_test: true
+  -
+    src: RDD-Fundamentals/lab01-Washington-Crime/Scala/Solutions.scala
+    dest: Scala/RDD-Fundamentals/01-${basename} ($lang).scala
+    run_test: true
+
+# slides: PowerPoint slides to be included in the courseware. The slides are
+#         copied to the destination directory's "InstructorFiles" subdirectory.
+#
+# The format is similar to the <notebooks> section.
+#
+# FIELDS:
+#
+# src  - path to the slide deck, relative to <src_base>
+# dest - the destination path within the "InstructorFiles" target directory
+#
+# SUBSTITUTIONS:
+#
+# In the <dest> value, the following substitution tokens are permitted:
+#
+# ${basename}  - the base file name of the source, WITHOUT the extension
+# ${filename}  - the base file name of the source, WITH the extension
+# ${extension} - the file extension
+#
+# This section may eventually be deprecated or removed, as we move toward 100%
+# notebook-driven courseware.
+slides:
+  -
+    src: Overview-History/Welcome-Overview.pptx
+    dest: 01-${filename}
+  -
+    src: RDD-Fundamentals/RDD-Fundamentals.pptx
+    dest: 02-${filename}
+
+# datasets: Datasets to be included in the courseware. The files are copied
+#           to the destination directory's "StudentFiles" subdirectory, in
+#           a special subdirectory called "datasets". Each dataset will end
+#           up in its own subdirectory below "datasets".
+#
+# FIELDS:
+#
+# src     - Path to the data set file, relative to this file. If the data set
+#           comprises multiple files (e.g., a Parquet file, which is really a
+#           directory), it should be zipped into one file. REQUIRED.
+# dest    - Name of the target subdirectory within the "StudentFiles/datasets"
+#           directory. REQUIRED.'
+#
+# Each dataset MUST have:
+#
+# - a README.md file associated with it, describing the datset
+# - a LICENSE.md file associated with it, describing the dataset's provenance
+#   and licensing.
+#
+# These files must live in the same directory as the dataset and will be copied,
+# in both original Markdown and HTML formats, to the destination directory.
+datasets:
+  -
+    src: ../../datasets/tom-sawyer/tom-sawyer.txt
+    dest: datasets/tom-sawyer
+  -
+    src: ../../datasets/bigrams/bigrams.zip
+    dest: datasets/bigrams

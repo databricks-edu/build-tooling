@@ -8,7 +8,7 @@ import sys
 # Can't just import bdc, because dependencies have to be satisfied
 # first. So, we'll "grep" for the VERSION.
 
-source = "bdc/__init__.py"
+source = "bdc/bdc.py"
 
 version = None
 version_re = re.compile(r'''^\s*VERSION\s*=\s*['"]?([\d.]+)["']?.*$''')

@@ -12,5 +12,6 @@ Version 1.3.0:
       reformatted `INSTRUCTOR_NOTE` cells.
     - The _answers_ notebook is almost identical to the _instructor_ notebook,
       except that it does not contain `INSTRUCTOR_NOTE` cells.
-* Added deprecation warnings for `PRIVATE_TEST` and `INLINE` labels.
+* Added deprecation warnings for `PRIVATE_TEST`, `INLINE` and 
+  `IPYTHON_ONLY` labels.
 * Added change log.

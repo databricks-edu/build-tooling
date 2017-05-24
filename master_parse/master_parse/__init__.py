@@ -21,19 +21,55 @@ import os
 import os.path
 import re
 import codecs
-from enum import Enum
+from enum import Enum, auto
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 
-CommandLabel = Enum('CommandLabel',
-                    'IPYTHON_ONLY PYTHON_ONLY SCALA_ONLY ' +
-                    'R_ONLY SQL_ONLY ANSWER TODO TEST PRIVATE_TEST ' +
-                    'DATABRICKS_ONLY INLINE ALL_NOTEBOOKS INSTRUCTOR_NOTES')
-CommandCode = Enum('CommandCode',
-                   'SCALA PYTHON R SQL MARKDOWN FILESYSTEM SHELL RUN FS SH')
-NotebookKind = Enum('NotebookKind', 'DATABRICKS IPYTHON')
-NotebookUser = Enum('NotebookUser', 'INSTRUCTOR STUDENT')
-NewlineAfterCode = {CommandCode.SCALA, CommandCode.R, CommandCode.PYTHON}
+# Enums. (Implemented as classes, rather than using the Enum functional
+# API, for ease of modification.)
+class CommandLabel(Enum):
+    IPYTHON_ONLY      = 'IPYTHON_ONLY'
+    PYTHON_ONLY       = 'PYTHON_ONLY'
+    SCALA_ONLY        = 'SCALA_ONLY'
+    R_ONLY            = 'R_ONLY'
+    SQL_ONLY          = 'SQL_ONLY'
+    ANSWER            = 'ANSWER'
+    TODO              = 'TODO'
+    TEST              = 'TEST'
+    PRIVATE_TEST      = 'PRIVATE_TEST'
+    DATABRICKS_ONLY   = 'DATABRICKS_ONLY'
+    INLINE            = 'INLINE'
+    ALL_NOTEBOOKS     = 'ALL_NOTEBOOKS'
+    INSTRUCTOR_NOTE  = 'INSTRUCTOR_NOTE'
+
+class CommandCode(Enum):
+    SCALA      = auto()
+    PYTHON     = auto()
+    R          = auto()
+    SQL        = auto()
+    MARKDOWN   = auto()
+    FILESYSTEM = auto()
+    SHELL      = auto()
+    RUN        = auto()
+    FS         = auto()
+    SH         = auto()
+
+class NotebookKind(Enum):
+    DATABRICKS = auto()
+    IPYTHON    = auto()
+
+class NotebookUser(Enum):
+    INSTRUCTOR = auto()
+    EXERCISES  = auto()
+    ANSWERS    = auto()
+
+DEPRECATED_LABELS = {
+    CommandLabel.INLINE,
+    CommandLabel.PRIVATE_TEST,
+    CommandLabel.IPYTHON_ONLY
+}
+
+NEWLINE_AFTER_CODE = {CommandCode.SCALA, CommandCode.R, CommandCode.PYTHON}
 
 from collections import namedtuple
 Command = namedtuple('Command', ['part', 'code', 'labels', 'content'])
@@ -54,26 +90,32 @@ class NotebookGenerator(object):
         CommandCode.SH: {CommandLabel.ALL_NOTEBOOKS},
         NotebookKind.DATABRICKS: {CommandLabel.DATABRICKS_ONLY},
         NotebookKind.IPYTHON: {CommandLabel.IPYTHON_ONLY},
+        NotebookUser.ANSWERS: {CommandLabel.ANSWER,
+                              CommandLabel.PRIVATE_TEST},
         NotebookUser.INSTRUCTOR: {CommandLabel.ANSWER,
-                                  CommandLabel.INSTRUCTOR_NOTES,
+                                  CommandLabel.INSTRUCTOR_NOTE,
                                   CommandLabel.PRIVATE_TEST},
-        NotebookUser.STUDENT: {CommandLabel.TODO},
+        NotebookUser.EXERCISES: {CommandLabel.TODO},
     }
 
     user_to_extension = {
-        NotebookUser.INSTRUCTOR: '_answers',
-        NotebookUser.STUDENT: '_student'
+        NotebookUser.INSTRUCTOR: '_instructor',
+        NotebookUser.EXERCISES: '_exercises',
+        NotebookUser.ANSWERS: '_answers'
     }
 
     def __init__(self, notebook_kind, notebook_user, notebook_code):
         base_keep = set(CommandLabel.__members__.values())
+        print("*** NotebookGenerator: notebook_user={0}, notebook_code={1}".format(notebook_user, notebook_code))
         self.keep_labels = self._get_labels(notebook_kind,
                                             notebook_user,
                                             notebook_code)
+        print("*** keep_labels={0}".format(self.keep_labels))
         # discard labels not explicitly kept
         self.discard_labels = base_keep - self.keep_labels
+        print("*** discard_labels={0}".format(self.discard_labels))
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
-                       _all_notebooks, _instructor_notes]
+                       _all_notebooks, _INSTRUCTOR_NOTE]
         self.replace = [(_ipythonReplaceRemoveLine, ''),
                         _rename_public_test,
                         _rename_import_public_test]
@@ -86,7 +128,8 @@ class NotebookGenerator(object):
     def _get_labels(self, *params):
         labels = {CommandLabel.TEST, CommandLabel.INLINE}
         for param in params:
-            labels.update(NotebookGenerator.param_to_label[param])
+            label = NotebookGenerator.param_to_label[param]
+            labels.update(label)
         return labels
 
     def _get_extension(self):
@@ -96,11 +139,14 @@ class NotebookGenerator(object):
     def generate(self, header, commands, input_name, parts=True,
                  creative_commons=False):
         is_IPython = self.notebook_kind == NotebookKind.IPYTHON
+        is_instructor_nb = self.notebook_user == NotebookUser.INSTRUCTOR
 
         command_cell = _command_cell.format(self.base_comment)
 
         max_part = max([part for (part, _, _, _) in commands]) if parts else 0
-        if max_part == 0 or is_IPython:
+
+        # Don't generate parts for IPython notebooks or instructor notebooks.
+        if max_part == 0 or is_IPython or is_instructor_nb:
             parts = False
 
         # generate full notebook when generating parts
@@ -108,8 +154,7 @@ class NotebookGenerator(object):
             self.generate(header, commands, input_name, False,
                           creative_commons=creative_commons)
 
-        base_file = os.path.splitext(os.path.basename(input_name))[0]
-
+        base_file, _ = os.path.splitext(os.path.basename(input_name))
         for i in range(max_part + 1): # parts are zero indexed
 
             part_base = '_part{0}'
@@ -148,32 +193,35 @@ class NotebookGenerator(object):
                 output.write(header_adj + '\n')
 
                 added_run = False
-                for (part, code, labels, content) in commands:
+                for (cell_num, (part, code, labels, content)) in enumerate(commands):
+                    cell_num += 1 # 1-based, for error reporting
+
                     if parts:
                         if part > i:  # don't show later parts
                             break
                         elif part == i - 1 and not added_run:
                             # add %run command before new part
-                            student = NotebookGenerator.user_to_extension[
-                                NotebookUser.STUDENT
+                            exercises = NotebookGenerator.user_to_extension[
+                                NotebookUser.EXERCISES
                             ]
-                            instr = NotebookGenerator.user_to_extension[
-                                NotebookUser.INSTRUCTOR
+                            answers = NotebookGenerator.user_to_extension[
+                                NotebookUser.ANSWERS
                             ]
-                            solution_file = file_out.replace(student, instr)
 
-                            solution_file = os.path.splitext(solution_file)[0]
-                            solution_file = solution_file.replace(
+                            remove_ext = lambda path: os.path.splitext(path)[0]
+
+                            # Convert the exercises file name into an answer
+                            # file name.
+                            answers_file = remove_ext(
+                                file_out.replace(exercises, answers)
+                            ).replace(
                                 part_string, part_base.format(i)
                             )
-                            # Now that Databricks supports relative run paths,
-                            # this is no longer necessary.
-                            #db_location = ('/Users/admin@databricks.com/Labs/' +
-                            #               solution_file.replace('\\', '/'))
-                            # db_location = db_location.replace('build_mp/', '')
-                            db_location = os.path.basename(solution_file.replace('\\', '/'))
+
+                            # Databricks now supports relative %run paths.
+
                             runCommand = '{0} MAGIC %run {1}'.format(
-                                self.base_comment, db_location
+                                self.base_comment, os.path.basename(answers_file)
                             )
                             is_first = self._write_command(
                                 output, command_cell, [runCommand, ''], is_first
@@ -183,13 +231,18 @@ class NotebookGenerator(object):
                         elif part < i:  # earlier parts will be chained in %run
                             continue
 
-                    if (CommandLabel.INSTRUCTOR_NOTES in labels):
+                    if (CommandLabel.INSTRUCTOR_NOTE in labels):
                         # Special processing.
                         if code != CommandCode.MARKDOWN:
                             raise Exception(
-                                'INSTRUCTOR_NOTES can only appear in Markdown cells.'
+                                '{0} can only appear in Markdown cells.'.format(
+                                    CommandLabel.INSTRUCTOR_NOTE.value
+                                )
                             )
-                        content = ['<h2 style="color:red">Instructor Note</h2>'] + content
+                        content = (
+                            ['<h2 style="color:red">Instructor Note</h2>'] +
+                            content
+                        )
 
                     inline = CommandLabel.INLINE in labels
                     all_notebooks = CommandLabel.ALL_NOTEBOOKS in labels
@@ -280,7 +333,7 @@ class NotebookGenerator(object):
             if self.notebook_kind == NotebookKind.DATABRICKS:
                 # add % command (e.g. %md)
                 s = Parser.code_to_magic[code]
-                if not code in NewlineAfterCode:
+                if not code in NEWLINE_AFTER_CODE:
                     # Suppress the newline after the magic, and add the content
                     # here.
                     content = modified_content[skip_one]
@@ -375,19 +428,19 @@ def make_magic(regex_text):
 _databricks = make_re(r'Databricks')
 _command = make_re(r'COMMAND')
 
-_answer = or_magic(r'ANSWER')
-_private_test = or_magic(r'PRIVATE_TEST')
-_todo = or_magic(r'TODO')
-_dbc_only = or_magic(r'DATABRICKS_ONLY')
-_ipython_only = or_magic(r'IPYTHON_ONLY')
-_python_only = or_magic(r'PYTHON_ONLY')
-_scala_only = or_magic(r'SCALA_ONLY')
-_sql_only = or_magic(r'SQL_ONLY')
-_r_only = or_magic(r'R_ONLY')
+_answer = or_magic(CommandLabel.ANSWER.value)
+_private_test = or_magic(CommandLabel.PRIVATE_TEST.value)
+_todo = or_magic(CommandLabel.TODO.value)
+_dbc_only = or_magic(CommandLabel.DATABRICKS_ONLY.value)
+_ipython_only = or_magic(CommandLabel.IPYTHON_ONLY.value)
+_python_only = or_magic(CommandLabel.PYTHON_ONLY.value)
+_scala_only = or_magic(CommandLabel.SCALA_ONLY.value)
+_sql_only = or_magic(CommandLabel.SQL_ONLY.value)
+_r_only = or_magic(CommandLabel.R_ONLY.value)
 _new_part = or_magic(r'NEW_PART')
-_inline = or_magic(r'INLINE')
-_all_notebooks = or_magic(r'ALL_NOTEBOOKS')
-_instructor_notes = or_magic(r'INSTRUCTOR_NOTES')
+_inline = or_magic(CommandLabel.INLINE.value)
+_all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
+_INSTRUCTOR_NOTE = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
 
 _ipython_remove_line = re.compile(
     r'.*{0}\s*REMOVE\s*LINE\s*IPYTHON\s*$'.format(_comment)
@@ -545,7 +598,7 @@ class Parser:
                         (_python_only, CommandLabel.PYTHON_ONLY),
                         (_r_only, CommandLabel.R_ONLY),
                         (_all_notebooks, CommandLabel.ALL_NOTEBOOKS),
-                        (_instructor_notes, CommandLabel.INSTRUCTOR_NOTES),
+                        (_INSTRUCTOR_NOTE, CommandLabel.INSTRUCTOR_NOTE),
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
                         (_sql_only, CommandLabel.SQL_ONLY)]
@@ -665,6 +718,11 @@ class Parser:
 
             for pat, label in Parser.pattern_to_label:
                 if pat.match(line):
+                    if label in DEPRECATED_LABELS:
+                        print(
+                            '*** "{0}", line {1}: WARNING: "{2}" is deprecated.'
+                                .format(file_name, i + 1, label.value)
+                        )
                     self.command_labels.add(label)
 
             for pat, code in Parser.pattern_to_code:
@@ -706,7 +764,8 @@ def process_notebooks(path,
                       r=False,
                       sql=False,
                       instructor=False,
-                      student=False,
+                      answers=False,
+                      exercises=False,
                       creative_commons=False,
                       encoding_in=DEFAULT_ENCODING_IN,
                       encoding_out=DEFAULT_ENCODING_OUT):
@@ -730,10 +789,11 @@ def process_notebooks(path,
                                R content
     :param sql:                True to produce SQL notebooks, False to skip
                                all SQL content
-    :param instructor:         True to produce instructor (answer) notebooks,
-                               False otherwise
-    :param student:            True to produce student notebooks, False
+    :param instructor:         True to produce instructor notebooks, False
                                otherwise
+    :param exercises:          True to produce exercises notebooks, False
+                               otherwise
+    :param answers:            True to produce answer notebooks, False otherwise
     :param creative_commons:   True to add Creative Commons license cells,
                                False otherwise
     :param encoding_in:        Input encoding for the notebook. Defaults to
@@ -751,8 +811,8 @@ def process_notebooks(path,
         raise UsageError("Specify at least one of databricks or ipython")
     if not (scala or python or r or sql):
         raise UsageError("Specify at least one of Scala, Python, R or SQL")
-    if not (instructor or student):
-        raise UsageError("Specify at least one of instructor or student")
+    if not (instructor or answers or exercises):
+        raise UsageError("Specify at least one of: instructor, answers, exercises")
 
     if os.path.isdir(path):
         files = []
@@ -773,8 +833,10 @@ def process_notebooks(path,
     notebook_users = []
     if instructor:
         notebook_users.append(NotebookUser.INSTRUCTOR)
-    if student:
-        notebook_users.append(NotebookUser.STUDENT)
+    if exercises:
+        notebook_users.append(NotebookUser.EXERCISES)
+    if answers:
+        notebook_users.append(NotebookUser.ANSWERS)
 
     notebook_languages = []
     if scala:
@@ -845,8 +907,11 @@ def main():
     userGroup.add_argument('-in', '--instructor',
                            help='generate instructor notebook(s)',
                            action='store_true')
-    userGroup.add_argument('-st', '--student',
-                           help='generate student notebook(s)',
+    userGroup.add_argument('-ex', '--exercises',
+                           help='generate exercises notebook(s)',
+                           action='store_true')
+    userGroup.add_argument('-an', '--answers',
+                           help='generate answers notebook(s)',
                            action='store_true')
     arg_parser.add_argument('-cc', '--creativecommons',
                             help='add by-nc-nd cc 4.0 license',
@@ -891,7 +956,8 @@ def main():
                           r=args.rproject,
                           sql=args.sql,
                           instructor=args.instructor,
-                          student=args.student,
+                          answers=args.answers,
+                          exercises=args.exercises,
                           creative_commons=args.creativecommons,
                           encoding_in=args.encoding_in,
                           encoding_out=args.encoding_out)

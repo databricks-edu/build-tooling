@@ -43,8 +43,18 @@ More than one option may be specified.
 ### Target audience group
 
 * `-in` or `--instructor`: Generate instructor notebooks (notebooks ending
-  with `_answers`)
-* `-st` or `--student`: Generate student notebooks (notebooks with `_student`)
+  with `_instructor`). Instructor notebooks contain all instructor note cells
+  and all answer cells. Exercise cells (those marked `TODO`) are omitted.
+
+* `-an` or `--answers`: Generate answer notebooks (notebooks ending
+  with `_answers`). Answer notebooks contain all answer cells. Exercise cells 
+  (those marked `TODO`) are omitted, as are instructor note cells. Thus, an
+  answer notebook is the same as the corresponding notebook _minus_ the 
+  instructor notes.
+
+* `-ex` or `--exercises`: Generate exercise notebooks (notebooks with 
+  `_exercises`). These notebooks are the primary student notebooks. They omit
+  answer cells and instructor notes and contain all cells marked `TODO`.
 
 More than one option may be specified.
 
@@ -163,6 +173,9 @@ The valid labels are:
 
 **IPYTHON\_ONLY**
 
+**This cell type is _deprecated_ and will be removed in a future release of
+this tool. Use of it will generate warnings.**
+
 Cells which need to be in IPython (or Jupyter) notebooks only.
 If IPython notebooks aren't being generated, these cells are stripped out.
 
@@ -180,18 +193,22 @@ one marked PYTHON_ONLY and the other marked SCALA_ONLY.
 
 **TODO**
 
-Cells show up only in student notebooks. These cells are usually
+Cells show up only in exercise notebooks. These cells are usually
 exercises the user needs to complete.
 
 **ANSWER**
 
-Cells show up only in instructor/answer notebooks.
+Cells show up only in instructor and answer notebooks.
 
 **TEST**
 
-Cells show up in student and instructor/answer notebooks.
+These cells identify tests and usually follow an exercise cell. Test cells
+provide a means for a student to test the solution to an exercise. Cells show up in all notebooks.
 
 **PRIVATE\_TEST**
+
+**This cell type is _deprecated_ and will be removed in a future release of
+this tool. Use of it will generate warnings.**
 
 Cells show up in instructor/answer notebooks.
 
@@ -218,6 +235,9 @@ notebooks (instructor _and_ answers) as well in the generated Python notebooks
 (instructor _and_ answers).
 
 **INLINE**
+
+**This cell type is _deprecated_ and will be removed in a future release of
+this tool. Use of it will generate warnings.**
 
 Can be used for multilanguage notebooks to force another language
 to be inserted. The behavior is a little counterintuitive. Here's an example.

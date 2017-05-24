@@ -11,4 +11,5 @@ Version 1.4.0:
 * Fixed handling of destination directories.
 * Allow use of `${target_lang}` in master parse destination configuration
   (`dest` keyword).
+* Added `skip` keyword, allowing files to be "commented out" easily.
 * Added change log.

@@ -31,6 +31,8 @@ setup(
     install_requires=['docopt >= 0.6.2',
                       'future >= 0.15.2',
                       'markdown2 >= 2.3.1',
+                      'backports.tempfile >= 1.0rc1',
+                      'grizzled-python >= 1.1.0',
                       'PyYAML >= 3.11'],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

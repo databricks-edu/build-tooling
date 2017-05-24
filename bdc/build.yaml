@@ -59,9 +59,13 @@ src_base: ../../modules
 # FIELDS:
 #
 # src   - source path to the file to be copied, relative to the directory
-#         containing this build file
-# dest  - destination path, relative to the top course directory
-# SUBSTITIONS:
+#         containing this build file. REQUIRED.
+# dest  - destination path, relative to the top course directory. REQUIRED.
+# skip  - true to skip this entry, false to keep it. This field is a convenient
+#         alternative to commenting the entire entry out.
+#         OPTIONAL. Default: false
+#
+# SUBSTITUTIONS:
 #
 # In the <dest> value, the following substitution tokens are permitted:
 #
@@ -107,8 +111,20 @@ misc_files:
 #              are always moved to InstructorFiles/Answer-Labs and placed in
 #              the instructor's DBC file, not the students' DBC file.)
 #
+#              For master notebooks, ${target_lang} can be used to substitute
+#              post-parsed final (target) language into the path. If missing,
+#              ${target_lang} is inserted at the BEGINNING of the path. For
+#              instance:
+#
+#              dest: "overview/${target_lang}/nb-01"  # explicit
+#              dest: "overview/nb-01"  # same as "${target_lang}/overview/notebook-01"
+#
 #              REQUIRED.
 #
+# skip       - true to skip this entry, false to keep it. This field is a
+#              convenient alternative to commenting the entire entry out.
+#              OPTIONAL. Default: false
+
 # master     - If this section is present, it marks the notebook as a master
 #              notebook to be processed by the master parse tool, and it
 #              contain master parse parameters. If this section is missing,
@@ -116,6 +132,9 @@ misc_files:
 #              the master parse tool; false otherwise. OPTIONAL.
 #
 #              The following parameters are supported.
+#
+#              Note: When master parsing is enabled, instructor, exercises
+#              and answer notebooks are ALWAYS generated.
 #
 #   enabled      - true to enable master processing, false to disable.
 #                  Default: false.
@@ -126,26 +145,11 @@ misc_files:
 #                  master:
 #                    enabled: true
 #
+#   answers      - whether or not to generate answer notebooks. True by default.
 #   scala        - true to generate a Scala notebook. True by default.
-#   scala_path   - path for the Scala notebook should go, relative to <dest>.
-#                  Default: <dest>/Scala/$basename.scala
-#                  Substitutions apply (see below).
 #   python       - true to generate a Python notebook. True by default.
-#   python_path  - path for the Python notebook should go, relative to <dest>.
-#                  Default: <dest>/Python/$basename.py
-#                  Substitutions apply (see below).
 #   r            - true to generate an R notebook. False by default.
-#   r_path       - path for the R notebook should go, relative to <dest>.
-#                  Default: <dest>/R/$basename.r
-#                  Substitutions apply (see below).
 #   sql          - true to generate an SQL notebook. False by default.
-#   sql_path     - path for the SQL notebook should go, relative to <dest>.
-#                  Default: <dest>/SQL/$basename.sql
-#                  Substitutions apply (see below).
-#   answers      - true to generate answer (i.e., instructor) notebooks. True
-#                  by default. Any answer notebooks are copied into the
-#                  instructor subfolder.
-#   student      - true to generate student notebooks. True by by default.
 #   encoding_in  - the encoding to use when reading the master notebook.
 #                  Defaults to UTF-8
 #   encoding_out - the encoding to use when writing the output notebooks.
@@ -175,8 +179,6 @@ notebooks:
       scala: true
       sql: true
       python: true
-      answers: true
-      student: true
   -
     src: Overview-History/Welcome.py
     dest: Python/01-${basename} ($lang).py

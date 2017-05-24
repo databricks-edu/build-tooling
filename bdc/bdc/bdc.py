@@ -21,12 +21,18 @@ import markdown2
 import codecs
 import re
 import master_parse
+from grizzled.file import eglob
+
+# We're using backports.tempfile, instead of tempfile, so we can use
+# TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
+# was added in Python 3.2.
+from backports.tempfile import TemporaryDirectory
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -51,14 +57,15 @@ Options:
 """.format(PROG, VERSION, DEFAULT_BUILD_FILE))
 
 INSTRUCTOR_FILES_SUBDIR = "InstructorFiles" # instructor files subdir
-INSTRUCTOR_LABS_DIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Answer-Labs")
-INSTRUCTOR_LABS_DBC = path.join(INSTRUCTOR_FILES_SUBDIR, "Answer-Labs.dbc")
+INSTRUCTOR_LABS_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Instructor-Labs")
+INSTRUCTOR_LABS_DBC = path.join(INSTRUCTOR_FILES_SUBDIR, "Instructor-Labs.dbc")
 STUDENT_FILES_SUBDIR = "StudentFiles"    # student files subdir
-LABS_SUBDIR = path.join(STUDENT_FILES_SUBDIR, "Labs")
-LABS_DBC = path.join(STUDENT_FILES_SUBDIR, "Labs.dbc")
+STUDENT_LABS_SUBDIR = path.join(STUDENT_FILES_SUBDIR, "Labs")
+STUDENT_LABS_DBC = path.join(STUDENT_FILES_SUBDIR, "Labs.dbc")
 SLIDES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Slides")
 DATASETS_SUBDIR = path.join(STUDENT_FILES_SUBDIR, "Datasets")
 INSTRUCTOR_NOTES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "InstructorNotes")
+TARGET_LANG = 'target_lang'
 
 # EXT_LANG is used when parsing the YAML file.
 EXT_LANG = {'.py':    'Python',
@@ -126,18 +133,11 @@ h4 {
 # Always generate Databricks notebooks.
 MASTER_PARSE_DEFAULTS = {
     'enabled':      False,
-    'ipython':      False,
-    'ipython_path': 'ipython/$basename.ipynb',
     'python':       True,
-    'python_path':  'Python/$basename.py',
     'r':            False,
-    'r_path':       'R/$basename.r',
     'scala':        True,
-    'scala_path':   'Scala/$basename.scala',
     'sql':          False,
-    'sql_path':     'SQL/$basename.sql',
     'answers':      True,
-    'student':      True,
     'encoding_in':  'UTF-8',
     'encoding_out': 'UTF-8',
 }
@@ -150,6 +150,7 @@ ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
 
 html_template = Template(DEFAULT_HTML_TEMPLATE)
 be_verbose = False
+errors = 0
 
 # ---------------------------------------------------------------------------
 # Classes
@@ -264,13 +265,24 @@ def verbose(msg):
         print(msg)
 
 
+def error(msg):
+    """
+    Emit a message to standard error.
+
+    :param msg: the message
+    """
+    global errors
+    errors += 1
+    sys.stderr.write("***\n")
+    sys.stderr.write(msg + "\n")
+    sys.stderr.write("***\n")
+
+
 def die(msg, show_usage=False):
     """
     Emit a message to standard error, optionally write the usage, and exit.
     """
-    sys.stderr.write("***\n")
-    sys.stderr.write(msg + "\n")
-    sys.stderr.write("***\n")
+    error(msg)
     if show_usage:
         sys.stderr.write(USAGE)
     sys.stderr.write("\n*** ABORTED\n")
@@ -299,6 +311,10 @@ def load_build_yaml(yaml_file):
         else:
             raise ConfigError('Bad boolean value: "{0}"'.format(s))
 
+    def bool_field(d, key, default=False):
+        val = d.get(key, default)
+        return bool_value(val)
+
     def required(d, key, where):
         v = d.get(key)
         if v is None:
@@ -313,9 +329,12 @@ def load_build_yaml(yaml_file):
         base_with_ext = path.basename(src)
         (base_no_ext, ext) = path.splitext(base_with_ext)
         fields = {
-            'basename':  base_no_ext,
-            'extension': ext,
-            'filename':  base_with_ext
+            'basename':     base_no_ext,
+            'extension':    ext,
+            'filename':     base_with_ext,
+            # Note: ${target_lang} is substituted by process_master_notebook,
+            # so it has to be explicitly preserved here, if it exists.
+            TARGET_LANG:   '${' + TARGET_LANG + '}',
         }
         if allow_lang:
             fields['lang'] = EXT_LANG.get(ext, "???")
@@ -325,8 +344,19 @@ def load_build_yaml(yaml_file):
     def parse_notebook(obj):
         src = required(obj, 'src', 'notebooks section')
         dest = subst(required(obj, 'dest', 'notebooks section'), src)
+        if bool_field(obj, 'skip'):
+            verbose('Skipping notebook {0}'.format(src))
+            return None
+
         master = dict(MASTER_PARSE_DEFAULTS)
         master.update(obj.get('master', {}))
+        extra_keys = master.keys() - MASTER_PARSE_DEFAULTS.keys()
+        if len(extra_keys) > 0:
+            raise ConfigError(
+                ('Notebook {0}: Unknown fields in "master" section: {1}'.format(
+                    src, ', '.join(sorted(extra_keys))
+                ))
+            )
 
         _, dest_ext = os.path.splitext(dest)
         if master and master.get('enabled', False):
@@ -342,10 +372,15 @@ def load_build_yaml(yaml_file):
                     ('Notebook {0}: "master" is disabled, so "dest" should ' +
                      'have extension "{1}".').format(src, src_ext)
                 )
-
-        for k in ('scala_path', 'python_path', 'ipython_path',
-                  'r_path', 'sql_path'):
-            master[k] = subst(master[k], src)
+            # Check for the presence of ${target_lang} by substituting something
+            # that should never appear in a destination, then searching for it.
+            token = u'\u2122$$$$$$$$$$\u2122'
+            d = Template(dest).safe_substitute({TARGET_LANG: token})
+            if token in d:
+                raise ConfigError(
+                    ('Notebook {0}: ${1} found in "dest", but "master" is disabled'.
+                      format(src, TARGET_LANG))
+                )
 
         return NotebookData(
             src=src,
@@ -357,28 +392,48 @@ def load_build_yaml(yaml_file):
     def parse_slide(obj):
         src = required(obj, 'src', 'notebooks')
         dest = required(obj, 'dest', 'notebooks')
-        return SlideData(
-            src=src,
-            dest=subst(dest, src, allow_lang=False)
-        )
+        if bool_field(obj, 'skip'):
+            verbose('Skipping slide {0}'.format(src))
+            return None
+        else:
+            return SlideData(
+                src=src,
+                dest=subst(dest, src, allow_lang=False)
+            )
 
     def parse_misc_file(obj):
         src = required(obj, 'src', 'misc_files')
         dest = required(obj, 'dest', 'misc_files')
-        return MiscFileData(
-            src=src,
-            dest=subst(dest, src, allow_lang=False)
-        )
+        if bool_field(obj, 'skip'):
+            verbose('Skipping file {0}'.format(src))
+            return None
+        else:
+            return MiscFileData(
+                src=src,
+                dest=subst(dest, src, allow_lang=False)
+            )
 
     def parse_dataset(obj):
         src = required(obj, 'src', 'notebooks')
         dest = required(obj, 'dest', 'notebooks')
-        src_dir = path.dirname(src)
-        return DatasetData(
-            src=src,
-            dest=subst(dest, src, allow_lang=False),
-            license=path.join(src_dir, 'LICENSE.md'),
-            readme=path.join(src_dir, 'README.md')
+        if bool_field(obj, 'skip'):
+            verbose('Skipping data set {0}'.format(src))
+            return None
+        else:
+            src_dir = path.dirname(src)
+            return DatasetData(
+                src=src,
+                dest=subst(dest, src, allow_lang=False),
+                license=path.join(src_dir, 'LICENSE.md'),
+                readme=path.join(src_dir, 'README.md')
+            )
+
+    def parse_file_section(section, parse):
+        # Use the supplied parse function to parse each element in the
+        # supplied section, filtering out None results from the function.
+        # Convert the entire result to a tuple.
+        return tuple(
+            filter(lambda o: o != None, [parse(i) for i in section])
         )
 
     def parse_markdown(obj):
@@ -409,22 +464,22 @@ def load_build_yaml(yaml_file):
     deprecated = contents.get('deprecated', '')
 
     if slides_cfg:
-        slides = tuple([parse_slide(i) for i in slides_cfg])
+        slides = parse_file_section(slides_cfg, parse_slide)
     else:
         slides = None
 
     if datasets_cfg:
-        datasets = tuple([parse_dataset(i) for i in datasets_cfg])
+        datasets = parse_file_section(datasets_cfg, parse_dataset)
     else:
         datasets = None
 
     if misc_files_cfg:
-        misc_files = tuple([parse_misc_file(i) for i in misc_files_cfg])
+        misc_files = parse_file_section(misc_files_cfg, parse_misc_file)
     else:
         misc_files = None
 
     if notebooks_cfg:
-        notebooks = tuple([parse_notebook(i) for i in notebooks_cfg])
+        notebooks = parse_file_section(notebooks_cfg, parse_notebook)
     else:
         notebooks = None
 
@@ -580,7 +635,7 @@ def copy_info_file(src_file, target_file, build):
         markdown_to_html(src_file, html_out, build.markdown.html_stylesheet)
 
 
-def process_master_notebook(dest_root, notebook, src_path, dest_path):
+def process_master_notebook(dest_root, notebook, src_path):
     """
     Process a master notebook.
 
@@ -591,183 +646,106 @@ def process_master_notebook(dest_root, notebook, src_path, dest_path):
                        dest_root and notebook.dest
     :return: None
     """
-    verbose("notebook={0}, dest_root={1}".format(notebook, dest_root))
+    verbose("notebook={0}\ndest_root={1}".format(notebook, dest_root))
 
-    def move_parts(mp_notebook_dir, base, lang, lang_ext):
-        '''
-        
-        :param mp_notebook_dir:  the notebook dir 
-        :param base:             the base file name
-        :param lang:             the language string
-        :param lang_ext:         the language file name extension
-        :return: A tuple: (total_student_parts, total_answer_parts)
-        '''
+    def move_master_notebooks(master, temp_output_dir):
+        """
+        Move master-parsed notebooks.
 
-        # The master parse tool created <notebook-basename>/<lang>/*
-        # See if what we want is there.
-        lc_lang = lang.lower()
-
-        # Move student part notebooks, if any.
-        student_part_num = 1
-        while True:
-            student_part_nb = path.abspath(
-                path.join(mp_notebook_dir,
-                          '{0}_part{1}_student{2}'.format(
-                              base, student_part_num, lang_ext
-                          ))
-            )
-            if not path.exists(student_part_nb):
-                verbose("student part nb path does not exist: {0}".format(
-                    student_part_nb
-                ))
-                break
-
-            verbose("moving student nb part " + student_part_nb)
-            target = path.join(
-                dest_root, LABS_SUBDIR, lang,
-                '{0}_part{1}_student{2}'.format(
-                    base, student_part_num, lang_ext
-                )
-            )
-            move(student_part_nb, target)
-            student_part_num += 1
-
-        # Move answer part notebooks, if any.
-        answer_part_num = 1
-        while True:
-            answer_part_nb = path.abspath(
-                path.join(mp_notebook_dir,
-                          '{0}_part{1}_answers{2}'.format(
-                              base, answer_part_num, lang_ext
-                          ))
-            )
-            if not path.exists(answer_part_nb):
-                verbose("answer part nb path does not exist: {0}".format(
-                    answer_part_nb
-                ))
-                break
-
-            verbose("moving answers nb part " + answer_part_nb)
-            target = path.join(
-                dest_root, INSTRUCTOR_LABS_DIR, lang,
-                '{0}_part{1}_answers{2}'.format(
-                    base, answer_part_num, lang_ext
-                )
-            )
-            move(answer_part_nb, target)
-            answer_part_num += 1
-
-        return (student_part_num - 1, answer_part_num -1)
-
-    def move_notebooks(master):
+        :param master:           the master notebook configuration data
+        :param temp_output_dir:  the temporary output directory
+        """
         # See if we have to move the notebooks to other paths.
         for lang in set(EXT_LANG.values()):
             lc_lang = lang.lower()
-            p = lc_lang + '_path'
-            lang_ext = LANG_EXT[lc_lang]
-            print("--- master={0}".format(master))
-            if not (master[lc_lang] and master[p]):
+            if not master.get(lc_lang):
                 continue
 
-            # This language is desired, and the path is defined.
-            if lc_lang == "ipython":
-                lc_lang = "python"
-                lang = "python"
+            # This language is desired. Calculate the path. The path is
+            # <dest_root> + <notebook.dest> + file
+            #
+            # <notebook.dest> can have the language in it. If it's not there,
+            # we put the language at the beginning.
+            lang_dir = lc_lang.capitalize()
+            dest_subst = Template(notebook.dest).safe_substitute(
+                {TARGET_LANG: lang_dir}
+            )
+
+            if dest_subst == notebook.dest:
+                dest_subst = path.join(lang_dir, notebook.dest)
+
+            # Get the file name extension for the language. Note that this
+            # extension INCLUDES the ".".
+            lang_ext = LANG_EXT[lc_lang]
 
             # The master parse tool created <notebook-basename>/<lang>/*
-            # See if what we want is there.
-            base, ext = path.splitext(path.basename(notebook.src))
-            print("---\n--- dest_path={0}\n--- notebook_dest={1}\n--- base={2}\n--- lc_lang={3}".format(dest_path, notebook.dest, base, lc_lang))
-            mp_notebook_dir = path.join(dest_path, base, lc_lang)
-            print("mp_notebook_dir={0}".format(mp_notebook_dir))
+            # in the temporary directory. The following recursive glob pattern
+            # will make finding the files simple. In this glob pattern, {0} is
+            # the notebook type (e.g., "_answers"), and {1} is the file
+            # extension (e.g., ".py")
+            glob_template = "**/*_{0}*{1}"
 
-            total_student_parts, total_answer_parts = move_parts(
-                mp_notebook_dir, base, lang, lang_ext
-            )
+            # Copy all answers notebooks and exercises notebooks to the student
+            # labs directory. Copy all instructor notebooks to the instructor
+            # labs directory.
 
-            # Move student student notebook (and add a suffix
-            # if parts exist for it).
-            student_nb = path.abspath(
-                path.join(mp_notebook_dir,
-                          '{0}_student{1}'.format(base, lang_ext))
-            )
-            if not path.exists(student_nb):
-                verbose("student nb does not exist: {0}".format(student_nb))
-                raise BuildError("Can't find expected notebook {0}".format(
-                    student_nb
-                ))
+            student_dir = path.join(dest_root, STUDENT_LABS_SUBDIR)
+            instructor_dir = path.join(dest_root, INSTRUCTOR_LABS_SUBDIR)
 
-            # Compute a suffix for the student nb w/ all the parts.
-            stud_suf_text = "_parts_1-{0}".format(total_student_parts - 1)
-            stud_parts_suf = stud_suf_text if total_student_parts > 1 else ""
+            types_and_targets = [
+                ("exercises", student_dir),
+                ("instructor", instructor_dir),
+            ]
 
-            move(student_nb, path.join(dest_root,
-                                       notebook.dest,
-                                       LABS_SUBDIR,
-                                       lang,
-                                       '{0}{1}_student{2}'.format(
-                                           base, stud_parts_suf, lang_ext
-                                        )))
-
-            # Compute a suffix for the answers nb w/ all the parts.
-            answer_suf_text = "_parts_1-{0}".format(total_answer_parts - 1)
-            answ_parts_suf = answer_suf_text if total_answer_parts > 1 else ""
-
-            # Move any answers notebooks, too. We'll end up moving them
-            # again, it's easier this way.
-            answer_filename = '{0}_answers{1}'.format(base, lang_ext)
-            answers_nb = path.abspath(path.join(mp_notebook_dir,
-                                                answer_filename))
-            if path.exists(answers_nb):
-                target = path.join(
-                    dest_root, notebook.dest, INSTRUCTOR_LABS_DIR,
-                    '{0}{1}_answers{2}'.format(
-                        base, answ_parts_suf,lang_ext
-                    )
+            if master['answers']:
+                types_and_targets.append(
+                    ("answers", student_dir)
                 )
-                move(answers_nb, target)
 
-    def move_answers():
-        # Look for any answer notebooks and move them out of the student
-        # area and into the instructor area.
-        with working_directory(dest_path):
-            for dirpath, _, filenames in os.walk('.'):
-                for f in filenames:
-                    if ANSWERS_NOTEBOOK_PATTERN.match(f):
-                        answers_src = path.abspath(path.join(dest_path,
-                                                             dirpath,
-                                                             f))
-                        answers_dest = path.join(dest_root,
-                                                 INSTRUCTOR_LABS_DIR,
-                                                 dirpath,
-                                                 f)
-                        parent = path.dirname(answers_dest)
-                        move(answers_src, answers_dest)
+            base, _ = path.splitext(path.basename(notebook.src))
+            mp_notebook_dir = path.join(temp_output_dir, base, lc_lang)
+
+
+            for type, target_dir in types_and_targets:
+                # Use a recursive glob pattern to find all matching notebooks.
+                # Note that eglob returns a generator.
+                copied = 0
+                glob_pattern = glob_template.format(type, lang_ext)
+                matches = eglob(glob_pattern, mp_notebook_dir)
+
+                for f in matches:
+                    target = path.join(target_dir, dest_subst, path.basename(f))
+                    copy(f, target)
+                    copied += 1
+
+                if copied == 0:
+                    error('Found no generated {0} {1} notebooks for "{2}"!'.
+                        format(lang, type, notebook.src)
+                    )
 
     verbose("Running master parse on {0}".format(src_path))
-    print("\n****\n**** Master parsing {0}\n****".format(notebook))
     master = notebook.master
-    make_answers = master['answers']
-    try:
-        master_parse.process_notebooks(path=src_path,
-                                       output_dir=dest_path,
-                                       databricks=True,
-                                       ipython=master['ipython'],
-                                       scala=master['scala'],
-                                       python=master['python'],
-                                       r=master['r'],
-                                       sql=master['sql'],
-                                       instructor=make_answers,
-                                       student=master['student'],
-                                       encoding_in=master['encoding_in'],
-                                       encoding_out=master['encoding_out'])
-    except Exception as e:
-        die("Failed to process {0}: {1}".format(src_path, e.message))
-
-    move_notebooks(master)
-    if make_answers:
-        move_answers()
-
+    with TemporaryDirectory() as tempdir:
+        try:
+            master_parse.process_notebooks(path=src_path,
+                                           output_dir=tempdir,
+                                           databricks=True,
+                                           ipython=False,
+                                           scala=master['scala'],
+                                           python=master['python'],
+                                           r=master['r'],
+                                           sql=master['sql'],
+                                           instructor=True,
+                                           exercises=True,
+                                           answers=master['answers'],
+                                           encoding_in=master['encoding_in'],
+                                           encoding_out=master['encoding_out'])
+            move_master_notebooks(master, tempdir)
+        except Exception as e:
+            error("Failed to process {0}\n    {1}: {2}".format(
+                src_path, e.__class__.__name__, e.message
+            ))
+            raise
 
 def copy_notebooks(build, labs_dir, dest_root):
     """
@@ -776,10 +754,10 @@ def copy_notebooks(build, labs_dir, dest_root):
     os.makedirs(labs_dir)
     for notebook in build.notebooks:
         src_path = path.join(build.source_base, notebook.src)
-        dest_path = path.join(labs_dir, notebook.dest)
         if notebook.master_enabled():
-            process_master_notebook(dest_root, notebook, src_path, dest_path)
+            process_master_notebook(dest_root, notebook, src_path)
         else:
+            dest_path = path.join(labs_dir, notebook.dest)
             copy(src_path, dest_path)
 
         remove_empty_subdirectories(dest_root)
@@ -904,9 +882,12 @@ def main():
     global be_verbose
     be_verbose = opts['--verbose']
 
+    bdc_config = opts['MASTER_CFG']
+    course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
+
     try:
-        config = load_config(opts['MASTER_CFG'])
-        build = load_build_yaml(opts['BUILD_YAML'] or DEFAULT_BUILD_FILE)
+        config = load_config(bdc_config)
+        build = load_build_yaml(course_config)
         if build.course_info.deprecated:
             die('{0} is deprecated and cannot be built.'.format(
                 build.course_info.name
@@ -924,11 +905,11 @@ def main():
         for d in [INSTRUCTOR_FILES_SUBDIR, STUDENT_FILES_SUBDIR]:
             os.makedirs(path.join(dest_dir, d))
 
-        labs_full_path = path.join(dest_dir, LABS_SUBDIR)
+        labs_full_path = path.join(dest_dir, STUDENT_LABS_SUBDIR)
         copy_notebooks(build, labs_full_path, dest_dir)
         copy_instructor_notes(build, dest_dir)
-        make_dbc(config, build, labs_full_path, path.join(dest_dir, LABS_DBC))
-        instructor_labs = path.join(dest_dir, INSTRUCTOR_LABS_DIR)
+        make_dbc(config, build, labs_full_path, path.join(dest_dir, STUDENT_LABS_DBC))
+        instructor_labs = path.join(dest_dir, INSTRUCTOR_LABS_SUBDIR)
         if os.path.exists(instructor_labs):
             instructor_dbc = path.join(dest_dir, INSTRUCTOR_LABS_DBC)
             make_dbc(config, build, instructor_labs, instructor_dbc)
@@ -942,10 +923,15 @@ def main():
         shutil.rmtree(labs_full_path)
         shutil.rmtree(instructor_labs)
 
+        if errors > 0:
+            raise BuildError("{0} error(s).".format(errors))
+
         print("\nPublished {0}, version {1} to {2}\n".format(
             build.course_info.name, build.course_info.version, dest_dir
         ))
 
+    except ConfigError as e:
+        die('Error in "{0}": {1}'.format(course_config, e.message))
     except BuildError as e:
         die(e.message)
 

@@ -106,14 +106,11 @@ class NotebookGenerator(object):
 
     def __init__(self, notebook_kind, notebook_user, notebook_code):
         base_keep = set(CommandLabel.__members__.values())
-        print("*** NotebookGenerator: notebook_user={0}, notebook_code={1}".format(notebook_user, notebook_code))
         self.keep_labels = self._get_labels(notebook_kind,
                                             notebook_user,
                                             notebook_code)
-        print("*** keep_labels={0}".format(self.keep_labels))
         # discard labels not explicitly kept
         self.discard_labels = base_keep - self.keep_labels
-        print("*** discard_labels={0}".format(self.discard_labels))
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
                        _all_notebooks, _INSTRUCTOR_NOTE]
         self.replace = [(_ipythonReplaceRemoveLine, ''),

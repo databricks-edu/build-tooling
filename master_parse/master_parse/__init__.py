@@ -166,9 +166,12 @@ class NotebookGenerator(object):
                             solution_file = solution_file.replace(
                                 part_string, part_base.format(i)
                             )
-                            db_location = ('/Users/admin@databricks.com/Labs/' +
-                                           solution_file.replace('\\', '/'))
-                            db_location = db_location.replace('build_mp/', '')
+                            # Now that Databricks supports relative run paths,
+                            # this is no longer necessary.
+                            #db_location = ('/Users/admin@databricks.com/Labs/' +
+                            #               solution_file.replace('\\', '/'))
+                            # db_location = db_location.replace('build_mp/', '')
+                            db_location = os.path.basename(solution_file.replace('\\', '/'))
                             runCommand = '{0} MAGIC %run {1}'.format(
                                 self.base_comment, db_location
                             )

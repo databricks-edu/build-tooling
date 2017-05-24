@@ -21,7 +21,7 @@ import os
 import os.path
 import re
 import codecs
-from enum import Enum, auto
+from enum import Enum
 
 VERSION = "1.3.0"
 
@@ -43,25 +43,25 @@ class CommandLabel(Enum):
     INSTRUCTOR_NOTE  = 'INSTRUCTOR_NOTE'
 
 class CommandCode(Enum):
-    SCALA      = auto()
-    PYTHON     = auto()
-    R          = auto()
-    SQL        = auto()
-    MARKDOWN   = auto()
-    FILESYSTEM = auto()
-    SHELL      = auto()
-    RUN        = auto()
-    FS         = auto()
-    SH         = auto()
+    SCALA      = 'scala'
+    PYTHON     = 'python'
+    R          = 'r'
+    SQL        = 'sql'
+    MARKDOWN   = 'md'
+    FILESYSTEM = 'filesystem'
+    SHELL      = 'shell'
+    RUN        = 'run'
+    FS         = 'fs'
+    SH         = 'sh'
 
 class NotebookKind(Enum):
-    DATABRICKS = auto()
-    IPYTHON    = auto()
+    DATABRICKS = 'Databricks'
+    IPYTHON    = 'IPython'
 
 class NotebookUser(Enum):
-    INSTRUCTOR = auto()
-    EXERCISES  = auto()
-    ANSWERS    = auto()
+    INSTRUCTOR = 'INSTRUCTOR'
+    EXERCISES  = 'EXERCISES'
+    ANSWERS    = 'ANSWERS'
 
 DEPRECATED_LABELS = {
     CommandLabel.INLINE,

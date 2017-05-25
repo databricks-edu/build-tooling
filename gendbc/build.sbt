@@ -2,7 +2,7 @@ import grizzled.file.{util => fileutil}
 
 name := """gendbc"""
 
-version := "1.3.1"
+version := "1.3.2"
 
 scalaVersion := "2.11.8"
 
@@ -57,7 +57,7 @@ makeBuildInfo := {
 }
 
 // Automatically build the properties file during compilation.
-compile in Compile <<= (compile in Compile) dependsOn makeBuildInfo
+compile in Compile := ((compile in Compile) dependsOn makeBuildInfo).value
 
 // ----------------------------------------------------------------------------
 // Install task

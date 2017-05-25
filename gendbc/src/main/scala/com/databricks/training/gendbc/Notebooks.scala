@@ -38,7 +38,7 @@ object Notebooks {
             msg:       MessageHandler,
             buildInfo: BuildInfo,
             flatten:   Boolean): Try[File] = {
-    for { notebooks <- loadRecursively(dir, dbcFolder, encoding, msg) //
+    for { notebooks <- loadRecursively(dir, dbcFolder, encoding, msg)
           f         <- write(dbcFile, notebooks, msg, buildInfo, flatten) }
     yield f
   }
@@ -124,13 +124,47 @@ object Notebooks {
       }
     }
 
+    /** Find the longest common path prefix from a list of paths. Based on
+      * https://rosettacode.org/wiki/Find_common_directory_path#Advanced
+      *
+      * @param paths the paths
+      *
+      * @return the longest common path, which might be the empty string
+      */
+    def longestCommonPathPrefix(paths: List[String]): String = {
+      import grizzled.file.util.{nativePath, universalPath}
+
+      val SEP = "/"
+      val BOUNDARY_REGEX = s"(?=[$SEP])(?<=[^$SEP])|(?=[^$SEP])(?<=[$SEP])"
+
+      def common(a: List[String], b: List[String]): List[String] = {
+        (a, b) match {
+          case (a :: as, b :: bs) if a equals b => a :: common(as, bs)
+          case _ => Nil
+        }
+      }
+
+      if (paths.length < 2) {
+        paths.headOption.getOrElse("")
+      }
+      else {
+        // Convert all paths to "universal" paths (i.e., with "/" characters,
+        // even if we're on Windows). We'll convert back when we're done.
+        val uPaths = paths.map(universalPath)
+        val res = uPaths
+          .map { _.split(BOUNDARY_REGEX).toList }
+          .reduceLeft(common)
+          .mkString
+        nativePath(res)
+      }
+    }
+
     def findLeadingPath(files: Seq[File]) = {
-      import grizzled.string.util.longestCommonPrefix
       if (dbcFolder.isDefined) {
         // Find the common prefix of all the files and remove that prefix
         // to get the relative path to use.
         val names = files.map(_.getAbsolutePath).toArray
-        longestCommonPrefix(names) match {
+        longestCommonPathPrefix(names.toList) match {
           case s if s.isEmpty => dir.dirname.getPath // no common prefix
           case s              => s
         }

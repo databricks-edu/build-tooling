@@ -1,1 +1,7 @@
+/.idea
+*.iml
+*.egg_info
 /build_mp
+/build
+/dist
+/tmp

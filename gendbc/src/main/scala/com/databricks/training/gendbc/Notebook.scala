@@ -114,7 +114,6 @@ object Notebook {
     // Figure out the notebook's output path within the DBC file.
     def dbcOutputPath(parent: File, base: String, ext: String): File = {
       import grizzled.file.util.joinPath
-
       val parentPath = parent.getAbsolutePath
       // Strip the leading path from the output path to get the relative path
       // for the file within the DBC zip file.
@@ -131,7 +130,6 @@ object Notebook {
       }
 
       val path = joinPath(folder, cleanedSubdir)
-
       new File(joinPath(path, s"$base$ext"))
     }
 

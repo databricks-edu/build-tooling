@@ -215,6 +215,7 @@ class BuildData(object):
                  slides,
                  datasets,
                  misc_files,
+                 keep_lab_dirs,
                  markdown_cfg):
         self.build_file_path = build_file_path
         self.course_directory = path.dirname(build_file_path)
@@ -225,6 +226,7 @@ class BuildData(object):
         self.datasets = datasets
         self.markdown = markdown_cfg
         self.misc_files = misc_files
+        self.keep_lab_dirs = keep_lab_dirs
 
     @property
     def name(self):
@@ -461,7 +463,6 @@ def load_build_yaml(yaml_file):
     build_yaml_full = path.abspath(yaml_file)
     build_yaml_dir = path.dirname(build_yaml_full)
     src_base = path.abspath(path.join(build_yaml_dir, src_base))
-    deprecated = contents.get('deprecated', '')
 
     if slides_cfg:
         slides = parse_file_section(slides_cfg, parse_slide)
@@ -491,6 +492,7 @@ def load_build_yaml(yaml_file):
         datasets=datasets,
         source_base=src_base,
         misc_files=misc_files,
+        keep_lab_dirs=bool_field(contents, 'keep_lab_dirs'),
         markdown_cfg=parse_markdown(contents.get('markdown'))
     )
 
@@ -919,9 +921,9 @@ def main():
 
         # Finally, remove the instructor labs folder and the student labs
         # folder.
-
-        shutil.rmtree(labs_full_path)
-        shutil.rmtree(instructor_labs)
+        if not build.keep_lab_dirs:
+            shutil.rmtree(labs_full_path)
+            shutil.rmtree(instructor_labs)
 
         if errors > 0:
             raise BuildError("{0} error(s).".format(errors))

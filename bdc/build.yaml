@@ -40,6 +40,11 @@ course_info:
   version: version
   deprecated: false
 
+# By default, the directories containing the labs are deleted once the
+# corresponding DBC files are created. You can set this field to "true"
+# to override that behavior.
+keep_lab_dirs: false
+
 # Markdown configuration
 #
 # html_stylesheet - path to an HTML stylesheet to include, inline, in any HTML

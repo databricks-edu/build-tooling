@@ -3,6 +3,7 @@
 Version 1.4.1:
 
 * Emit tool name (bdc) as prefix on verbose messages. 
+* When -v is specified, invoke master parser with new _verbose_ argument.
 
 Version 1.4.0:
 

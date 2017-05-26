@@ -32,7 +32,7 @@ from backports.tempfile import TemporaryDirectory
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -264,7 +264,7 @@ class BuildData(object):
 def verbose(msg):
     """Conditionally emit a verbose message."""
     if be_verbose:
-        print(msg)
+        print("{0}: {1}".format(PROG, msg))
 
 
 def error(msg):

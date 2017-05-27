@@ -1,5 +1,10 @@
 # Change Log for gendbc
 
+Version 1.3.3:
+
+- Emit tool name as prefix, where possible, on verbose and error messages.
+- Wrap usage output, for readability.
+
 Version 1.3.2:
 
 - Fixed common path prefix bug in DBC generation.

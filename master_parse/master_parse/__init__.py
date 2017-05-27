@@ -22,11 +22,15 @@ import os.path
 import re
 import codecs
 from enum import Enum
+from collections import namedtuple
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
+# -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
 # API, for ease of modification.)
+# -----------------------------------------------------------------------------
+
 class CommandLabel(Enum):
     IPYTHON_ONLY      = 'IPYTHON_ONLY'
     PYTHON_ONLY       = 'PYTHON_ONLY'
@@ -63,6 +67,16 @@ class NotebookUser(Enum):
     EXERCISES  = 'EXERCISES'
     ANSWERS    = 'ANSWERS'
 
+    def __repr__(self):
+        return self.value
+
+    def __str__(self):
+        return self.value.lower()
+
+# -----------------------------------------------------------------------------
+# Constants
+# -----------------------------------------------------------------------------
+
 DEPRECATED_LABELS = {
     CommandLabel.INLINE,
     CommandLabel.PRIVATE_TEST,
@@ -71,7 +85,14 @@ DEPRECATED_LABELS = {
 
 NEWLINE_AFTER_CODE = {CommandCode.SCALA, CommandCode.R, CommandCode.PYTHON}
 
-from collections import namedtuple
+DEFAULT_ENCODING_IN = 'utf-8'
+DEFAULT_ENCODING_OUT = 'utf-8'
+DEFAULT_OUTPUT_DIR = 'build_mp'
+
+# -----------------------------------------------------------------------------
+# Classes
+# -----------------------------------------------------------------------------
+
 Command = namedtuple('Command', ['part', 'code', 'labels', 'content'])
 
 
@@ -105,6 +126,12 @@ class NotebookGenerator(object):
     }
 
     def __init__(self, notebook_kind, notebook_user, notebook_code):
+        '''
+
+        :param notebook_kind:  the NotebookKind
+        :param notebook_user:  the NotebookUser
+        :param notebook_code:  the parsed notebook code
+        '''
         base_keep = set(CommandLabel.__members__.values())
         self.keep_labels = self._get_labels(notebook_kind,
                                             notebook_user,
@@ -135,6 +162,11 @@ class NotebookGenerator(object):
 
     def generate(self, header, commands, input_name, parts=True,
                  creative_commons=False):
+
+        _verbose('Generating {0} notebook(s) for "{1}"'.format(
+            str(self.notebook_user), input_name
+        ))
+
         is_IPython = self.notebook_kind == NotebookKind.IPYTHON
         is_instructor_nb = self.notebook_user == NotebookUser.INSTRUCTOR
 
@@ -242,13 +274,39 @@ class NotebookGenerator(object):
                         )
 
                     inline = CommandLabel.INLINE in labels
-                    all_notebooks = CommandLabel.ALL_NOTEBOOKS in labels
+
                     discard_labels = self.discard_labels
 
-                    if ((not (discard_labels & labels)) and
-                        ((inline and code != self.notebook_code) or
-                         (not inline and code == self.notebook_code)) or
-                        all_notebooks):
+                    all_notebooks = CommandLabel.ALL_NOTEBOOKS in labels
+                    if all_notebooks:
+                        # There are some exceptions here. A cell marked
+                        # ALL_NOTEBOOKS will still not be copied if it's
+                        # an ANSWER cell and the notebook is an EXERCISES
+                        # notebook, or if it's a TO cell and the notebook
+                        # is not an EXERCISES notebook.
+                        if ((self.notebook_user == NotebookUser.EXERCISES) and
+                            (CommandLabel.ANSWER in labels)):
+                            all_notebooks = False
+                        elif ((self.notebook_user != NotebookUser.EXERCISES) and
+                              (CommandLabel.TODO in labels)):
+                            all_notebooks = False
+
+                    if all_notebooks:
+                        # Remove ALL_NOTEBOOKS from the set of labels, so
+                        # as not to befoul the screwed-up if statement,
+                        # below. Leaving it in causes cells like this to be
+                        # mishandled:
+                        #
+                        # %sql
+                        # -- ANSWER (or -- TODO)
+                        # -- ALL_NOTEBOOKS
+                        labels = labels - {CommandLabel.ALL_NOTEBOOKS}
+
+                    if ( (not (discard_labels & labels)) and
+                         #(not suppress) and
+                         (((inline and code != self.notebook_code) or
+                         ((not inline) and code == self.notebook_code)) or
+                         all_notebooks)):
 
                         content = self.remove_and_replace(content, code, inline,
                                                           all_notebooks, is_first)
@@ -349,20 +407,31 @@ class NotebookGenerator(object):
 
         return modified_content
 
-DEFAULT_ENCODING_IN = 'cp1252'
-DEFAULT_ENCODING_OUT = 'utf-8'
-DEFAULT_OUTPUT_DIR = 'build_mp'
+# -----------------------------------------------------------------------------
+# Globals and Functions
+# -----------------------------------------------------------------------------
 
 _file_encoding_in =  DEFAULT_ENCODING_IN
 _file_encoding_out = DEFAULT_ENCODING_OUT
 _file_encoding_errors = 'strict'
 _output_dir = DEFAULT_OUTPUT_DIR
+_be_verbose = False
+_show_debug = False
+
+def _debug(msg):
+    if _show_debug:
+        print("master_parse: (DEBUG) {0}".format(msg))
+
+def _verbose(msg):
+    if _be_verbose:
+        print("master_parse: {0}".format(msg))
 
 
 def _collapse(s):
     lines = [line.strip() for line in s.split("\n")]
     non_empty = [line for line in lines if len(line) > 0]
     return ' '.join(non_empty)
+
 
 # Commons license
 _cc_license = _collapse("""
@@ -580,6 +649,34 @@ _code_to_comment = {CommandCode.SQL: '--',
                     CommandCode.SCALA: '//',
                     CommandCode.PYTHON: '#'}
 
+class ParseState(object):
+    '''
+    Used internally by the Parser class to track parsing state.
+    '''
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.command_content = []
+        self.command_code = None
+        self.command_labels = set()
+        self.starting_line_number = None
+
+    def __str__(self):
+        return (
+            "ParseState" +
+            "<command_content={0}, " +
+            "command_code={1}, " +
+            "command_labels={2},"
+            "starting_line_number={3}>"
+        ).format(
+            self.command_content, self.command_code, self.command_labels,
+            self.starting_line_number
+        )
+
+    def __repr__(self):
+        return self.__str__()
+
 
 class Parser:
     """Customizable parser of DBC py files, converting to other formats.
@@ -636,34 +733,8 @@ class Parser:
         Initialize the defining attributes of this Parser.
         """
         self.base_notebook_code = None
-        self.commands = []
         self.part = 0
         self.header = None
-        self.command_code = None
-
-    def _clear_command(self):
-        self.command_content = []
-        self.command_code = None
-        self.command_labels = set()
-
-    def _extend_content(self):
-        if self.command_code is None:
-            self.command_code = self.base_notebook_code
-        else:  # Remove %sql, %fs, etc and MAGIC
-            pat = Parser.code_to_pattern[self.command_code]
-            self.command_content = _transform_match(self.command_content, [pat])
-            self.command_content = _replace_text(self.command_content,
-                                                 [_magic_replace])
-
-        if self.command_code not in Parser.master_code:
-            # non base notebook commands are inlined automatically
-            self.command_labels.add(CommandLabel.INLINE)
-
-        cmd = Command(self.part,
-                      self.command_code,
-                      self.command_labels,
-                      self.command_content)
-        self.commands.append(cmd)
 
     def generate_commands(self, file_name):
         """Generates py file content for DBC and ipynb use.
@@ -680,6 +751,38 @@ class Parser:
             tuple[str, list[Command]]: A tuple containing the header and a list
             of commands.
         """
+
+        current = ParseState()
+
+        def extend_content(cell_state):
+            _debug('Notebook "{0}": Cell at line {1} matches labels {2}'.
+                format(
+                    file_name,
+                    cell_state.starting_line_number,
+                    [l.value for l in cell_state.command_labels]
+                )
+            )
+            if cell_state.command_code is None:
+                cell_state.command_code = self.base_notebook_code
+            else:  # Remove %sql, %fs, etc and MAGIC
+                pat = Parser.code_to_pattern[current.command_code]
+                cell_state.command_content = _transform_match(
+                    cell_state.command_content, [pat]
+                )
+                cell_state.command_content = _replace_text(
+                    cell_state.command_content, [_magic_replace]
+                )
+
+            if cell_state.command_code not in Parser.master_code:
+                # non base notebook commands are inlined automatically
+                cell_state.command_labels.add(CommandLabel.INLINE)
+
+            cmd = Command(self.part,
+                          cell_state.command_code,
+                          cell_state.command_labels,
+                          cell_state.command_content)
+            commands.append(cmd)
+
         _, file_extension = os.path.splitext(file_name)
         file_extension = file_extension.lower()
 
@@ -692,59 +795,70 @@ class Parser:
                          errors=_file_encoding_errors) as dbcExport:
             file_contents = dbcExport.readlines()
 
-        self.commands = []
-        self._clear_command()
+        commands = []
+        current.reset()
         self.part = 0
 
+        line_number_inc = 1
         if len(file_contents) > 0 and _databricks.match(file_contents[0]):
             self.header = file_contents[0]
             # Strip first line if it's the Databricks' timestamp
             file_contents[:1] = []
+            line_number_inc += 1
 
         for i, line in enumerate(file_contents):
 
-            if _command.match(line):
-                if len(self.command_content) > 0:
-                    self._extend_content()
+            line_number = i + line_number_inc
 
-                self._clear_command()
+            if current.starting_line_number is None:
+                current.starting_line_number = line_number
+
+            if _command.match(line):
+                # New cell. Flush the current one.
+                if len(current.command_content) > 0:
+                    extend_content(current)
+
+                current.reset()
                 continue
 
             if _new_part.match(line):
                 self.part += 1
 
+            # Does this line match any of our special comment strings?
             for pat, label in Parser.pattern_to_label:
                 if pat.match(line):
                     if label in DEPRECATED_LABELS:
                         print(
                             '*** "{0}", line {1}: WARNING: "{2}" is deprecated.'
-                                .format(file_name, i + 1, label.value)
+                                .format(file_name, line_number, label.value)
                         )
-                    self.command_labels.add(label)
+                    current.command_labels.add(label)
 
+            # Does this line match any of the Databricks magic cells?
             for pat, code in Parser.pattern_to_code:
                 m = pat.match(line)
                 if m:
-                    if self.command_code is not None:
-                        msg = 'Line "{0}" has multiple magic strings.'.format(
-                            line
+                    if current.command_code is not None:
+                        msg = '"{0}", line {1}: multiple magic strings.'.format(
+                            file_name, line_number
                         )
                         raise Exception(msg)
-                    self.command_code = code
+                    current.command_code = code
 
             line = line.rstrip()
             # Lines with only MAGIC do not reimport
             if len(line) <= 8 and line[-5:] == 'MAGIC':
                 # Keep empty lines
-                self.command_content.append(base_comment + ' MAGIC ')
+                current.command_content.append(base_comment + ' MAGIC ')
             else:
-                self.command_content.append(line)
+                current.command_content.append(line)
 
-        if len(self.command_content) > 0:
-            self.command_content.append("")
-            self._extend_content()  # EOF reached.  Add the last cell.
+        # Flush anything left.
+        if len(current.command_content) > 0:
+            current.command_content.append("")
+            extend_content(current)
 
-        return self.header, self.commands
+        return self.header, commands
 
 
 class UsageError(Exception):
@@ -765,7 +879,9 @@ def process_notebooks(path,
                       exercises=False,
                       creative_commons=False,
                       encoding_in=DEFAULT_ENCODING_IN,
-                      encoding_out=DEFAULT_ENCODING_OUT):
+                      encoding_out=DEFAULT_ENCODING_OUT,
+                      enable_verbosity=False,
+                      enable_debug=False):
     """
     Main entry point for notebook processing. This function can be used to
     process notebook from within another Python program.
@@ -797,12 +913,21 @@ def process_notebooks(path,
                                DEFAULT_ENCODING_IN
     :param encoding_out:       Encoding for the output notebook(s). Defaults to
                                DEFAULT_ENCODING_OUT.
+    :param enable_verbosity:   Emit verbose messages. Default: False
+    :param enable_debug:       Emit debug messages. Default: False
+
     :return: Nothing.
     """
     global _output_dir, _file_encoding_in, _file_encoding_out
     _output_dir = output_dir if output_dir else DEFAULT_OUTPUT_DIR
     _file_encoding_in = encoding_in or DEFAULT_ENCODING_IN
     _file_encoding_out = encoding_out or DEFAULT_ENCODING_OUT
+
+    global _be_verbose
+    _be_verbose = enable_verbosity
+
+    global _show_debug
+    _show_debug = enable_debug
 
     if not (databricks or ipython):
         raise UsageError("Specify at least one of databricks or ipython")
@@ -916,10 +1041,12 @@ def main():
     arg_parser.add_argument('-ei', '--encoding-in',
                             help="input file encoding",
                             action='store',
+                            default=DEFAULT_ENCODING_OUT,
                             metavar="ENCODING")
     arg_parser.add_argument('-eo', '--encoding-out',
                             help="output file encoding",
                             action='store',
+                            default=DEFAULT_ENCODING_OUT,
                             metavar="ENCODING")
     arg_parser.add_argument('-d', '--dir',
                             help="Base output directory. Default: {0}".format(
@@ -927,6 +1054,12 @@ def main():
                             action='store',
                             dest='output_dir',
                             metavar="OUTPUT_DIR")
+    arg_parser.add_argument('-D', '--debug',
+                            help="Enable debug messages",
+                            action='store_true')
+    arg_parser.add_argument('-v', '--verbose',
+                            help="Enable verbose messages.",
+                            action='store_true')
 
     args = arg_parser.parse_args()
 
@@ -957,7 +1090,9 @@ def main():
                           exercises=args.exercises,
                           creative_commons=args.creativecommons,
                           encoding_in=args.encoding_in,
-                          encoding_out=args.encoding_out)
+                          encoding_out=args.encoding_out,
+                          enable_verbosity=args.verbose,
+                          enable_debug=args.debug)
     except UsageError as e:
         sys.stderr.write(e.message + '\n')
         sys.exit(1)

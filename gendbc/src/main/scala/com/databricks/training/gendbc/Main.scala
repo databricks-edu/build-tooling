@@ -1,8 +1,8 @@
 package com.databricks.training.gendbc
 
-import java.io.File
+import java.io.{File, PrintStream}
 
-import scopt.OptionParser
+import scopt.{OptionParser, RenderingMode}
 
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success, Try}
@@ -15,6 +15,8 @@ import scala.util.{Failure, Success, Try}
   * @param dbcFolder        top-level DBC folder, if any
   * @param dumpStackTraces  dump exception stack traces
   * @param verbose          display verbose messages
+  * @param showVersion      show tool version and exit
+  * @param flatten          flatten the generated DBC
   */
 private[gendbc] case class Params(
   sourceDirectory: File = new File("."),
@@ -29,15 +31,18 @@ private[gendbc] case class Params(
 /** Simple message handler, because full-on logging is way more than we need.
   *
   * @param showVerbose whether to show verbose messages or not
+  * @param buildInfo   BuildInfo object, if loaded. If defined, this object
+  *                    may be used to augment the output messages.
   */
-case class MessageHandler(showVerbose: Boolean = false) {
+case class MessageHandler(showVerbose: Boolean = false,
+                          buildInfo:   Option[BuildInfo] = None) {
 
   /** Display a message, IFF verbose messages are neabled.
     *
     * @param msg the message (as a by-name parameter)
     */
   def verbose(msg: => String): Unit = {
-    if (showVerbose) println(msg)
+    if (showVerbose) emit(System.out, msg)
   }
 
   /** Display an error message in a consistent manner.
@@ -46,8 +51,13 @@ case class MessageHandler(showVerbose: Boolean = false) {
     * @param ex  optional exception to dump
     */
   def error(msg: => String, ex: Option[Throwable] = None): Unit = {
-    System.err.println(s"ERROR: $msg")
+    emit(System.err, s"(ERROR) $msg")
     if (ex.isDefined) ex.get.printStackTrace(System.err)
+  }
+
+  private def emit(out: PrintStream, msg: String): Unit = {
+    val prefix = buildInfo.map { b => s"${b.name}: " }.getOrElse("")
+    out.println(s"$prefix$msg")
   }
 }
 
@@ -79,7 +89,7 @@ object Main {
       CommandLineParser.parseParams(args, buildInfo)
     }
 
-    val msg = MessageHandler(params.verbose)
+    val msg = MessageHandler(params.verbose, Some(buildInfo))
 
     handlePossibleError(msg, params.dumpStackTraces) {
       for { dbc <- Notebooks.toDBC(dir       = params.sourceDirectory,
@@ -158,6 +168,7 @@ private[gendbc] object CommandLineParser {
 
     new scopt.OptionParser[Params](Main.Constants.Name) {
       override val showUsageOnError = true
+      override def renderingMode = RenderingMode.OneColumn
 
       head(s"\n${buildInfo.toString}\n")
 
@@ -182,7 +193,7 @@ private[gendbc] object CommandLineParser {
       opt[Unit]("flatten")
         .optional
         .text("Flatten, i.e., put all the files in the top directory of the " +
-              "DBC")
+              "generated DBC file.")
         .action { (_, params) => params.copy(flatten = true) }
 
       opt[Unit]('s', "stack")
@@ -222,6 +233,32 @@ private[gendbc] object CommandLineParser {
         }
 
       help("help").text("This usage message.")
+
+      override def showUsage(): Unit = {
+        import grizzled.string.WordWrapper
+
+        // scopt's generated usage message doesn't wrap properly. Add wrapping.
+        // Since we don't have access to all of scopt's internals, we have
+        // to brute-force this one.
+        val cols = Option(System.getenv("COLUMNS")).flatMap { sColumns =>
+          Try { Some(sColumns.toInt) }.recover { case _: Exception => None }.get
+        }
+        .getOrElse(80) - 1
+
+        val lines = usage.split("\n")
+        val u = for (line <- lines) yield {
+          val leadingBlanks = line.takeWhile(Character.isWhitespace).length
+          val w = WordWrapper(indentation = leadingBlanks, wrapWidth = cols)
+          val line2 = w.wrap(line.dropWhile(Character.isWhitespace))
+          if (line2 startsWith "Command")
+            s"\n$line2"
+          else
+            line2
+        }
+        Console.err.println(u.mkString("\n"))
+      }
+
+      override def showUsageAsError: Unit = showUsage()
     }
   }
 }

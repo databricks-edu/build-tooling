@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+Version 1.4.1:
+
+* Emit tool name (bdc) as prefix on verbose messages. 
+* When -v is specified, invoke master parser with new _verbose_ argument.
+
 Version 1.4.0:
 
 * Updated to work with newest version of master parser, which produces

@@ -32,7 +32,7 @@ from backports.tempfile import TemporaryDirectory
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -264,7 +264,7 @@ class BuildData(object):
 def verbose(msg):
     """Conditionally emit a verbose message."""
     if be_verbose:
-        print(msg)
+        print("{0}: {1}".format(PROG, msg))
 
 
 def error(msg):
@@ -741,7 +741,8 @@ def process_master_notebook(dest_root, notebook, src_path):
                                            exercises=True,
                                            answers=master['answers'],
                                            encoding_in=master['encoding_in'],
-                                           encoding_out=master['encoding_out'])
+                                           encoding_out=master['encoding_out'],
+                                           enable_verbosity=be_verbose)
             move_master_notebooks(master, tempdir)
         except Exception as e:
             error("Failed to process {0}\n    {1}: {2}".format(

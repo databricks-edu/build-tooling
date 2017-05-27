@@ -1,5 +1,10 @@
 # Change Log for Master Parse Tool
 
+Version 1.3.1:
+
+* Fixed a bug causing a mishandling of any language cell (e.g., `%sql`, `%r`)
+  that has the `ALL_NOTEBOOKS` _and_ one of `TODO` or `ANSWER`.
+
 Version 1.3.0:
 
 * Master parser now generates _three_ broad kinds of notebooks: instructor, 

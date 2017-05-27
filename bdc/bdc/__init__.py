@@ -742,7 +742,7 @@ def process_master_notebook(dest_root, notebook, src_path):
                                            answers=master['answers'],
                                            encoding_in=master['encoding_in'],
                                            encoding_out=master['encoding_out'],
-                                           verbose=be_verbose)
+                                           enable_verbosity=be_verbose)
             move_master_notebooks(master, tempdir)
         except Exception as e:
             error("Failed to process {0}\n    {1}: {2}".format(

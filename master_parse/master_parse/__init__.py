@@ -24,7 +24,7 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 
-VERSION = "1.3.1"
+VERSION = "1.4.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -42,9 +42,10 @@ class CommandLabel(Enum):
     TEST              = 'TEST'
     PRIVATE_TEST      = 'PRIVATE_TEST'
     DATABRICKS_ONLY   = 'DATABRICKS_ONLY'
+    TRAINING_HEADING  = 'TRAINING_HEADING'
     INLINE            = 'INLINE'
     ALL_NOTEBOOKS     = 'ALL_NOTEBOOKS'
-    INSTRUCTOR_NOTE  = 'INSTRUCTOR_NOTE'
+    INSTRUCTOR_NOTE   = 'INSTRUCTOR_NOTE'
 
 class CommandCode(Enum):
     SCALA      = 'scala'
@@ -89,9 +90,113 @@ DEFAULT_ENCODING_IN = 'utf-8'
 DEFAULT_ENCODING_OUT = 'utf-8'
 DEFAULT_OUTPUT_DIR = 'build_mp'
 
+INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
+
+DEFAULT_TRAINING_HEADING = """<div>
+<img src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/databricks-logo.png" style="float: right; margin-right: 30px; width: 100px"/>
+<h1 style="color: #d0000a">Databricks Training</h1>
+</div>"""
+
+CC_LICENSE = """<div>
+<a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/4.0/">
+  <img alt="Creative Commons License" style="border-width:0"
+       src="https://i.creativecommons.org/l/by-nc-nd/4.0/88x31.png"/>
+</a>
+<br/>
+This work is licensed under a
+<a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/4.0/">
+  Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International
+  License.
+</a>
+</div>"""
+
 # -----------------------------------------------------------------------------
 # Classes
 # -----------------------------------------------------------------------------
+
+class Params(object):
+    '''
+    Parsed command-line parameters or manually constructed parameters,
+    passed to process_notebooks().
+    '''
+    def __init__(self,
+                 path=None,
+                 output_dir=DEFAULT_OUTPUT_DIR,
+                 databricks=True,
+                 ipython=False,
+                 scala=False,
+                 python=False,
+                 r=False,
+                 sql=False,
+                 instructor=False,
+                 answers=False,
+                 exercises=False,
+                 creative_commons=False,
+                 training_heading_path=None,
+                 encoding_in=DEFAULT_ENCODING_IN,
+                 encoding_out=DEFAULT_ENCODING_OUT,
+                 enable_verbosity=False,
+                 enable_debug=False):
+        self.path = path
+        self.output_dir = output_dir or DEFAULT_OUTPUT_DIR
+        self.databricks = databricks
+        self.ipython = ipython
+        self.scala = scala
+        self.python = python
+        self.r = r
+        self.sql = sql
+        self.instructor = instructor
+        self.answers = answers
+        self.exercises = exercises
+        self.creative_commons = creative_commons
+        self.encoding_in = encoding_in or DEFAULT_ENCODING_IN
+        self.encoding_out = encoding_out or DEFAULT_ENCODING_OUT
+        self.enable_verbosity = enable_verbosity
+        self.enable_debug = enable_debug
+        self.training_heading_path = training_heading_path
+        self._training_heading = None
+
+    @property
+    def training_heading(self):
+        if self._training_heading is None:
+            if self.training_heading_path is None:
+                self._training_heading = DEFAULT_TRAINING_HEADING
+            else:
+                self._training_heading = ''.join(
+                    open(self.training_heading_path).readlines()
+                )
+        return self._training_heading
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __str__(self):
+        fields = [
+            'path',
+            'output_dir',
+            'databricks',
+            'ipython',
+            'scala',
+            'python',
+            'r',
+            'sql',
+            'instructor',
+            'answers',
+            'exercises',
+            'creative_commons',
+            'training_heading',
+            'encoding_in',
+            'encoding_out',
+            'enable_verbosity',
+            'enable_debug',
+        ]
+        return 'Params({0})'.format(
+            ','.join([
+                '{0}={1}'.format(f, self.__getattribute__(f))
+                for f in fields
+            ])
+        )
+
 
 Command = namedtuple('Command', ['part', 'code', 'labels', 'content'])
 
@@ -125,12 +230,13 @@ class NotebookGenerator(object):
         NotebookUser.ANSWERS: '_answers'
     }
 
-    def __init__(self, notebook_kind, notebook_user, notebook_code):
+    def __init__(self, notebook_kind, notebook_user, notebook_code, params):
         '''
 
         :param notebook_kind:  the NotebookKind
         :param notebook_user:  the NotebookUser
         :param notebook_code:  the parsed notebook code
+        :param params:         parsed (usually command-line) parameters
         '''
         base_keep = set(CommandLabel.__members__.values())
         self.keep_labels = self._get_labels(notebook_kind,
@@ -139,7 +245,7 @@ class NotebookGenerator(object):
         # discard labels not explicitly kept
         self.discard_labels = base_keep - self.keep_labels
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
-                       _all_notebooks, _INSTRUCTOR_NOTE]
+                       _all_notebooks, _instructor_note]
         self.replace = [(_ipythonReplaceRemoveLine, ''),
                         _rename_public_test,
                         _rename_import_public_test]
@@ -148,6 +254,8 @@ class NotebookGenerator(object):
         self.notebook_code = notebook_code
         self.file_ext = self._get_extension()
         self.base_comment = _code_to_comment[self.notebook_code]
+        self.params = params
+        print("--- NotebookGenerator: notebook_kind={0}, notebook_user={1}, notebook_code={2}, params={3}".format(notebook_kind, notebook_user, notebook_code, params))
 
     def _get_labels(self, *params):
         labels = {CommandLabel.TEST, CommandLabel.INLINE}
@@ -189,6 +297,7 @@ class NotebookGenerator(object):
             part_base = '_part{0}'
             part_string = part_base.format(i + 1) if parts else ''
 
+            print(">>> _output_dir={0}, base_file={1}, $={2}".format(_output_dir, base_file, NotebookGenerator.code_to_output_dir[self.notebook_code]))
             out_dir = os.path.join(
                 _output_dir, base_file,
                 NotebookGenerator.code_to_output_dir[self.notebook_code]
@@ -215,7 +324,7 @@ class NotebookGenerator(object):
                     header_adj = re.sub(_comment, self.base_comment, header)
                     if creative_commons:
                         header_adj += '\n{0} MAGIC %md\n{0} MAGIC {1}'.format(
-                            self.base_comment, _cc_license
+                            self.base_comment, CC_LICENSE
                         )
                         is_first = False
 
@@ -260,7 +369,7 @@ class NotebookGenerator(object):
                         elif part < i:  # earlier parts will be chained in %run
                             continue
 
-                    if (CommandLabel.INSTRUCTOR_NOTE in labels):
+                    if CommandLabel.INSTRUCTOR_NOTE in labels:
                         # Special processing.
                         if code != CommandCode.MARKDOWN:
                             raise Exception(
@@ -269,9 +378,16 @@ class NotebookGenerator(object):
                                 )
                             )
                         content = (
-                            ['<h2 style="color:red">Instructor Note</h2>'] +
+                            [INSTRUCTOR_NOTE_HEADING] +
                             content
                         )
+                    elif CommandLabel.TRAINING_HEADING in labels:
+                        if code != CommandCode.MARKDOWN:
+                            raise Exception(
+                                '{0} can only appear in Markdown cells.'.format(
+                                    CommandLabel.TRAINING_HEADING.value
+                                )
+                            )
 
                     inline = CommandLabel.INLINE in labels
 
@@ -302,6 +418,7 @@ class NotebookGenerator(object):
                         # -- ALL_NOTEBOOKS
                         labels = labels - {CommandLabel.ALL_NOTEBOOKS}
 
+                    # This thing just gets uglier and uglier.
                     if ( (not (discard_labels & labels)) and
                          #(not suppress) and
                          (((inline and code != self.notebook_code) or
@@ -322,6 +439,12 @@ class NotebookGenerator(object):
 
                         is_first = self._write_command(output, cell_split,
                                                        content, is_first)
+
+                    elif CommandLabel.TRAINING_HEADING in labels:
+                        is_first = self._write_command(
+                            output, command_cell,
+                            [self.params.training_heading], is_first
+                        )
 
             if is_IPython:
                 self.generate_ipynb(file_out)
@@ -415,6 +538,7 @@ _file_encoding_in =  DEFAULT_ENCODING_IN
 _file_encoding_out = DEFAULT_ENCODING_OUT
 _file_encoding_errors = 'strict'
 _output_dir = DEFAULT_OUTPUT_DIR
+print('!!! _output_dir={0}'.format(_output_dir))
 _be_verbose = False
 _show_debug = False
 
@@ -426,26 +550,6 @@ def _verbose(msg):
     if _be_verbose:
         print("master_parse: {0}".format(msg))
 
-
-def _collapse(s):
-    lines = [line.strip() for line in s.split("\n")]
-    non_empty = [line for line in lines if len(line) > 0]
-    return ' '.join(non_empty)
-
-
-# Commons license
-_cc_license = _collapse("""
-<a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/4.0/">
-  <img alt="Creative Commons License" style="border-width:0"
-       src="https://i.creativecommons.org/l/by-nc-nd/4.0/88x31.png"/>
-</a>
-<br/>
-This work is licensed under a
-<a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/4.0/">
-  Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International
-  License.
-</a>
-""")
 
 # Regular Expressions
 _comment = r'(#|//|--)' # Allow Python, Scala, and SQL style comments
@@ -506,7 +610,8 @@ _r_only = or_magic(CommandLabel.R_ONLY.value)
 _new_part = or_magic(r'NEW_PART')
 _inline = or_magic(CommandLabel.INLINE.value)
 _all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
-_INSTRUCTOR_NOTE = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
+_instructor_note = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
+_training_heading = or_magic(CommandLabel.TRAINING_HEADING.value)
 
 _ipython_remove_line = re.compile(
     r'.*{0}\s*REMOVE\s*LINE\s*IPYTHON\s*$'.format(_comment)
@@ -692,7 +797,8 @@ class Parser:
                         (_python_only, CommandLabel.PYTHON_ONLY),
                         (_r_only, CommandLabel.R_ONLY),
                         (_all_notebooks, CommandLabel.ALL_NOTEBOOKS),
-                        (_INSTRUCTOR_NOTE, CommandLabel.INSTRUCTOR_NOTE),
+                        (_instructor_note, CommandLabel.INSTRUCTOR_NOTE),
+                        (_training_heading, CommandLabel.TRAINING_HEADING),
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
                         (_sql_only, CommandLabel.SQL_ONLY)]
@@ -866,111 +972,67 @@ class UsageError(Exception):
         Exception.__init__(self, message)
 
 
-def process_notebooks(path,
-                      output_dir=DEFAULT_OUTPUT_DIR,
-                      databricks=True,
-                      ipython=False,
-                      scala=False,
-                      python=False,
-                      r=False,
-                      sql=False,
-                      instructor=False,
-                      answers=False,
-                      exercises=False,
-                      creative_commons=False,
-                      encoding_in=DEFAULT_ENCODING_IN,
-                      encoding_out=DEFAULT_ENCODING_OUT,
-                      enable_verbosity=False,
-                      enable_debug=False):
+def process_notebooks(params):
     """
     Main entry point for notebook processing. This function can be used to
     process notebook from within another Python program.
 
-    :param path:               The path to the notebook or to the directory
-                               containing the notebooks.
-    :param output_dir:         The output directory. Defaults to
-                               DEFAULT_OUTPUT_DIR
-    :param databricks:         True to include Databricks notebook content,
-                               False to suppress it.
-    :param ipython:            True to include IPython (Jupyter) notebook
-                               content, False to suppress it.
-    :param scala:              True to produce Scala notebooks, False to
-                               skip all Scala content
-    :param python:             True to produce Python notebooks, False to
-                               skip all Python content
-    :param r:                  True to produce R notebooks, False to skip all
-                               R content
-    :param sql:                True to produce SQL notebooks, False to skip
-                               all SQL content
-    :param instructor:         True to produce instructor notebooks, False
-                               otherwise
-    :param exercises:          True to produce exercises notebooks, False
-                               otherwise
-    :param answers:            True to produce answer notebooks, False otherwise
-    :param creative_commons:   True to add Creative Commons license cells,
-                               False otherwise
-    :param encoding_in:        Input encoding for the notebook. Defaults to
-                               DEFAULT_ENCODING_IN
-    :param encoding_out:       Encoding for the output notebook(s). Defaults to
-                               DEFAULT_ENCODING_OUT.
-    :param enable_verbosity:   Emit verbose messages. Default: False
-    :param enable_debug:       Emit debug messages. Default: False
-
+    :param params: parameters
     :return: Nothing.
     """
     global _output_dir, _file_encoding_in, _file_encoding_out
-    _output_dir = output_dir if output_dir else DEFAULT_OUTPUT_DIR
-    _file_encoding_in = encoding_in or DEFAULT_ENCODING_IN
-    _file_encoding_out = encoding_out or DEFAULT_ENCODING_OUT
+    _output_dir = params.output_dir
+    _file_encoding_in = params.encoding_in
+    _file_encoding_out = params.encoding_out
 
     global _be_verbose
-    _be_verbose = enable_verbosity
+    _be_verbose = params.enable_verbosity
 
     global _show_debug
-    _show_debug = enable_debug
+    _show_debug = params.enable_debug
 
-    if not (databricks or ipython):
+    if not (params.databricks or params.ipython):
         raise UsageError("Specify at least one of databricks or ipython")
-    if not (scala or python or r or sql):
+    if not (params.scala or params.python or params.r or params.sql):
         raise UsageError("Specify at least one of Scala, Python, R or SQL")
-    if not (instructor or answers or exercises):
+    if not (params.instructor or params.answers or params.exercises):
         raise UsageError("Specify at least one of: instructor, answers, exercises")
 
-    if os.path.isdir(path):
+    if os.path.isdir(params.path):
         files = []
         for p in ['*.py', '*.scala', '*.r', '*.sql']:
             files.extend(glob.glob(os.path.join(path, p)))
     else:
-        files = [path]
+        files = [params.path]
 
     if not files:
-        raise UsageError("No acceptable files found for {0}".format(path))
+        raise UsageError("No acceptable files found for {0}".format(params.path))
 
     notebook_kinds = []
-    if databricks:
+    if params.databricks:
         notebook_kinds.append(NotebookKind.DATABRICKS)
-    if ipython:
+    if params.ipython:
         notebook_kinds.append(NotebookKind.IPYTHON)
 
     notebook_users = []
-    if instructor:
+    if params.instructor:
         notebook_users.append(NotebookUser.INSTRUCTOR)
-    if exercises:
+    if params.exercises:
         notebook_users.append(NotebookUser.EXERCISES)
-    if answers:
+    if params.answers:
         notebook_users.append(NotebookUser.ANSWERS)
 
     notebook_languages = []
-    if scala:
+    if params.scala:
         notebook_languages.append(CommandCode.SCALA)
-    if python:
+    if params.python:
         notebook_languages.append(CommandCode.PYTHON)
-    if r:
+    if params.r:
         notebook_languages.append(CommandCode.R)
-    if sql:
+    if params.sql:
         notebook_languages.append(CommandCode.SQL)
 
-    if ipython and CommandCode.PYTHON not in notebook_languages:
+    if params.ipython and CommandCode.PYTHON not in notebook_languages:
         langs = []
         for x in notebook_languages: langs.append(Parser.code_to_extension[x])
         raise UsageError('IPython target can only be used when generating' + \
@@ -982,14 +1044,14 @@ def process_notebooks(path,
             for lang in notebook_languages:
                 if kind != NotebookKind.IPYTHON or \
                    (kind == NotebookKind.IPYTHON and lang == CommandCode.PYTHON):
-                    notebooks.append(NotebookGenerator(kind, user, lang))
+                    notebooks.append(NotebookGenerator(kind, user, lang, params))
 
     parser = Parser()
     for db_src in files:
         header, commands = parser.generate_commands(db_src)
         for notebook in notebooks:
             notebook.generate(header, commands, db_src,
-                              creative_commons=creative_commons)
+                              creative_commons=params.creative_commons)
 
 
 def main():
@@ -1048,6 +1110,15 @@ def main():
                             action='store',
                             default=DEFAULT_ENCODING_OUT,
                             metavar="ENCODING")
+    arg_parser.add_argument('-th', '--training-heading',
+                            help='A file containing Markdown and/or HTML, ' +
+                                 'to be used to replace {0} cells. If not ' +
+                                 'specified, a default is used'.format(
+                                     CommandLabel.TRAINING_HEADING.value
+                                 ),
+                            default=None,
+                            metavar="<file>")
+
     arg_parser.add_argument('-d', '--dir',
                             help="Base output directory. Default: {0}".format(
                                 DEFAULT_OUTPUT_DIR),
@@ -1073,26 +1144,31 @@ def main():
     if not (args.scala or args.python or args.rproject or args.sql):
         arg_parser.error('at least one of -sc, -py, -r, or -sq is required')
 
-    if not (args.instructor or args.student):
-        arg_parser.error('at least one of -in or -st is required')
+    if not (args.instructor or args.exercises):
+        arg_parser.error('at least one of -in or -ex is required')
+
+    params = Params(
+        path=args.filename,
+        output_dir=args.output_dir,
+        databricks=args.databricks,
+        ipython=args.ipython,
+        scala=args.scala,
+        python=args.python,
+        r=args.rproject,
+        sql=args.sql,
+        instructor=args.instructor,
+        answers=args.answers,
+        exercises=args.exercises,
+        creative_commons=args.creativecommons,
+        training_heading_path=args.training_heading,
+        encoding_in=args.encoding_in,
+        encoding_out=args.encoding_out,
+        enable_verbosity=args.verbose,
+        enable_debug=args.debug
+    )
 
     try:
-        process_notebooks(path=args.filename,
-                          output_dir=args.output_dir,
-                          databricks=args.databricks,
-                          ipython=args.ipython,
-                          scala=args.scala,
-                          python=args.python,
-                          r=args.rproject,
-                          sql=args.sql,
-                          instructor=args.instructor,
-                          answers=args.answers,
-                          exercises=args.exercises,
-                          creative_commons=args.creativecommons,
-                          encoding_in=args.encoding_in,
-                          encoding_out=args.encoding_out,
-                          enable_verbosity=args.verbose,
-                          enable_debug=args.debug)
+        process_notebooks(params)
     except UsageError as e:
         sys.stderr.write(e.message + '\n')
         sys.exit(1)

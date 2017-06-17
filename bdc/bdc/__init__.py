@@ -132,14 +132,15 @@ h4 {
 
 # Always generate Databricks notebooks.
 MASTER_PARSE_DEFAULTS = {
-    'enabled':      False,
-    'python':       True,
-    'r':            False,
-    'scala':        True,
-    'sql':          False,
-    'answers':      True,
-    'encoding_in':  'UTF-8',
-    'encoding_out': 'UTF-8',
+    'enabled':          False,
+    'python':           True,
+    'r':                False,
+    'scala':            True,
+    'sql':              False,
+    'answers':          True,
+    'encoding_in':      'UTF-8',
+    'encoding_out':     'UTF-8',
+    'training_heading': None
 }
 
 ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
@@ -729,20 +730,24 @@ def process_master_notebook(dest_root, notebook, src_path):
     master = notebook.master
     with TemporaryDirectory() as tempdir:
         try:
-            master_parse.process_notebooks(path=src_path,
-                                           output_dir=tempdir,
-                                           databricks=True,
-                                           ipython=False,
-                                           scala=master['scala'],
-                                           python=master['python'],
-                                           r=master['r'],
-                                           sql=master['sql'],
-                                           instructor=True,
-                                           exercises=True,
-                                           answers=master['answers'],
-                                           encoding_in=master['encoding_in'],
-                                           encoding_out=master['encoding_out'],
-                                           enable_verbosity=be_verbose)
+            params = master_parse.Params(
+                path=src_path,
+                output_dir=tempdir,
+                databricks=True,
+                ipython=False,
+                scala=master['scala'],
+                python=master['python'],
+                r=master['r'],
+                sql=master['sql'],
+                instructor=True,
+                exercises=True,
+                answers=master['answers'],
+                training_heading_path=master['training_heading'],
+                encoding_in=master['encoding_in'],
+                encoding_out=master['encoding_out'],
+                enable_verbosity=be_verbose
+            )
+            master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)
         except Exception as e:
             error("Failed to process {0}\n    {1}: {2}".format(

@@ -141,24 +141,27 @@ misc_files:
 #              Note: When master parsing is enabled, instructor, exercises
 #              and answer notebooks are ALWAYS generated.
 #
-#   enabled      - true to enable master processing, false to disable.
-#                  Default: false.
+#   enabled          - true to enable master processing, false to disable.
+#                      Default: false.
 #
-#                  The easiest way to enable master processing with all the
-#                  defaults is:
+#                      The easiest way to enable master processing with all the
+#                      defaults is:
 #
-#                  master:
-#                    enabled: true
+#                      master:
+#                        enabled: true
 #
-#   answers      - whether or not to generate answer notebooks. True by default.
-#   scala        - true to generate a Scala notebook. True by default.
-#   python       - true to generate a Python notebook. True by default.
-#   r            - true to generate an R notebook. False by default.
-#   sql          - true to generate an SQL notebook. False by default.
-#   encoding_in  - the encoding to use when reading the master notebook.
-#                  Defaults to UTF-8
-#   encoding_out - the encoding to use when writing the output notebooks.
-#                  Defaults to UTF-8
+#   answers          - whether or not to generate answer notebooks. True by default.
+#   scala            - true to generate a Scala notebook. True by default.
+#   python           - true to generate a Python notebook. True by default.
+#   r                - true to generate an R notebook. False by default.
+#   sql              - true to generate an SQL notebook. False by default.
+#   encoding_in      - the encoding to use when reading the master notebook.
+#                      Defaults to UTF-8
+#   encoding_out     - the encoding to use when writing the output notebooks.
+#                      Defaults to UTF-8
+#   training_heading - Path to a file containing Markdown and/or HTML, to be
+#                      used to replace cells marked TRAINING_HEADING. If not
+#                      specified, an internal default will be used.
 #
 # run_test   - Whether or not to test the dataset by running it in a cluster
 #              within a shard. The shard and cluster configuration are specified

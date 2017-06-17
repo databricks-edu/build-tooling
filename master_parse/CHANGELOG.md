@@ -1,5 +1,12 @@
 # Change Log for Master Parse Tool
 
+Version 1.4.0:
+
+* Added `TRAINING_HEADING` command, which replaces the (Markdown) cell in
+  which it appears with a standard heading.
+* Added a `-th` (`--training-heading`) command line option that permits
+  overriding the standard heading with the contents of some other file.
+
 Version 1.3.1:
 
 * Fixed a bug causing a mishandling of any language cell (e.g., `%sql`, `%r`)

@@ -1,5 +1,14 @@
 # Change Log for BDC
 
+Version 1.5.0:
+
+* Updated to support `training_heading` override parameter in the
+  `master` section for a notebook. This parameter, if defined, must
+  point to a file containing Markdown and/or HTML, to be used to
+  replace cells with the `TRAINING_HEADING` command. It corresponds to
+  the `--training-heading` master parse command-line parameter, and it's
+  optional.
+
 Version 1.4.1:
 
 * Emit tool name (bdc) as prefix on verbose messages. 

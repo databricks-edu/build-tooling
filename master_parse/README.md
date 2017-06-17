@@ -70,6 +70,10 @@ More than one option may be specified.
   "cp1252", though a more useful default might be "UTF-8".
 * `-eo ENCODING`: Specifies the desired encoding of the output files.
   Defaults to "UTF-8".
+* `-th PATH` or `--training-heading PATH`: Specifies the path to a file
+  containing Markdown and/or HTML, to be used to replace any
+  `TRAINING_HEADING` cells. If not specified, internally coded
+  default HTML is used.
 
 ### Filename group
 
@@ -170,6 +174,17 @@ In a Python code cell, this is not valid Master Parse Tool syntax and will simpl
 #### Valid labels
 
 The valid labels are:
+
+**TRAINING\_HEADING**
+
+This command must occur only in a Markdown cell. The cell containing
+the command is replaced by a standard Databricks training heading.
+(Thus, it's most useful at the top of a notebook, though the tool
+does not enforce that.)
+
+The standard header is controlled by the `-th` (`--training-heading`)
+command line option. If that option is missing, then an internal
+default is used.
 
 **IPYTHON\_ONLY**
 

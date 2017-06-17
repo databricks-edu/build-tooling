@@ -255,7 +255,6 @@ class NotebookGenerator(object):
         self.file_ext = self._get_extension()
         self.base_comment = _code_to_comment[self.notebook_code]
         self.params = params
-        print("--- NotebookGenerator: notebook_kind={0}, notebook_user={1}, notebook_code={2}, params={3}".format(notebook_kind, notebook_user, notebook_code, params))
 
     def _get_labels(self, *params):
         labels = {CommandLabel.TEST, CommandLabel.INLINE}
@@ -297,7 +296,6 @@ class NotebookGenerator(object):
             part_base = '_part{0}'
             part_string = part_base.format(i + 1) if parts else ''
 
-            print(">>> _output_dir={0}, base_file={1}, $={2}".format(_output_dir, base_file, NotebookGenerator.code_to_output_dir[self.notebook_code]))
             out_dir = os.path.join(
                 _output_dir, base_file,
                 NotebookGenerator.code_to_output_dir[self.notebook_code]
@@ -538,7 +536,6 @@ _file_encoding_in =  DEFAULT_ENCODING_IN
 _file_encoding_out = DEFAULT_ENCODING_OUT
 _file_encoding_errors = 'strict'
 _output_dir = DEFAULT_OUTPUT_DIR
-print('!!! _output_dir={0}'.format(_output_dir))
 _be_verbose = False
 _show_debug = False
 

@@ -32,7 +32,7 @@ from backports.tempfile import TemporaryDirectory
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.4.1"
+VERSION = "1.5.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -140,7 +140,7 @@ MASTER_PARSE_DEFAULTS = {
     'answers':          True,
     'encoding_in':      'UTF-8',
     'encoding_out':     'UTF-8',
-    'training_heading': None
+    'notebook_heading': None
 }
 
 ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
@@ -742,7 +742,7 @@ def process_master_notebook(dest_root, notebook, src_path):
                 instructor=True,
                 exercises=True,
                 answers=master['answers'],
-                training_heading_path=master['training_heading'],
+                notebook_heading_path=master['notebook_heading'],
                 encoding_in=master['encoding_in'],
                 encoding_out=master['encoding_out'],
                 enable_verbosity=be_verbose

@@ -1,5 +1,12 @@
 # Change Log for Master Parse Tool
 
+Version 1.4.1:
+
+* Fixed bug where notebook heading wasn't properly generated.
+* Changed `TRAINING_HEADING` to the more general-purpose `NOTEBOOK_HEADING`.
+* Changed `-th` (`--training-heading`) option to `-nh` (`--notebook-heading`),
+  and made corresponding API changes.
+
 Version 1.4.0:
 
 * Added `TRAINING_HEADING` command, which replaces the (Markdown) cell in

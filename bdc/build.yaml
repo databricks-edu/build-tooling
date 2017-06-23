@@ -159,8 +159,8 @@ misc_files:
 #                      Defaults to UTF-8
 #   encoding_out     - the encoding to use when writing the output notebooks.
 #                      Defaults to UTF-8
-#   training_heading - Path to a file containing Markdown and/or HTML, to be
-#                      used to replace cells marked TRAINING_HEADING. If not
+#   notebook_heading - Path to a file containing Markdown and/or HTML, to be
+#                      used to replace cells marked NOTEBOOK_HEADING. If not
 #                      specified, an internal default will be used.
 #
 # run_test   - Whether or not to test the dataset by running it in a cluster

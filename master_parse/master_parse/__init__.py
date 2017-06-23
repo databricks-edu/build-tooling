@@ -24,7 +24,7 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -42,7 +42,7 @@ class CommandLabel(Enum):
     TEST              = 'TEST'
     PRIVATE_TEST      = 'PRIVATE_TEST'
     DATABRICKS_ONLY   = 'DATABRICKS_ONLY'
-    TRAINING_HEADING  = 'TRAINING_HEADING'
+    NOTEBOOK_HEADING  = 'NOTEBOOK_HEADING'
     INLINE            = 'INLINE'
     ALL_NOTEBOOKS     = 'ALL_NOTEBOOKS'
     INSTRUCTOR_NOTE   = 'INSTRUCTOR_NOTE'
@@ -92,9 +92,10 @@ DEFAULT_OUTPUT_DIR = 'build_mp'
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
-DEFAULT_TRAINING_HEADING = """<div>
+DEFAULT_NOTEBOOK_HEADING = """<div>
 <img src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/databricks-logo.png" style="float: right; margin-right: 30px; width: 100px"/>
 <h1 style="color: #d0000a">Databricks Training</h1>
+Copyright &copy; 2017 Databricks, Inc.
 </div>"""
 
 CC_LICENSE = """<div>
@@ -132,7 +133,7 @@ class Params(object):
                  answers=False,
                  exercises=False,
                  creative_commons=False,
-                 training_heading_path=None,
+                 notebook_heading_path=None,
                  encoding_in=DEFAULT_ENCODING_IN,
                  encoding_out=DEFAULT_ENCODING_OUT,
                  enable_verbosity=False,
@@ -153,19 +154,19 @@ class Params(object):
         self.encoding_out = encoding_out or DEFAULT_ENCODING_OUT
         self.enable_verbosity = enable_verbosity
         self.enable_debug = enable_debug
-        self.training_heading_path = training_heading_path
-        self._training_heading = None
+        self.notebook_heading_path = notebook_heading_path
+        self._notebook_heading = None
 
     @property
-    def training_heading(self):
-        if self._training_heading is None:
-            if self.training_heading_path is None:
-                self._training_heading = DEFAULT_TRAINING_HEADING
+    def notebook_heading(self):
+        if self._notebook_heading is None:
+            if self.notebook_heading_path is None:
+                self._notebook_heading = DEFAULT_NOTEBOOK_HEADING
             else:
-                self._training_heading = ''.join(
-                    open(self.training_heading_path).readlines()
+                self._notebook_heading = ''.join(
+                    open(self.notebook_heading_path).readlines()
                 )
-        return self._training_heading
+        return self._notebook_heading
 
     def __repr__(self):
         return self.__str__()
@@ -184,7 +185,7 @@ class Params(object):
             'answers',
             'exercises',
             'creative_commons',
-            'training_heading',
+            'notebook_heading',
             'encoding_in',
             'encoding_out',
             'enable_verbosity',
@@ -379,11 +380,11 @@ class NotebookGenerator(object):
                             [INSTRUCTOR_NOTE_HEADING] +
                             content
                         )
-                    elif CommandLabel.TRAINING_HEADING in labels:
+                    elif CommandLabel.NOTEBOOK_HEADING in labels:
                         if code != CommandCode.MARKDOWN:
                             raise Exception(
                                 '{0} can only appear in Markdown cells.'.format(
-                                    CommandLabel.TRAINING_HEADING.value
+                                    CommandLabel.NOTEBOOK_HEADING.value
                                 )
                             )
 
@@ -438,10 +439,15 @@ class NotebookGenerator(object):
                         is_first = self._write_command(output, cell_split,
                                                        content, is_first)
 
-                    elif CommandLabel.TRAINING_HEADING in labels:
+                    elif CommandLabel.NOTEBOOK_HEADING in labels:
+                        hdr_lines = self.params.notebook_heading.strip().split('\n')
+                        hdr = [
+                            '{0} MAGIC {1}'.format(self.base_comment, line)
+                            for line in ['%md'] + hdr_lines
+                        ]
+
                         is_first = self._write_command(
-                            output, command_cell,
-                            [self.params.training_heading], is_first
+                            output, command_cell, hdr + ['\n'], is_first
                         )
 
             if is_IPython:
@@ -608,7 +614,7 @@ _new_part = or_magic(r'NEW_PART')
 _inline = or_magic(CommandLabel.INLINE.value)
 _all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
 _instructor_note = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
-_training_heading = or_magic(CommandLabel.TRAINING_HEADING.value)
+_training_heading = or_magic(CommandLabel.NOTEBOOK_HEADING.value)
 
 _ipython_remove_line = re.compile(
     r'.*{0}\s*REMOVE\s*LINE\s*IPYTHON\s*$'.format(_comment)
@@ -795,7 +801,7 @@ class Parser:
                         (_r_only, CommandLabel.R_ONLY),
                         (_all_notebooks, CommandLabel.ALL_NOTEBOOKS),
                         (_instructor_note, CommandLabel.INSTRUCTOR_NOTE),
-                        (_training_heading, CommandLabel.TRAINING_HEADING),
+                        (_training_heading, CommandLabel.NOTEBOOK_HEADING),
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
                         (_sql_only, CommandLabel.SQL_ONLY)]
@@ -1107,11 +1113,11 @@ def main():
                             action='store',
                             default=DEFAULT_ENCODING_OUT,
                             metavar="ENCODING")
-    arg_parser.add_argument('-th', '--training-heading',
+    arg_parser.add_argument('-nh', '--notebook-heading',
                             help='A file containing Markdown and/or HTML, ' +
                                  'to be used to replace {0} cells. If not ' +
                                  'specified, a default is used'.format(
-                                     CommandLabel.TRAINING_HEADING.value
+                                     CommandLabel.NOTEBOOK_HEADING.value
                                  ),
                             default=None,
                             metavar="<file>")
@@ -1157,7 +1163,7 @@ def main():
         answers=args.answers,
         exercises=args.exercises,
         creative_commons=args.creativecommons,
-        training_heading_path=args.training_heading,
+        notebook_heading_path=args.notebook_heading,
         encoding_in=args.encoding_in,
         encoding_out=args.encoding_out,
         enable_verbosity=args.verbose,

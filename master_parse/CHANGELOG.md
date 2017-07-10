@@ -1,5 +1,9 @@
 # Change Log for Master Parse Tool
 
+Version 1.5.0:
+
+* Updated format of default notebook heading.
+
 Version 1.4.1:
 
 * Fixed bug where notebook heading wasn't properly generated.

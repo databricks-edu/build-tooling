@@ -24,7 +24,7 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 
-VERSION = "1.4.1"
+VERSION = "1.5.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -92,10 +92,8 @@ DEFAULT_OUTPUT_DIR = 'build_mp'
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
-DEFAULT_NOTEBOOK_HEADING = """<div>
-<img src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/databricks-logo.png" style="float: right; margin-right: 30px; width: 100px"/>
-<h1 style="color: #d0000a">Databricks Training</h1>
-Copyright &copy; 2017 Databricks, Inc.
+DEFAULT_NOTEBOOK_HEADING = """<div style="width: 100%; background: black; height: 96px">
+  <img src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/db_learning_rev.png" style="display: block; margin: auto"/>
 </div>"""
 
 CC_LICENSE = """<div>

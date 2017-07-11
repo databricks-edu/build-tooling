@@ -1,8 +1,5 @@
 # gendbc
 
-**Warning: This tool is being superseded. It's still used by the build, but
-it is _not_ being maintained moving forward.**
-
 ## Introduction
 
 This Scala program takes, as input, a directory that contains Scala, Python,

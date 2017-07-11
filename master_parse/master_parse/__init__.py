@@ -81,8 +81,8 @@ class NotebookUser(Enum):
 
 DEPRECATED_LABELS = {
     CommandLabel.INLINE,
-    CommandLabel.PRIVATE_TEST,
-    CommandLabel.IPYTHON_ONLY
+    CommandLabel.IPYTHON_ONLY,
+    CommandLabel.DATABRICKS_ONLY
 }
 
 NEWLINE_AFTER_CODE = {CommandCode.SCALA, CommandCode.R, CommandCode.PYTHON}

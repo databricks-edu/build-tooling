@@ -196,9 +196,12 @@ If IPython notebooks aren't being generated, these cells are stripped out.
 
 **DATABRICKS\_ONLY**
 
+**This cell type is _deprecated_ and will be removed in a future release of
+this tool. Use of it will generate warnings.**
+
 Cells which need to be in Databricks notebooks only.
 
-**SCALA_\_ONLY**, **PYTHON\_ONLY**, **SQL\_ONLY**, **R\_ONLY**
+**SCALA\_ONLY**, **PYTHON\_ONLY**, **SQL\_ONLY**, **R\_ONLY**
 
 Cells marked with this show up only when generating notebooks for _lang. These
 are for special cells (like Markdown cells, `%fs` cells, `%sh` cells) that you
@@ -222,10 +225,16 @@ provide a means for a student to test the solution to an exercise. Cells show up
 
 **PRIVATE\_TEST**
 
-**This cell type is _deprecated_ and will be removed in a future release of
-this tool. Use of it will generate warnings.**
-
 Cells show up in instructor/answer notebooks.
+
+**VIDEO**
+
+Valid only in Markdown cells, this command is replaced with HTML for a
+large video button. When clicked, the button launches a new tab to the
+specified URL. The command takes the form `VIDEO url [title]`. `url`
+is the link to the video. The title (optional) is the video's title which,
+if present, will appear in the button. If no title is supplied, the button
+will not contain a title.
 
 **INSTRUCTOR_NOTE**
 

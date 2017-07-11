@@ -4,6 +4,8 @@ Version 1.5.0:
 
 * Added support for `VIDEO <url> <title>` command.
 * Updated format of default notebook heading.
+* Deprecated the `DATABRICKS_ONLY` command.
+* Un-deprecated the `PRIVATE_TEST` command.
 
 Version 1.4.1:
 

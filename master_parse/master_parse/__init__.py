@@ -46,6 +46,7 @@ class CommandLabel(Enum):
     INLINE            = 'INLINE'
     ALL_NOTEBOOKS     = 'ALL_NOTEBOOKS'
     INSTRUCTOR_NOTE   = 'INSTRUCTOR_NOTE'
+    VIDEO             = 'VIDEO'
 
 class CommandCode(Enum):
     SCALA      = 'scala'
@@ -89,6 +90,16 @@ NEWLINE_AFTER_CODE = {CommandCode.SCALA, CommandCode.R, CommandCode.PYTHON}
 DEFAULT_ENCODING_IN = 'utf-8'
 DEFAULT_ENCODING_OUT = 'utf-8'
 DEFAULT_OUTPUT_DIR = 'build_mp'
+
+# VIDEO_TEMPLATE requires {0} and {1}
+VIDEO_TEMPLATE = """<div style="width: 30%; height: auto; background: black; border: 1px solid black; border-radius: 10px 10px 10px 10px;">
+  <div style="width: 95%; display: block; margin: auto">
+    <a href="{0}" target="video" style="text-decoration: none">
+      <img src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/video-button.png" style=""/>
+      <div style="width: 100%; text-align: center; color: white; margin-top: 40px; margin-bottom: 20px">{1}</div>
+    </a>
+  </div>
+</div>"""
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
@@ -244,7 +255,7 @@ class NotebookGenerator(object):
         # discard labels not explicitly kept
         self.discard_labels = base_keep - self.keep_labels
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
-                       _all_notebooks, _instructor_note]
+                       _all_notebooks, _instructor_note, _video]
         self.replace = [(_ipythonReplaceRemoveLine, ''),
                         _rename_public_test,
                         _rename_import_public_test]
@@ -385,6 +396,13 @@ class NotebookGenerator(object):
                                     CommandLabel.NOTEBOOK_HEADING.value
                                 )
                             )
+                    elif CommandLabel.VIDEO in labels:
+                        if code != CommandCode.MARKDOWN:
+                            raise Exception(
+                                '{0} can only appear in Markdown cells.'.format(
+                                    CommandLabel.NOTEBOOK_HEADING.value
+                                )
+                            )
 
                     inline = CommandLabel.INLINE in labels
 
@@ -448,8 +466,41 @@ class NotebookGenerator(object):
                             output, command_cell, hdr + ['\n'], is_first
                         )
 
+                    elif CommandLabel.VIDEO in labels:
+                        new_content = self._handle_video_cell(cell_num, content)
+                        new_cell = [
+                            '{0} MAGIC {1}'.format(self.base_comment, line)
+                            for line in ['%md'] + new_content
+                        ]
+                        is_first = self._write_command(
+                            output, command_cell, new_cell + ['\n'], is_first
+                        )
+
             if is_IPython:
                 self.generate_ipynb(file_out)
+
+    def _handle_video_cell(self, cell_num, content):
+        new_content = []
+        for line in content:
+            m = _video.match(line)
+            if m:
+                # The regular expression matches the first part of the token
+                # (e.g., "-- VIDEO"). The remainder of the line constitutes
+                # the arguments.
+                arg_string = line[m.end():]
+                if len(arg_string.strip()) == 0:
+                    raise Exception(
+                        'Cell {0}: "{1}" is not of form: VIDEO <url> [<title>]'.format(
+                            cell_num, line
+                        )
+                    )
+
+                args = arg_string.split(None, 1)
+                (url, title) = args if len(args) == 2 else (args[0], "")
+                new_content = new_content + VIDEO_TEMPLATE.format(url, title).split('\n')
+            else:
+                new_content.append(line)
+        return new_content
 
     def _write_command(self, output, cell_split, content, is_first):
         if not is_first:
@@ -612,6 +663,7 @@ _new_part = or_magic(r'NEW_PART')
 _inline = or_magic(CommandLabel.INLINE.value)
 _all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
 _instructor_note = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
+_video = or_magic(CommandLabel.VIDEO.value)
 _training_heading = or_magic(CommandLabel.NOTEBOOK_HEADING.value)
 
 _ipython_remove_line = re.compile(
@@ -802,6 +854,7 @@ class Parser:
                         (_training_heading, CommandLabel.NOTEBOOK_HEADING),
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
+                        (_video, CommandLabel.VIDEO),
                         (_sql_only, CommandLabel.SQL_ONLY)]
 
     pattern_to_code = [(_markdown, CommandCode.MARKDOWN),
@@ -1145,8 +1198,11 @@ def main():
     if not (args.scala or args.python or args.rproject or args.sql):
         arg_parser.error('at least one of -sc, -py, -r, or -sq is required')
 
-    if not (args.instructor or args.exercises):
-        arg_parser.error('at least one of -in or -ex is required')
+    if not (args.instructor or args.exercises or args.answers):
+        arg_parser.error('at least one of -in, -ex or -an is required')
+
+    if not args.filename:
+        arg_parser.error('Missing notebook path.')
 
     params = Params(
         path=args.filename,

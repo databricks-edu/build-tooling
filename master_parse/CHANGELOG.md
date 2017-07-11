@@ -2,6 +2,7 @@
 
 Version 1.5.0:
 
+* Added support for `VIDEO <url> <title>` command.
 * Updated format of default notebook heading.
 
 Version 1.4.1:

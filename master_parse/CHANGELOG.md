@@ -4,6 +4,11 @@ Version 1.7.0:
 
 * Add cell validity checks that ensure that some commands can only appear
   in certain cells.
+* `TEST` cells can now have an annotation after the word `TEST`, and if
+  the annotation is missing, the tool adds one. Thus, in a code cell,
+  the line `TEST - You can use this cell to test your solution` will be
+  emitted as is, but the cell `TEST` will be transformed to
+  `TEST - Run this cell to test your solution`. 
   
 Version 1.6.0:
 

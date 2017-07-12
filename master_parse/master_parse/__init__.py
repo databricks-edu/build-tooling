@@ -24,7 +24,7 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -77,6 +77,8 @@ class NotebookUser(Enum):
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
+
+DEFAULT_TEST_CELL_ANNOTATION = "Run this cell to test your answer."
 
 ALL_CELL_TYPES = {c for c in CommandCode }
 CODE_CELL_TYPES = {
@@ -427,6 +429,7 @@ class NotebookGenerator(object):
                             continue
 
                     if CommandLabel.INSTRUCTOR_NOTE in labels:
+                        # Special case processing
                         content = (
                             [INSTRUCTOR_NOTE_HEADING] +
                             content
@@ -463,13 +466,16 @@ class NotebookGenerator(object):
 
                     # This thing just gets uglier and uglier.
                     if ( (not (discard_labels & labels)) and
-                         #(not suppress) and
                          (((inline and code != self.notebook_code) or
                          ((not inline) and code == self.notebook_code)) or
                          all_notebooks)):
 
                         content = self.remove_and_replace(content, code, inline,
                                                           all_notebooks, is_first)
+
+                        if CommandLabel.TEST in labels:
+                            # Special handling.
+                            content = self._handle_test_cell(cell_num, content)
 
                         isCodeCell = code != CommandCode.MARKDOWN
 
@@ -496,27 +502,47 @@ class NotebookGenerator(object):
             if is_IPython:
                 self.generate_ipynb(file_out)
 
+    def _handle_test_cell(self, cell_num, content):
+        new_content = []
+        for line in content:
+            m = _test.match(line)
+            if not m:
+                new_content.append(line)
+                continue
+
+            remainder = line[m.end():].strip()
+            if len(remainder) > 0:
+                # There's already an annotation on the TEST marker.
+                new_content.append(line)
+            else:
+                # Add the default annotation.
+                new_content.append(line + " - " + DEFAULT_TEST_CELL_ANNOTATION)
+
+        return new_content
+
     def _handle_video_cell(self, cell_num, content):
         new_content = []
         for line in content:
             m = _video.match(line)
-            if m:
-                # The regular expression matches the first part of the token
-                # (e.g., "-- VIDEO"). The remainder of the line constitutes
-                # the arguments.
-                arg_string = line[m.end():]
-                if len(arg_string.strip()) == 0:
-                    raise Exception(
-                        'Cell {0}: "{1}" is not of form: VIDEO <url> [<title>]'.format(
-                            cell_num, line
-                        )
-                    )
-
-                args = arg_string.split(None, 1)
-                (url, title) = args if len(args) == 2 else (args[0], "")
-                new_content = new_content + VIDEO_TEMPLATE.format(url, title).split('\n')
-            else:
+            if not m:
                 new_content.append(line)
+                continue
+
+            # The regular expression matches the first part of the token
+            # (e.g., "-- VIDEO"). The remainder of the line constitutes
+            # the arguments.
+            arg_string = line[m.end():]
+            if len(arg_string.strip()) == 0:
+                raise Exception(
+                    'Cell {0}: "{1}" is not of form: VIDEO <url> [<title>]'.format(
+                    cell_num, line
+                    )
+                )
+
+            args = arg_string.split(None, 1)
+            (url, title) = args if len(args) == 2 else (args[0], "")
+            new_content = new_content + VIDEO_TEMPLATE.format(url, title).split('\n')
+
         return new_content
 
     def _write_command(self, output, cell_split, content, is_first):

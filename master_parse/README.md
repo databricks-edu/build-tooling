@@ -70,10 +70,13 @@ More than one option may be specified.
   "cp1252", though a more useful default might be "UTF-8".
 * `-eo ENCODING`: Specifies the desired encoding of the output files.
   Defaults to "UTF-8".
-* `-th PATH` or `--training-heading PATH`: Specifies the path to a file
-  containing Markdown and/or HTML, to be used to replace any
-  `TRAINING_HEADING` cells. If not specified, internally coded
-  default HTML is used.
+* `-nh PATH` or `--notebook-heading PATH`: Specifies the path to a file
+  containing Markdown and/or HTML to be used as the top-of-notebook heading.
+  If not specified, internally coded default HTML is used.
+* `--heading`: By default, even if you specify `-nh`, the `master_parse`
+  tool does _not_ add the notebook heading at the top of the generated
+  notebooks. You need to specify `--heading` to force that behavior.
+  (This preserves historical behavior better.)
 
 ### Filename group
 

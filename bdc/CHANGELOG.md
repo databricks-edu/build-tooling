@@ -1,5 +1,11 @@
 # Change Log for BDC
 
+Version 1.6.0:
+
+* Changed to support notebook heading changes in master parser.
+  Notebook heading is automatically added by the build tool, unless
+  the `notebook_heading.enabled` parameter is set to `false`.
+
 Version 1.5.0:
 
 * Updated to support `notebook_heading` override parameter in the

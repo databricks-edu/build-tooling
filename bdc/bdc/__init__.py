@@ -32,7 +32,7 @@ from backports.tempfile import TemporaryDirectory
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -139,8 +139,7 @@ MASTER_PARSE_DEFAULTS = {
     'sql':              False,
     'answers':          True,
     'encoding_in':      'UTF-8',
-    'encoding_out':     'UTF-8',
-    'notebook_heading': None
+    'encoding_out':     'UTF-8'
 }
 
 ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
@@ -217,6 +216,8 @@ class BuildData(object):
                  datasets,
                  misc_files,
                  keep_lab_dirs,
+                 notebook_heading_path,
+                 add_heading,
                  markdown_cfg):
         self.build_file_path = build_file_path
         self.course_directory = path.dirname(build_file_path)
@@ -228,6 +229,8 @@ class BuildData(object):
         self.markdown = markdown_cfg
         self.misc_files = misc_files
         self.keep_lab_dirs = keep_lab_dirs
+        self.notebook_heading_path = notebook_heading_path
+        self.add_heading = add_heading
 
     @property
     def name(self):
@@ -485,6 +488,8 @@ def load_build_yaml(yaml_file):
     else:
         notebooks = None
 
+    notebook_heading = contents.get('notebook_heading', {})
+
     data = BuildData(
         build_file_path=build_yaml_full,
         course_info=course_info,
@@ -494,6 +499,8 @@ def load_build_yaml(yaml_file):
         source_base=src_base,
         misc_files=misc_files,
         keep_lab_dirs=bool_field(contents, 'keep_lab_dirs'),
+        add_heading=notebook_heading.get('enabled', True),
+        notebook_heading_path=notebook_heading.get('path'),
         markdown_cfg=parse_markdown(contents.get('markdown'))
     )
 
@@ -638,7 +645,8 @@ def copy_info_file(src_file, target_file, build):
         markdown_to_html(src_file, html_out, build.markdown.html_stylesheet)
 
 
-def process_master_notebook(dest_root, notebook, src_path):
+def process_master_notebook(dest_root, notebook, src_path, add_heading,
+                            notebook_heading_path):
     """
     Process a master notebook.
 
@@ -742,10 +750,11 @@ def process_master_notebook(dest_root, notebook, src_path):
                 instructor=True,
                 exercises=True,
                 answers=master['answers'],
-                notebook_heading_path=master['notebook_heading'],
+                notebook_heading_path=notebook_heading_path,
                 encoding_in=master['encoding_in'],
                 encoding_out=master['encoding_out'],
-                enable_verbosity=be_verbose
+                enable_verbosity=be_verbose,
+                add_heading=add_heading
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)
@@ -763,7 +772,13 @@ def copy_notebooks(build, labs_dir, dest_root):
     for notebook in build.notebooks:
         src_path = path.join(build.source_base, notebook.src)
         if notebook.master_enabled():
-            process_master_notebook(dest_root, notebook, src_path)
+            process_master_notebook(
+                dest_root=dest_root,
+                notebook=notebook,
+                src_path=src_path,
+                notebook_heading_path=build.notebook_heading_path,
+                add_heading=build.add_heading
+            )
         else:
             dest_path = path.join(labs_dir, notebook.dest)
             copy(src_path, dest_path)

@@ -1,5 +1,10 @@
 # Change Log for Master Parse Tool
 
+Version 1.7.0:
+
+* Add cell validity checks that ensure that some commands can only appear
+  in certain cells.
+  
 Version 1.6.0:
 
 * Removed `NOTEBOOK_HEADING` command, in favor of `--heading` command

@@ -78,6 +78,33 @@ class NotebookUser(Enum):
 # Constants
 # -----------------------------------------------------------------------------
 
+ALL_CELL_TYPES = {c for c in CommandCode }
+CODE_CELL_TYPES = {
+    CommandCode.SCALA,
+    CommandCode.SQL,
+    CommandCode.R,
+    CommandCode.PYTHON}
+
+VALID_CELL_TYPES_FOR_LABELS = {
+    CommandLabel.IPYTHON_ONLY:    CODE_CELL_TYPES | {CommandCode.MARKDOWN},
+    CommandLabel.DATABRICKS_ONLY: ALL_CELL_TYPES,
+    CommandLabel.PYTHON_ONLY:     ALL_CELL_TYPES,
+    CommandLabel.SCALA_ONLY:      ALL_CELL_TYPES,
+    CommandLabel.R_ONLY:          ALL_CELL_TYPES,
+    CommandLabel.SQL_ONLY:        ALL_CELL_TYPES,
+    CommandLabel.ANSWER:          CODE_CELL_TYPES,
+    CommandLabel.TODO:            CODE_CELL_TYPES,
+    CommandLabel.TEST:            CODE_CELL_TYPES,
+    CommandLabel.PRIVATE_TEST:    CODE_CELL_TYPES,
+    CommandLabel.INLINE:          ALL_CELL_TYPES,
+    CommandLabel.INSTRUCTOR_NOTE: { CommandCode.MARKDOWN },
+    CommandLabel.ALL_NOTEBOOKS:   ALL_CELL_TYPES,
+    CommandLabel.VIDEO:           { CommandCode.MARKDOWN },
+}
+
+# Ensure that all labels are captured in VALID_CELL_TYPES_FOR_LABELS
+assert set(VALID_CELL_TYPES_FOR_LABELS.keys()) == {i for i in CommandLabel}
+
 DEPRECATED_LABELS = {
     CommandLabel.INLINE,
     CommandLabel.IPYTHON_ONLY,
@@ -279,6 +306,17 @@ class NotebookGenerator(object):
         return (NotebookGenerator.user_to_extension[self.notebook_user] +
                 Parser.code_to_extension[self.notebook_code])
 
+    def _check_cell_type(self, command_code, labels, cell_num):
+        for label in labels:
+            valid_codes_for_label = VALID_CELL_TYPES_FOR_LABELS[label]
+            if command_code not in valid_codes_for_label:
+                magics = ['%{0}'.format(c.value) for c in valid_codes_for_label]
+                raise Exception(
+                    "Cell #{0}: {1} can only appear in {2} cells".format(
+                        cell_num, label.value, ', '.join(magics)
+                    )
+                )
+
     def generate(self, header, commands, input_name, params, parts=True):
 
         _verbose('Generating {0} notebook(s) for "{1}"'.format(
@@ -351,6 +389,8 @@ class NotebookGenerator(object):
                 for (cell_num, (part, code, labels, content)) in enumerate(commands):
                     cell_num += 1 # 1-based, for error reporting
 
+                    self._check_cell_type(code, labels, cell_num)
+
                     if parts:
                         if part > i:  # don't show later parts
                             break
@@ -387,24 +427,10 @@ class NotebookGenerator(object):
                             continue
 
                     if CommandLabel.INSTRUCTOR_NOTE in labels:
-                        # Special processing.
-                        if code != CommandCode.MARKDOWN:
-                            raise Exception(
-                                '{0} can only appear in Markdown cells.'.format(
-                                    CommandLabel.INSTRUCTOR_NOTE.value
-                                )
-                            )
                         content = (
                             [INSTRUCTOR_NOTE_HEADING] +
                             content
                         )
-                    elif CommandLabel.VIDEO in labels:
-                        if code != CommandCode.MARKDOWN:
-                            raise Exception(
-                                '{0} can only appear in Markdown cells.'.format(
-                                    CommandLabel.VIDEO.value
-                                )
-                            )
 
                     inline = CommandLabel.INLINE in labels
 
@@ -655,6 +681,7 @@ _inline = or_magic(CommandLabel.INLINE.value)
 _all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
 _instructor_note = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
 _video = or_magic(CommandLabel.VIDEO.value)
+_test = or_magic(CommandLabel.TEST.value)
 
 _ipython_remove_line = re.compile(
     r'.*{0}\s*REMOVE\s*LINE\s*IPYTHON\s*$'.format(_comment)
@@ -844,6 +871,7 @@ class Parser:
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
                         (_video, CommandLabel.VIDEO),
+                        (_test, CommandLabel.TEST),
                         (_sql_only, CommandLabel.SQL_ONLY)]
 
     pattern_to_code = [(_markdown, CommandCode.MARKDOWN),
@@ -886,7 +914,7 @@ class Parser:
         self.header = None
 
     def generate_commands(self, file_name):
-        """Generates py file content for DBC and ipynb use.
+        """Generates file content for DBC and ipynb use.
 
         Note:
             If file for output already exists in the current working directory

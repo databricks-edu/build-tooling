@@ -78,7 +78,7 @@ class NotebookUser(Enum):
 # Constants
 # -----------------------------------------------------------------------------
 
-DEFAULT_TEST_CELL_ANNOTATION = "Run this cell to test your answer."
+DEFAULT_TEST_CELL_ANNOTATION = "Run this cell to test your solution."
 
 ALL_CELL_TYPES = {c for c in CommandCode }
 CODE_CELL_TYPES = {

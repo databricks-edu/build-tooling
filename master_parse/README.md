@@ -224,7 +224,25 @@ Cells show up only in instructor and answer notebooks.
 **TEST**
 
 These cells identify tests and usually follow an exercise cell. Test cells
-provide a means for a student to test the solution to an exercise. Cells show up in all notebooks.
+provide a means for a student to test the solution to an exercise. You can
+include an annotation after the word `TEST`. For example:
+
+```
+# TEST - Please run this cell to test your solution.
+```
+
+If you don't supply an annotation, the tool will add one. So, this line:
+
+```
+# TEST
+```
+
+will be emitted, in the generated notebooks, as:
+
+```
+# TEST - Run this cell to test your solution.
+```
+
 
 **PRIVATE\_TEST**
 

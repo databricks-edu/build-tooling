@@ -24,7 +24,7 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -77,6 +77,35 @@ class NotebookUser(Enum):
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
+
+DEFAULT_TEST_CELL_ANNOTATION = "Run this cell to test your solution."
+
+ALL_CELL_TYPES = {c for c in CommandCode }
+CODE_CELL_TYPES = {
+    CommandCode.SCALA,
+    CommandCode.SQL,
+    CommandCode.R,
+    CommandCode.PYTHON}
+
+VALID_CELL_TYPES_FOR_LABELS = {
+    CommandLabel.IPYTHON_ONLY:    CODE_CELL_TYPES | {CommandCode.MARKDOWN},
+    CommandLabel.DATABRICKS_ONLY: ALL_CELL_TYPES,
+    CommandLabel.PYTHON_ONLY:     ALL_CELL_TYPES,
+    CommandLabel.SCALA_ONLY:      ALL_CELL_TYPES,
+    CommandLabel.R_ONLY:          ALL_CELL_TYPES,
+    CommandLabel.SQL_ONLY:        ALL_CELL_TYPES,
+    CommandLabel.ANSWER:          CODE_CELL_TYPES,
+    CommandLabel.TODO:            CODE_CELL_TYPES,
+    CommandLabel.TEST:            CODE_CELL_TYPES,
+    CommandLabel.PRIVATE_TEST:    CODE_CELL_TYPES,
+    CommandLabel.INLINE:          ALL_CELL_TYPES,
+    CommandLabel.INSTRUCTOR_NOTE: { CommandCode.MARKDOWN },
+    CommandLabel.ALL_NOTEBOOKS:   ALL_CELL_TYPES,
+    CommandLabel.VIDEO:           { CommandCode.MARKDOWN },
+}
+
+# Ensure that all labels are captured in VALID_CELL_TYPES_FOR_LABELS
+assert set(VALID_CELL_TYPES_FOR_LABELS.keys()) == {i for i in CommandLabel}
 
 DEPRECATED_LABELS = {
     CommandLabel.INLINE,
@@ -279,6 +308,17 @@ class NotebookGenerator(object):
         return (NotebookGenerator.user_to_extension[self.notebook_user] +
                 Parser.code_to_extension[self.notebook_code])
 
+    def _check_cell_type(self, command_code, labels, cell_num):
+        for label in labels:
+            valid_codes_for_label = VALID_CELL_TYPES_FOR_LABELS[label]
+            if command_code not in valid_codes_for_label:
+                magics = ['%{0}'.format(c.value) for c in valid_codes_for_label]
+                raise Exception(
+                    "Cell #{0}: {1} can only appear in {2} cells".format(
+                        cell_num, label.value, ', '.join(magics)
+                    )
+                )
+
     def generate(self, header, commands, input_name, params, parts=True):
 
         _verbose('Generating {0} notebook(s) for "{1}"'.format(
@@ -351,6 +391,8 @@ class NotebookGenerator(object):
                 for (cell_num, (part, code, labels, content)) in enumerate(commands):
                     cell_num += 1 # 1-based, for error reporting
 
+                    self._check_cell_type(code, labels, cell_num)
+
                     if parts:
                         if part > i:  # don't show later parts
                             break
@@ -387,24 +429,11 @@ class NotebookGenerator(object):
                             continue
 
                     if CommandLabel.INSTRUCTOR_NOTE in labels:
-                        # Special processing.
-                        if code != CommandCode.MARKDOWN:
-                            raise Exception(
-                                '{0} can only appear in Markdown cells.'.format(
-                                    CommandLabel.INSTRUCTOR_NOTE.value
-                                )
-                            )
+                        # Special case processing
                         content = (
                             [INSTRUCTOR_NOTE_HEADING] +
                             content
                         )
-                    elif CommandLabel.VIDEO in labels:
-                        if code != CommandCode.MARKDOWN:
-                            raise Exception(
-                                '{0} can only appear in Markdown cells.'.format(
-                                    CommandLabel.VIDEO.value
-                                )
-                            )
 
                     inline = CommandLabel.INLINE in labels
 
@@ -437,13 +466,16 @@ class NotebookGenerator(object):
 
                     # This thing just gets uglier and uglier.
                     if ( (not (discard_labels & labels)) and
-                         #(not suppress) and
                          (((inline and code != self.notebook_code) or
                          ((not inline) and code == self.notebook_code)) or
                          all_notebooks)):
 
                         content = self.remove_and_replace(content, code, inline,
                                                           all_notebooks, is_first)
+
+                        if CommandLabel.TEST in labels:
+                            # Special handling.
+                            content = self._handle_test_cell(cell_num, content)
 
                         isCodeCell = code != CommandCode.MARKDOWN
 
@@ -470,27 +502,47 @@ class NotebookGenerator(object):
             if is_IPython:
                 self.generate_ipynb(file_out)
 
+    def _handle_test_cell(self, cell_num, content):
+        new_content = []
+        for line in content:
+            m = _test.match(line)
+            if not m:
+                new_content.append(line)
+                continue
+
+            remainder = line[m.end():].strip()
+            if len(remainder) > 0:
+                # There's already an annotation on the TEST marker.
+                new_content.append(line)
+            else:
+                # Add the default annotation.
+                new_content.append(line + " - " + DEFAULT_TEST_CELL_ANNOTATION)
+
+        return new_content
+
     def _handle_video_cell(self, cell_num, content):
         new_content = []
         for line in content:
             m = _video.match(line)
-            if m:
-                # The regular expression matches the first part of the token
-                # (e.g., "-- VIDEO"). The remainder of the line constitutes
-                # the arguments.
-                arg_string = line[m.end():]
-                if len(arg_string.strip()) == 0:
-                    raise Exception(
-                        'Cell {0}: "{1}" is not of form: VIDEO <url> [<title>]'.format(
-                            cell_num, line
-                        )
-                    )
-
-                args = arg_string.split(None, 1)
-                (url, title) = args if len(args) == 2 else (args[0], "")
-                new_content = new_content + VIDEO_TEMPLATE.format(url, title).split('\n')
-            else:
+            if not m:
                 new_content.append(line)
+                continue
+
+            # The regular expression matches the first part of the token
+            # (e.g., "-- VIDEO"). The remainder of the line constitutes
+            # the arguments.
+            arg_string = line[m.end():]
+            if len(arg_string.strip()) == 0:
+                raise Exception(
+                    'Cell {0}: "{1}" is not of form: VIDEO <url> [<title>]'.format(
+                    cell_num, line
+                    )
+                )
+
+            args = arg_string.split(None, 1)
+            (url, title) = args if len(args) == 2 else (args[0], "")
+            new_content = new_content + VIDEO_TEMPLATE.format(url, title).split('\n')
+
         return new_content
 
     def _write_command(self, output, cell_split, content, is_first):
@@ -655,6 +707,7 @@ _inline = or_magic(CommandLabel.INLINE.value)
 _all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
 _instructor_note = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
 _video = or_magic(CommandLabel.VIDEO.value)
+_test = or_magic(CommandLabel.TEST.value)
 
 _ipython_remove_line = re.compile(
     r'.*{0}\s*REMOVE\s*LINE\s*IPYTHON\s*$'.format(_comment)
@@ -844,6 +897,7 @@ class Parser:
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
                         (_video, CommandLabel.VIDEO),
+                        (_test, CommandLabel.TEST),
                         (_sql_only, CommandLabel.SQL_ONLY)]
 
     pattern_to_code = [(_markdown, CommandCode.MARKDOWN),
@@ -886,7 +940,7 @@ class Parser:
         self.header = None
 
     def generate_commands(self, file_name):
-        """Generates py file content for DBC and ipynb use.
+        """Generates file content for DBC and ipynb use.
 
         Note:
             If file for output already exists in the current working directory

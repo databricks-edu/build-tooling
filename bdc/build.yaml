@@ -40,6 +40,22 @@ course_info:
   version: version
   deprecated: false
 
+
+# notebook_heading defines how the notebook heading is handled.
+#
+# path    - Path to a file containing Markdown and/or HTML, to be used as the
+#           first cell in all generated notebooks. If not specified, the
+#           default will be used.
+# enabled - false to disable the automatic addition of a notebook header to
+#           generated notebooks. true (the default) to add the header.
+
+notebook_heading:
+  #path: /path/to/somewhere
+  #enabled: true
+
+# notebook_heading -
+#notebook_heading: /path/to/somewhere
+
 # By default, the directories containing the labs are deleted once the
 # corresponding DBC files are created. You can set this field to "true"
 # to override that behavior.
@@ -129,7 +145,7 @@ misc_files:
 # skip       - true to skip this entry, false to keep it. This field is a
 #              convenient alternative to commenting the entire entry out.
 #              OPTIONAL. Default: false
-
+#
 # master     - If this section is present, it marks the notebook as a master
 #              notebook to be processed by the master parse tool, and it
 #              contain master parse parameters. If this section is missing,
@@ -159,9 +175,6 @@ misc_files:
 #                      Defaults to UTF-8
 #   encoding_out     - the encoding to use when writing the output notebooks.
 #                      Defaults to UTF-8
-#   notebook_heading - Path to a file containing Markdown and/or HTML, to be
-#                      used to replace cells marked NOTEBOOK_HEADING. If not
-#                      specified, an internal default will be used.
 #
 # run_test   - Whether or not to test the dataset by running it in a cluster
 #              within a shard. The shard and cluster configuration are specified

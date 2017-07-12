@@ -24,7 +24,7 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -42,7 +42,6 @@ class CommandLabel(Enum):
     TEST              = 'TEST'
     PRIVATE_TEST      = 'PRIVATE_TEST'
     DATABRICKS_ONLY   = 'DATABRICKS_ONLY'
-    NOTEBOOK_HEADING  = 'NOTEBOOK_HEADING'
     INLINE            = 'INLINE'
     ALL_NOTEBOOKS     = 'ALL_NOTEBOOKS'
     INSTRUCTOR_NOTE   = 'INSTRUCTOR_NOTE'
@@ -142,6 +141,7 @@ class Params(object):
                  answers=False,
                  exercises=False,
                  creative_commons=False,
+                 add_heading=False,
                  notebook_heading_path=None,
                  encoding_in=DEFAULT_ENCODING_IN,
                  encoding_out=DEFAULT_ENCODING_OUT,
@@ -159,6 +159,7 @@ class Params(object):
         self.answers = answers
         self.exercises = exercises
         self.creative_commons = creative_commons
+        self.add_heading = add_heading
         self.encoding_in = encoding_in or DEFAULT_ENCODING_IN
         self.encoding_out = encoding_out or DEFAULT_ENCODING_OUT
         self.enable_verbosity = enable_verbosity
@@ -194,6 +195,7 @@ class Params(object):
             'answers',
             'exercises',
             'creative_commons',
+            'add_heading',
             'notebook_heading',
             'encoding_in',
             'encoding_out',
@@ -277,8 +279,7 @@ class NotebookGenerator(object):
         return (NotebookGenerator.user_to_extension[self.notebook_user] +
                 Parser.code_to_extension[self.notebook_code])
 
-    def generate(self, header, commands, input_name, parts=True,
-                 creative_commons=False):
+    def generate(self, header, commands, input_name, params, parts=True):
 
         _verbose('Generating {0} notebook(s) for "{1}"'.format(
             str(self.notebook_user), input_name
@@ -297,8 +298,7 @@ class NotebookGenerator(object):
 
         # generate full notebook when generating parts
         if parts:
-            self.generate(header, commands, input_name, False,
-                          creative_commons=creative_commons)
+            self.generate(header, commands, input_name, params, parts=False)
 
         base_file, _ = os.path.splitext(os.path.basename(input_name))
         for i in range(max_part + 1): # parts are zero indexed
@@ -330,7 +330,16 @@ class NotebookGenerator(object):
                 else:
                     # use proper comment char
                     header_adj = re.sub(_comment, self.base_comment, header)
-                    if creative_commons:
+                    sep = ""
+                    if params.add_heading:
+                        header_adj += '\n{0} MAGIC %md\n{0} MAGIC {1}'.format(
+                            self.base_comment, params.notebook_heading
+                        )
+                        sep = _command_cell.format(self.base_comment)
+                        is_first = False
+
+                    if params.creative_commons:
+                        header_adj += sep
                         header_adj += '\n{0} MAGIC %md\n{0} MAGIC {1}'.format(
                             self.base_comment, CC_LICENSE
                         )
@@ -389,18 +398,11 @@ class NotebookGenerator(object):
                             [INSTRUCTOR_NOTE_HEADING] +
                             content
                         )
-                    elif CommandLabel.NOTEBOOK_HEADING in labels:
-                        if code != CommandCode.MARKDOWN:
-                            raise Exception(
-                                '{0} can only appear in Markdown cells.'.format(
-                                    CommandLabel.NOTEBOOK_HEADING.value
-                                )
-                            )
                     elif CommandLabel.VIDEO in labels:
                         if code != CommandCode.MARKDOWN:
                             raise Exception(
                                 '{0} can only appear in Markdown cells.'.format(
-                                    CommandLabel.NOTEBOOK_HEADING.value
+                                    CommandLabel.VIDEO.value
                                 )
                             )
 
@@ -454,17 +456,6 @@ class NotebookGenerator(object):
 
                         is_first = self._write_command(output, cell_split,
                                                        content, is_first)
-
-                    elif CommandLabel.NOTEBOOK_HEADING in labels:
-                        hdr_lines = self.params.notebook_heading.strip().split('\n')
-                        hdr = [
-                            '{0} MAGIC {1}'.format(self.base_comment, line)
-                            for line in ['%md'] + hdr_lines
-                        ]
-
-                        is_first = self._write_command(
-                            output, command_cell, hdr + ['\n'], is_first
-                        )
 
                     elif CommandLabel.VIDEO in labels:
                         new_content = self._handle_video_cell(cell_num, content)
@@ -664,7 +655,6 @@ _inline = or_magic(CommandLabel.INLINE.value)
 _all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
 _instructor_note = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
 _video = or_magic(CommandLabel.VIDEO.value)
-_training_heading = or_magic(CommandLabel.NOTEBOOK_HEADING.value)
 
 _ipython_remove_line = re.compile(
     r'.*{0}\s*REMOVE\s*LINE\s*IPYTHON\s*$'.format(_comment)
@@ -851,7 +841,6 @@ class Parser:
                         (_r_only, CommandLabel.R_ONLY),
                         (_all_notebooks, CommandLabel.ALL_NOTEBOOKS),
                         (_instructor_note, CommandLabel.INSTRUCTOR_NOTE),
-                        (_training_heading, CommandLabel.NOTEBOOK_HEADING),
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
                         (_video, CommandLabel.VIDEO),
@@ -1104,8 +1093,7 @@ def process_notebooks(params):
     for db_src in files:
         header, commands = parser.generate_commands(db_src)
         for notebook in notebooks:
-            notebook.generate(header, commands, db_src,
-                              creative_commons=params.creative_commons)
+            notebook.generate(header, commands, db_src, params)
 
 
 def main():
@@ -1166,13 +1154,18 @@ def main():
                             metavar="ENCODING")
     arg_parser.add_argument('-nh', '--notebook-heading',
                             help='A file containing Markdown and/or HTML, ' +
-                                 'to be used to replace {0} cells. If not ' +
-                                 'specified, a default is used'.format(
-                                     CommandLabel.NOTEBOOK_HEADING.value
-                                 ),
+                                 'to be used as the top-of-notebook heading, ' +
+                                 'if headings are enabled. If not specified, ' +
+                                 'an internal default is used. See also ' +
+                                 '--heading.',
                             default=None,
                             metavar="<file>")
-
+    arg_parser.add_argument('--heading',
+                            help='By default, even if you specify -nh, this ' +
+                                 'tool does not add the notebook heading to ' +
+                                 'top of generated notebooks. If you specify ' +
+                                 'this option, it will do so.',
+                            action='store_true')
     arg_parser.add_argument('-d', '--dir',
                             help="Base output directory. Default: {0}".format(
                                 DEFAULT_OUTPUT_DIR),
@@ -1218,6 +1211,7 @@ def main():
         exercises=args.exercises,
         creative_commons=args.creativecommons,
         notebook_heading_path=args.notebook_heading,
+        add_heading=args.heading,
         encoding_in=args.encoding_in,
         encoding_out=args.encoding_out,
         enable_verbosity=args.verbose,

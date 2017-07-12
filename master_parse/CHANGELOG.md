@@ -1,5 +1,11 @@
 # Change Log for Master Parse Tool
 
+Version 1.6.0:
+
+* Removed `NOTEBOOK_HEADING` command, in favor of `--heading` command
+  line option that automatically adds the heading as the first cell in
+  generated notebooks.
+
 Version 1.5.0:
 
 * Added support for `VIDEO <url> <title>` command.

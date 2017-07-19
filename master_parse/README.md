@@ -178,17 +178,6 @@ In a Python code cell, this is not valid Master Parse Tool syntax and will simpl
 
 The valid labels are:
 
-**TRAINING\_HEADING**
-
-This command must occur only in a Markdown cell. The cell containing
-the command is replaced by a standard Databricks training heading.
-(Thus, it's most useful at the top of a notebook, though the tool
-does not enforce that.)
-
-The standard header is controlled by the `-th` (`--training-heading`)
-command line option. If that option is missing, then an internal
-default is used.
-
 **IPYTHON\_ONLY**
 
 **This cell type is _deprecated_ and will be removed in a future release of

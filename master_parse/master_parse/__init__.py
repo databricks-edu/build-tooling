@@ -131,8 +131,8 @@ VIDEO_TEMPLATE = """<div style="width: 30%; height: auto; background: black; bor
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
-DEFAULT_NOTEBOOK_HEADING = """<div style="width: 100%; background: black; height: 96px">
-  <img src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/db_learning_rev.png" style="display: block; margin: auto"/>
+DEFAULT_NOTEBOOK_HEADING = """<div style="text-align: center; line-height: 0; padding-top: 9px;">
+  <img src="https://cdn2.hubspot.net/hubfs/438089/docs/training/dblearning-banner.png" alt="Databricks Learning" width="555" height="64">
 </div>"""
 
 CC_LICENSE = """<div>
@@ -716,7 +716,7 @@ _ipython_remove_line = re.compile(
 _markdown = make_magic(r'%md')
 _scala = make_magic(r'%scala')
 _python = make_magic(r'%python')
-_r = make_magic(r'%r')
+_r = make_magic(r'%rxx')
 _file_system = make_magic(r'%fs')
 _shell = make_magic(r'%sh')
 _run = make_magic(r'%run')
@@ -924,6 +924,7 @@ class Parser:
     code_to_pattern = {code: pattern for pattern, code in pattern_to_code}
 
     code_to_magic = {CommandCode.MARKDOWN: '%md',
+    								 CommandCode.RUN: '%run',
                      CommandCode.SCALA: '%scala',
                      CommandCode.PYTHON: '%python',
                      CommandCode.FILESYSTEM: '%fs',
@@ -1048,7 +1049,7 @@ class Parser:
                         raise Exception(msg)
                     current.command_code = code
 
-            line = line.rstrip()
+            line = line.rstrip("\r\n")
             # Lines with only MAGIC do not reimport
             if len(line) <= 8 and line[-5:] == 'MAGIC':
                 # Keep empty lines

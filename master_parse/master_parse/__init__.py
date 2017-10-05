@@ -24,7 +24,7 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 
-VERSION = "1.7.0"
+VERSION = "1.7.1"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional

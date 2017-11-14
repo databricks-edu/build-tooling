@@ -6,11 +6,15 @@ from __future__ import (absolute_import, division, print_function,
 from builtins import (bytes, dict, int, list, object, range, str, ascii,
                       chr, hex, input, next, oct, open, pow, round, super,
                       filter, map, zip)
-from future.standard_library import install_aliases
-install_aliases()
+
+from future import standard_library
+standard_library.install_aliases()
 
 import sys
-from configparser import ConfigParser
+try:
+    from configparser import ConfigParser
+except ImportError:
+    from ConfigParser import ConfigParser
 from collections import namedtuple
 import os
 from os import path
@@ -32,7 +36,7 @@ from backports.tempfile import TemporaryDirectory
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.6.0"
+VERSION = "1.7.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -44,6 +48,7 @@ Usage:
   {0} (--version)
   {0} (-h | --help)
   {0} [(-o | --overwrite)] [(-v | --verbose)] MASTER_CFG [BUILD_YAML]
+  {0} --list-notebooks [BUILD_YAML]
 
 MASTER_CFG is the build tool's master configuration file.
 BUILD_YAML is the build file for the course to be built. Defaults to {2}
@@ -896,6 +901,56 @@ def remove_empty_subdirectories(directory):
             os.rmdir(dirpath)
 
 
+def build_course(opts, build, bdc_config):
+    config = load_config(bdc_config)
+    if build.course_info.deprecated:
+        die('{0} is deprecated and cannot be built.'.format(
+            build.course_info.name
+        ))
+
+    dest_dir = path.join(config.build_directory, build.course_id)
+    verbose('Publishing to "{0}"'.format(dest_dir))
+    if path.isdir(dest_dir):
+        if not opts['--overwrite']:
+            die(('Directory "{0}" already exists, and you did not ' +
+                 'specify --overwrite.').format(dest_dir))
+
+        shutil.rmtree(dest_dir)
+
+    for d in [INSTRUCTOR_FILES_SUBDIR, STUDENT_FILES_SUBDIR]:
+        os.makedirs(path.join(dest_dir, d))
+
+    labs_full_path = path.join(dest_dir, STUDENT_LABS_SUBDIR)
+    copy_notebooks(build, labs_full_path, dest_dir)
+    copy_instructor_notes(build, dest_dir)
+    make_dbc(config, build, labs_full_path, path.join(dest_dir, STUDENT_LABS_DBC))
+    instructor_labs = path.join(dest_dir, INSTRUCTOR_LABS_SUBDIR)
+    if os.path.exists(instructor_labs):
+        instructor_dbc = path.join(dest_dir, INSTRUCTOR_LABS_DBC)
+        make_dbc(config, build, instructor_labs, instructor_dbc)
+    copy_slides(build, dest_dir)
+    copy_misc_files(build, dest_dir)
+    copy_datasets(build, dest_dir)
+
+    # Finally, remove the instructor labs folder and the student labs
+    # folder.
+    if not build.keep_lab_dirs:
+        shutil.rmtree(labs_full_path)
+        shutil.rmtree(instructor_labs)
+
+    if errors > 0:
+        raise BuildError("{0} error(s).".format(errors))
+
+    print("\nPublished {0}, version {1} to {2}\n".format(
+        build.course_info.name, build.course_info.version, dest_dir
+    ))
+
+
+def list_notebooks(build):
+    for notebook in build.notebooks:
+        src_path = path.join(build.source_base, notebook.src)
+        print(src_path)
+
 # ---------------------------------------------------------------------------
 # Main program
 # ---------------------------------------------------------------------------
@@ -909,49 +964,11 @@ def main():
     course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
 
     try:
-        config = load_config(bdc_config)
         build = load_build_yaml(course_config)
-        if build.course_info.deprecated:
-            die('{0} is deprecated and cannot be built.'.format(
-                build.course_info.name
-            ))
-
-        dest_dir = path.join(config.build_directory, build.course_id)
-        verbose('Publishing to "{0}"'.format(dest_dir))
-        if path.isdir(dest_dir):
-            if not opts['--overwrite']:
-                die(('Directory "{0}" already exists, and you did not ' +
-                    'specify --overwrite.').format(dest_dir))
-
-            shutil.rmtree(dest_dir)
-
-        for d in [INSTRUCTOR_FILES_SUBDIR, STUDENT_FILES_SUBDIR]:
-            os.makedirs(path.join(dest_dir, d))
-
-        labs_full_path = path.join(dest_dir, STUDENT_LABS_SUBDIR)
-        copy_notebooks(build, labs_full_path, dest_dir)
-        copy_instructor_notes(build, dest_dir)
-        make_dbc(config, build, labs_full_path, path.join(dest_dir, STUDENT_LABS_DBC))
-        instructor_labs = path.join(dest_dir, INSTRUCTOR_LABS_SUBDIR)
-        if os.path.exists(instructor_labs):
-            instructor_dbc = path.join(dest_dir, INSTRUCTOR_LABS_DBC)
-            make_dbc(config, build, instructor_labs, instructor_dbc)
-        copy_slides(build, dest_dir)
-        copy_misc_files(build, dest_dir)
-        copy_datasets(build, dest_dir)
-
-        # Finally, remove the instructor labs folder and the student labs
-        # folder.
-        if not build.keep_lab_dirs:
-            shutil.rmtree(labs_full_path)
-            shutil.rmtree(instructor_labs)
-
-        if errors > 0:
-            raise BuildError("{0} error(s).".format(errors))
-
-        print("\nPublished {0}, version {1} to {2}\n".format(
-            build.course_info.name, build.course_info.version, dest_dir
-        ))
+        if opts['--list-notebooks']:
+            list_notebooks(build)
+        else:
+            build_course(opts, build, bdc_config)
 
     except ConfigError as e:
         die('Error in "{0}": {1}'.format(course_config, e.message))

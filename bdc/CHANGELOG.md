@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+Version 1.7.0:
+
+* Added `--list-notebooks` option, providing a quick way to get a listing
+  of all the notebooks in a course.
+
 Version 1.6.0:
 
 * Changed to support notebook heading changes in master parser.

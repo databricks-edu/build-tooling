@@ -64,9 +64,10 @@ new command window.**
 ### Install _bdc_
 
 Once you've activated the appropriate Python virtual environment, just run
-the following command in this directory:
+the following commands in this directory:
 
 ```
+pip install -r requirements.txt
 python setup.py install
 ```
 

@@ -24,7 +24,7 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 
-VERSION = "1.7.1"
+VERSION = "1.7.2"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -48,16 +48,17 @@ class CommandLabel(Enum):
     VIDEO             = 'VIDEO'
 
 class CommandCode(Enum):
-    SCALA      = 'scala'
-    PYTHON     = 'python'
-    R          = 'r'
-    SQL        = 'sql'
-    MARKDOWN   = 'md'
-    FILESYSTEM = 'filesystem'
-    SHELL      = 'shell'
-    RUN        = 'run'
-    FS         = 'fs'
-    SH         = 'sh'
+    SCALA             = 'scala'
+    PYTHON            = 'python'
+    R                 = 'r'
+    SQL               = 'sql'
+    MARKDOWN          = 'md'
+    MARKDOWN_SANDBOX  = 'md-sandbox'
+    FILESYSTEM        = 'filesystem'
+    SHELL             = 'shell'
+    RUN               = 'run'
+    FS                = 'fs'
+    SH                = 'sh'
 
 class NotebookKind(Enum):
     DATABRICKS = 'Databricks'
@@ -88,7 +89,8 @@ CODE_CELL_TYPES = {
     CommandCode.PYTHON}
 
 VALID_CELL_TYPES_FOR_LABELS = {
-    CommandLabel.IPYTHON_ONLY:    CODE_CELL_TYPES | {CommandCode.MARKDOWN},
+    CommandLabel.IPYTHON_ONLY:    CODE_CELL_TYPES | {CommandCode.MARKDOWN,
+                                                     CommandCode.MARKDOWN_SANDBOX},
     CommandLabel.DATABRICKS_ONLY: ALL_CELL_TYPES,
     CommandLabel.PYTHON_ONLY:     ALL_CELL_TYPES,
     CommandLabel.SCALA_ONLY:      ALL_CELL_TYPES,
@@ -99,9 +101,11 @@ VALID_CELL_TYPES_FOR_LABELS = {
     CommandLabel.TEST:            CODE_CELL_TYPES,
     CommandLabel.PRIVATE_TEST:    CODE_CELL_TYPES,
     CommandLabel.INLINE:          ALL_CELL_TYPES,
-    CommandLabel.INSTRUCTOR_NOTE: { CommandCode.MARKDOWN },
+    CommandLabel.INSTRUCTOR_NOTE: { CommandCode.MARKDOWN,
+                                    CommandCode.MARKDOWN_SANDBOX },
     CommandLabel.ALL_NOTEBOOKS:   ALL_CELL_TYPES,
-    CommandLabel.VIDEO:           { CommandCode.MARKDOWN },
+    CommandLabel.VIDEO:           { CommandCode.MARKDOWN,
+                                    CommandCode.MARKDOWN_SANDBOX },
 }
 
 # Ensure that all labels are captured in VALID_CELL_TYPES_FOR_LABELS
@@ -314,8 +318,9 @@ class NotebookGenerator(object):
             if command_code not in valid_codes_for_label:
                 magics = ['%{0}'.format(c.value) for c in valid_codes_for_label]
                 raise Exception(
-                    "Cell #{0}: {1} can only appear in {2} cells".format(
-                        cell_num, label.value, ', '.join(magics)
+                    ("Cell #{0}: Found {1} in a {2} cell, but it's only valid " +
+                     "in {3} cells.").format(
+                        cell_num, label.value, command_code, ', '.join(magics)
                     )
                 )
 
@@ -372,7 +377,7 @@ class NotebookGenerator(object):
                     header_adj = re.sub(_comment, self.base_comment, header)
                     sep = ""
                     if params.add_heading:
-                        header_adj += '\n{0} MAGIC %md\n{0} MAGIC {1}'.format(
+                        header_adj += '\n{0} MAGIC %md-sandbox\n{0} MAGIC {1}'.format(
                             self.base_comment, params.notebook_heading
                         )
                         sep = _command_cell.format(self.base_comment)
@@ -429,7 +434,10 @@ class NotebookGenerator(object):
                             continue
 
                     if CommandLabel.INSTRUCTOR_NOTE in labels:
-                        # Special case processing
+                        # Special case processing: Add instructor note heading,
+                        # and force use of %md-sandbox
+
+                        code = CommandCode.MARKDOWN_SANDBOX
                         content = (
                             [INSTRUCTOR_NOTE_HEADING] +
                             content
@@ -493,7 +501,7 @@ class NotebookGenerator(object):
                         new_content = self._handle_video_cell(cell_num, content)
                         new_cell = [
                             '{0} MAGIC {1}'.format(self.base_comment, line)
-                            for line in ['%md'] + new_content
+                            for line in ['%md-sandbox'] + new_content
                         ]
                         is_first = self._write_command(
                             output, command_cell, new_cell + ['\n'], is_first
@@ -684,9 +692,35 @@ def make_magic_text(regexText):
     return r'{0}MAGIC{1}'.format(_line_start_restricted, regexText)
 
 
-def make_magic(regex_text):
-    # these are without comment chars so allow for spaces
-    regex_text = r'\s*' + regex_text + r'(.*)$'
+def make_magic(regex_token, must_be_word=False):
+    '''
+    Maps a "magic" regex into one that matches properly and preserves what
+    follows the token.
+
+    :param regex_token:   the regular expression text pattern for the token
+    :param must_be_word:  whether the token must be a word by itself. This
+                          should have been the default, when the tool was
+                          originally written, but it wasn't. This option
+                          defaults to False to limit possible regression.
+                          But, some tokens (especially those with common
+                          prefixes, like "%md" and "%md-sandbox") will need
+                          to use True here.
+    :return: A compiled regex
+    '''
+    if must_be_word:
+        # This is complicated. Basically, the constructed regex says, "the
+        # token must match at the end of the string (\Z) OR must be followed
+        # by a white space character (\s). The (?:...) construct allows the
+        # alternation (the OR), without creating a capture group.
+        #
+        # If you don't understand this, DON'T modify it until you do. It's
+        # fragile.
+        adj_token = regex_token + '(?:\Z|\s+)'
+    else:
+        adj_token = regex_token
+
+    # Allow surrounding white space.
+    regex_text = r'\s*' + adj_token + r'\s*(.*)$'
     return re.compile(make_magic_text(regex_text))
 
 
@@ -713,13 +747,14 @@ _ipython_remove_line = re.compile(
     r'.*{0}\s*REMOVE\s*LINE\s*IPYTHON\s*$'.format(_comment)
 )
 
-_markdown = make_magic(r'%md')
+_markdown = make_magic(r'%md', must_be_word=True)
+_markdown_sandbox = make_magic(r'%md-sandbox', must_be_word=True)
 _scala = make_magic(r'%scala')
 _python = make_magic(r'%python')
-_r = make_magic(r'%rxx')
+_r = make_magic(r'%r', must_be_word=True)
 _file_system = make_magic(r'%fs')
 _shell = make_magic(r'%sh')
-_run = make_magic(r'%run')
+_run = make_magic(r'%run', must_be_word=True)
 _sql = make_magic(r'%sql')
 _magic = re.compile(r'MAGIC ')
 
@@ -901,6 +936,7 @@ class Parser:
                         (_sql_only, CommandLabel.SQL_ONLY)]
 
     pattern_to_code = [(_markdown, CommandCode.MARKDOWN),
+                       (_markdown_sandbox, CommandCode.MARKDOWN_SANDBOX),
                        (_scala, CommandCode.SCALA),
                        (_python, CommandCode.PYTHON),
                        (_file_system, CommandCode.FILESYSTEM),
@@ -924,7 +960,8 @@ class Parser:
     code_to_pattern = {code: pattern for pattern, code in pattern_to_code}
 
     code_to_magic = {CommandCode.MARKDOWN: '%md',
-    								 CommandCode.RUN: '%run',
+                     CommandCode.MARKDOWN_SANDBOX: '%md-sandbox',
+                     CommandCode.RUN: '%run',
                      CommandCode.SCALA: '%scala',
                      CommandCode.PYTHON: '%python',
                      CommandCode.FILESYSTEM: '%fs',
@@ -1040,7 +1077,8 @@ class Parser:
 
             # Does this line match any of the Databricks magic cells?
             for pat, code in Parser.pattern_to_code:
-                m = pat.match(line)
+                line2 = line.rstrip()
+                m = pat.match(line2)
                 if m:
                     if current.command_code is not None:
                         msg = '"{0}", line {1}: multiple magic strings.'.format(

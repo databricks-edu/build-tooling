@@ -1,5 +1,13 @@
 # Change Log for Master Parse Tool
 
+Version 1.7.2
+
+* Fixes to handle both `%r` and `%md-sandbox`.
+
+Version 1.7.1
+
+* Updates to fix handling of `%run`. **Breaks `%r`!**
+
 Version 1.7.0:
 
 * Add cell validity checks that ensure that some commands can only appear

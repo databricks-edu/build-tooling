@@ -11,9 +11,10 @@ from future import standard_library
 standard_library.install_aliases()
 
 import sys
-try:
+
+if sys.version_info >= (3,):
     from configparser import ConfigParser
-except ImportError:
+else:
     from ConfigParser import ConfigParser
 from collections import namedtuple
 import os

@@ -1,5 +1,17 @@
 # Change Log for BDC
 
+Version 1.8.0:
+
+* Added ability to upload and download entire course via `databricks`
+  CLI.
+* The master configuration file argument is now optional and defaults to
+  `~/.bdc.cfg`. Specify an alternate master configuration file with the
+  `-c` option.
+* Relative directory names as destinations in `build.yaml` (e.g.,
+  `dest: '..'`) are no longer supported. If you want to suppress the
+  insertion of a target language, use a destination path that starts with
+  "/".
+  
 Version 1.7.0:
 
 * Added `--list-notebooks` option, providing a quick way to get a listing

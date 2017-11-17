@@ -140,6 +140,11 @@ misc_files:
 #              dest: "overview/${target_lang}/nb-01"  # explicit
 #              dest: "overview/nb-01"  # same as "${target_lang}/overview/notebook-01"
 #
+#              If you want to suppress the target language entirely (e.g.,
+#              because you're only using one language), start the
+#              path with a "/" (meaning "starting from the top of the DBC")
+#              and don't include ${target_lang}.
+#
 #              REQUIRED.
 #
 # skip       - true to skip this entry, false to keep it. This field is a
@@ -186,19 +191,39 @@ misc_files:
 #
 # In the <dest> value, the following substitution tokens are permitted:
 #
-# ${basename}  - the base file name of the source, WITHOUT the extension
-# ${filename}  - the base file name of the source, WITH the extension
-# ${extension} - the file extension
-# ${lang}      - substitute the notebook language (Scala, R, etc.)
+# ${basename}    - the base file name of the source, WITHOUT the extension
+# ${filename}    - the base file name of the source, WITH the extension
+# ${extension}   - the file extension
+# ${target_lang} - substitute the notebook language (Scala, R, etc.)
 notebooks:
   -
     src: Overview-History/Introductions.py
+    # With this dest, the output ends up in:
+    #     Scala/Overview-History/Introductions_exercises.scala
+    #     Scala/Overview-History/Introductions_answers.scala
+    #     Python/Overview-History/Introductions_exercises.py
+    #     Python/Overview-History/Introductions_exercises.py
+    #     SQL/Overview-History/Introductions_exercises.sql
+    #     SQL/Overview-History/Introductions_exercises.sql
+    # etc.
     dest: Overview-History
     master:
       enabled: true
       r: false
       scala: true
       sql: true
+      python: true
+  -
+    src: Module1/Notebook1.py
+    # With this dest, the output ends up in:
+    #     Notebook1_exercises.py
+    #     Notebook1_answers.py
+    dest: /Notebook1
+    master:
+      enabled: true
+      r: false
+      scala: false
+      sql: false
       python: true
   -
     src: Overview-History/Welcome.py

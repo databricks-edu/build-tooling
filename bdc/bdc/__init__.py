@@ -397,6 +397,7 @@ def load_build_yaml(yaml_file):
         return Template(dest).substitute(fields)
 
     def parse_notebook(obj):
+        bad_dest = re.compile('^\.\./*|^\./*')
         src = required(obj, 'src', 'notebooks section')
         dest = subst(required(obj, 'dest', 'notebooks section'), src)
         if bool_field(obj, 'skip'):
@@ -420,6 +421,12 @@ def load_build_yaml(yaml_file):
                     ('Notebook {0}: When "master" is enabled, "dest" must be ' +
                     'a directory.').format(src)
                 )
+            if bad_dest.match(dest):
+                raise ConfigError(
+                    ('Notebook {0}: Relative destinations ("{1}") are ' +
+                     'disallowed.').format(src, dest)
+                )
+
         else:
             _, src_ext = os.path.splitext(src)
             if (not dest_ext) or (dest_ext != src_ext):

@@ -15,6 +15,7 @@ The tool is usable from either Python 2 or Python 3.
 To install, run
 
 ```
+pip install -r requirements.txt
 python setup.py install
 ```
 

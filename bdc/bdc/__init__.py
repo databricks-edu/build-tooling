@@ -11,9 +11,12 @@ from future import standard_library
 standard_library.install_aliases()
 
 import sys
-try:
+import subprocess
+import json
+
+if sys.version_info >= (3,):
     from configparser import ConfigParser
-except ImportError:
+else:
     from ConfigParser import ConfigParser
 from collections import namedtuple
 import os
@@ -24,6 +27,7 @@ import contextlib
 import markdown2
 import codecs
 import re
+from textwrap import TextWrapper
 import master_parse
 from grizzled.file import eglob
 
@@ -36,7 +40,7 @@ from backports.tempfile import TemporaryDirectory
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.7.0"
+VERSION = "1.8.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -47,19 +51,37 @@ USAGE = ("""
 Usage:
   {0} (--version)
   {0} (-h | --help)
-  {0} [(-o | --overwrite)] [(-v | --verbose)] MASTER_CFG [BUILD_YAML]
+  {0} [(-o | --overwrite)] [(-v | --verbose)] [-c MASTER_CFG] [BUILD_YAML]
   {0} --list-notebooks [BUILD_YAML]
+  {0} --upload [(-v | --verbose)] SHARD_FOLDER_PATH [BUILD_YAML]
+  {0} --download [(-v | --verbose)] SHARD_FOLDER_PATH [BUILD_YAML]
 
 MASTER_CFG is the build tool's master configuration file.
-BUILD_YAML is the build file for the course to be built. Defaults to {2}
+
+BUILD_YAML is the build file for the course to be built. Defaults to {2}.
+
+SHARD_FOLDER_PATH is the path to a folder on a Databricks shard, as supported
+by the Databricks CLI. You must install databricks-cli and configure it
+properly for --upload and --download to work.
 
 Options:
-  -h --help       Show this screen.
-  -o --overwrite  Overwrite the destination directory, if it exists.
-  -v --verbose    Print what's going on to standard output.
-  --version       Display version and exit.
+  -h --help         Show this screen.
+  -c MASTER_CFG     Specify the location of the master configuration.
+                    [default: ~/.bdc.cfg]
+  -o --overwrite    Overwrite the destination directory, if it exists.
+  -v --verbose      Print what's going on to standard output.
+  --list-notebooks  List the full paths of all notebooks in a course
+  --upload          Upload all notebooks to a folder on Databricks.
+  --download        Download all notebooks from a folder on Databricks, copying
+                    them into their appropriate locations on the local file
+                    system, as defined in the build.yaml file.
+  --version         Display version and exit.
 
 """.format(PROG, VERSION, DEFAULT_BUILD_FILE))
+
+COLUMNS = int(os.getenv('COLUMNS', '79'))
+VERBOSE_PREFIX = "{0}: ".format(PROG)
+WARNING_PREFIX = "*** WARNING: "
 
 INSTRUCTOR_FILES_SUBDIR = "InstructorFiles" # instructor files subdir
 INSTRUCTOR_LABS_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Instructor-Labs")
@@ -157,14 +179,29 @@ html_template = Template(DEFAULT_HTML_TEMPLATE)
 be_verbose = False
 errors = 0
 
+# Text wrappers
+warning_wrapper = TextWrapper(width=COLUMNS,
+                              subsequent_indent=' ' * len(WARNING_PREFIX))
+
+verbose_wrapper = TextWrapper(width=COLUMNS,
+                              subsequent_indent=' ' * len(VERBOSE_PREFIX))
+
+error_wrapper = TextWrapper(width=COLUMNS)
+
+info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
+
 # ---------------------------------------------------------------------------
 # Classes
 # ---------------------------------------------------------------------------
 
 Config = namedtuple('Config', ('gendbc', 'build_directory'))
 
-
 class BuildError(Exception):
+    def __init__(self, message):
+        self.message = message
+
+
+class UploadDownloadError(Exception):
     def __init__(self, message):
         self.message = message
 
@@ -273,7 +310,15 @@ class BuildData(object):
 def verbose(msg):
     """Conditionally emit a verbose message."""
     if be_verbose:
-        print("{0}: {1}".format(PROG, msg))
+        print(verbose_wrapper.fill("{0}{1}".format(VERBOSE_PREFIX, msg)))
+
+
+def warning(msg):
+    print(warning_wrapper.fill('{0}{1}'.format(WARNING_PREFIX, msg)))
+
+
+def info(msg):
+    print(info_wrapper.fill(msg))
 
 
 def error(msg):
@@ -285,7 +330,7 @@ def error(msg):
     global errors
     errors += 1
     sys.stderr.write("***\n")
-    sys.stderr.write(msg + "\n")
+    sys.stderr.write(error_wrapper.fill(msg) + "\n")
     sys.stderr.write("***\n")
 
 
@@ -298,7 +343,6 @@ def die(msg, show_usage=False):
         sys.stderr.write(USAGE)
     sys.stderr.write("\n*** ABORTED\n")
     sys.exit(1)
-
 
 def load_build_yaml(yaml_file):
     """
@@ -353,6 +397,7 @@ def load_build_yaml(yaml_file):
         return Template(dest).substitute(fields)
 
     def parse_notebook(obj):
+        bad_dest = re.compile('^\.\./*|^\./*')
         src = required(obj, 'src', 'notebooks section')
         dest = subst(required(obj, 'dest', 'notebooks section'), src)
         if bool_field(obj, 'skip'):
@@ -376,6 +421,12 @@ def load_build_yaml(yaml_file):
                     ('Notebook {0}: When "master" is enabled, "dest" must be ' +
                     'a directory.').format(src)
                 )
+            if bad_dest.match(dest):
+                raise ConfigError(
+                    ('Notebook {0}: Relative destinations ("{1}") are ' +
+                     'disallowed.').format(src, dest)
+                )
+
         else:
             _, src_ext = os.path.splitext(src)
             if (not dest_ext) or (dest_ext != src_ext):
@@ -493,7 +544,9 @@ def load_build_yaml(yaml_file):
     else:
         notebooks = None
 
-    notebook_heading = contents.get('notebook_heading', {})
+    notebook_heading = contents.get('notebook_heading', None)
+    if notebook_heading is None:
+        notebook_heading = {}
 
     data = BuildData(
         build_file_path=build_yaml_full,
@@ -593,14 +646,20 @@ def move(src, dest):
     verbose('mv "{0}" "{1}"'.format(src, dest))
     shutil.move(src, dest)
 
-def copy(src, dest):
+
+def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     """
     Copy a source file to a destination file, honoring the --verbose
     command line option and creating any intermediate destination
     directories.
 
-    :param src:   src file
-    :param dest:  destination file
+    :param src:                  src file
+    :param dest:                 destination file
+    :param ensure_final_newline  if True, ensure that the target file has
+                                 a final newline. Otherwise, just copy the
+                                 file exactly as is, byte for byte.
+    :param encoding              Only used if ensure_file_newline is True.
+                                 Defaults to 'UTF-8'.
     :return: None
     """
     if not path.exists(src):
@@ -609,7 +668,18 @@ def copy(src, dest):
     dest = path.abspath(dest)
     ensure_parent_dir_exists(dest)
     verbose('cp "{0}" "{1}"'.format(src, dest))
-    shutil.copy2(src, dest)
+    if not ensure_final_newline:
+        shutil.copy2(src, dest)
+    else:
+        with codecs.open(src, mode='r', encoding=encoding) as input:
+            with codecs.open(dest, mode='w', encoding=encoding) as output:
+                last_line_had_nl = False
+                for line in input:
+                    output.write(line)
+                    last_line_had_nl = line[-1] == '\n'
+                if not last_line_had_nl:
+                    output.write('\n')
+        shutil.copystat(src, dest)
 
 
 def markdown_to_html(md, html_out, stylesheet=None):
@@ -681,14 +751,18 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
             # <dest_root> + <notebook.dest> + file
             #
             # <notebook.dest> can have the language in it. If it's not there,
-            # we put the language at the beginning.
+            # we put the language at the beginning--unless the
             lang_dir = lc_lang.capitalize()
             dest_subst = Template(notebook.dest).safe_substitute(
                 {TARGET_LANG: lang_dir}
             )
 
             if dest_subst == notebook.dest:
-                dest_subst = path.join(lang_dir, notebook.dest)
+                if dest_subst.startswith('/'):
+                    # Suppress addition of target language.
+                    dest_subst = dest_subst[1:]
+                else:
+                    dest_subst = path.join(lang_dir, notebook.dest)
 
             # Get the file name extension for the language. Note that this
             # extension INCLUDES the ".".
@@ -720,7 +794,6 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
 
             base, _ = path.splitext(path.basename(notebook.src))
             mp_notebook_dir = path.join(temp_output_dir, base, lc_lang)
-
 
             for type, target_dir in types_and_targets:
                 # Use a recursive glob pattern to find all matching notebooks.
@@ -946,6 +1019,221 @@ def build_course(opts, build, bdc_config):
     ))
 
 
+def find_in_path(command):
+    '''
+    Find a command in the path, or bail.
+
+    :param command:  the command to find
+    :return: the location. Throws an exception otherwise.
+    '''
+    path = [p for p in os.getenv('PATH', '').split(os.pathsep) if len(p) > 0]
+    for d in path:
+        p = os.path.join(d, command)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    else:
+        raise Exception("""Can't find "{0}" in PATH.""".format(command))
+
+
+def dbw(subcommand, args, capture_stdout=True):
+    '''
+    Invoke "databricks workspace" with specified arguments.
+
+    :param subcommand: the "databricks workspace" subcommand
+    :param args: arguments, as a list
+    :param capture_stdout: True to capture and return standard output. False
+                           otherwise.
+
+    :return: A tuple of (returncode, parsed_json) on error,
+             or (returncode, stdout) on success. If capture_stdout is False,
+             then a successful result will return an empty string for stdout.
+    '''
+    dbw = find_in_path('databricks')
+    try:
+        full_args = [dbw, 'workspace', subcommand] + args
+        verbose('+ {0}'.format(' '.join(full_args)))
+        stdout_loc = subprocess.PIPE if capture_stdout else None
+        p = subprocess.Popen(full_args,
+                             stdout=stdout_loc, stderr=subprocess.STDOUT)
+        if capture_stdout:
+            stdout = p.communicate()[0]
+        else:
+            stdout = ''
+            p.wait()
+
+        if p.returncode is 0:
+            return (p.returncode, stdout)
+        elif stdout.startswith('Error: {'):
+            j = json.loads(stdout.replace('Error: {', '{'))
+            j['message'] = j.get('message', '').replace(r'\n', '\n')
+            return (p.returncode, j)
+        else:
+            return (p.returncode, {'error_code': 'UNKNOWN', 'message': stdout})
+
+    except OSError as e:
+        return (1, {'error_code': 'OS_ERROR', 'message': e.message})
+
+
+def ensure_shard_path_exists(shard_path):
+    rc, res = dbw('ls', [shard_path])
+    if rc == 0 and res.startswith('Usage:'):
+        die('(BUG) Error in "databricks" command:\n{0}'.format(res))
+    elif rc == 0:
+        # Path exists.
+        pass
+    else:
+        message = res.get('message', '?')
+        if res.get('error_code', '?') == 'RESOURCE_DOES_NOT_EXIST':
+            # All good
+            die('Shard path "{0}" does not exist.'.format(message))
+        else:
+            # Some other error
+            die('Unexpected error with "databricks": {0}'.format(message))
+
+
+def ensure_shard_path_does_not_exist(shard_path):
+    rc, res = dbw('ls', [shard_path])
+    if rc == 0 and res.startswith('Usage:'):
+        die('(BUG) Error in "databricks" command:\n{0}'.format(res))
+    elif rc == 0:
+        # Path exists.
+        die('Shard path "{0}" already exists.'.format(shard_path))
+    else:
+        message = res.get('message', '?')
+        if res.get('error_code', '?') == 'RESOURCE_DOES_NOT_EXIST':
+            # All good
+            pass
+        else:
+            # Some other error
+            die('Unexpected error with "databricks": {0}'.format(message))
+
+
+def notebook_is_transferrable(nb, build):
+    nb_full_path = path.abspath(path.join(build.source_base, nb.src))
+    if not os.path.exists(nb_full_path):
+        warning('Notebook "{0}" does not exist.'.format(nb_full_path))
+        return False
+
+    return True
+
+
+def get_sources_and_targets(build):
+    '''
+    Get the list of source notebooks to be uploaded/downloaded and map them
+    to their target names on the shard.
+
+    :param build: the build
+
+    :return: A dict of source names to partial-path target names
+    '''
+    template_data = {
+        TARGET_LANG: ''
+    }
+    def map_notebook_dest(nb):
+        return path.normpath(
+            leading_slashes.sub(
+                '', Template(nb.dest).safe_substitute(template_data)
+            )
+        )
+
+    res = {}
+    notebooks = [nb for nb in build.notebooks
+                 if notebook_is_transferrable(nb, build)]
+    leading_slashes = re.compile(r'^/+')
+
+    target_dirs = {}
+    for nb in notebooks:
+        dest = map_notebook_dest(nb)
+        if nb.master.get('enabled', False):
+            # The destination is a directory. Count how many notebooks
+            # end up in each directory.
+            target_dirs[dest] = target_dirs.get(dest, 0) + 1
+
+    for nb in notebooks:
+        nb_full_path = path.abspath(path.join(build.source_base, nb.src))
+
+        # Construct partial path from target path.
+        base_with_ext = path.basename(nb_full_path)
+        (base_no_ext, ext) = path.splitext(base_with_ext)
+        dest = map_notebook_dest(nb)
+        if nb.master.get('enabled', False):
+            # The destination is a directory. If the directory contains only
+            # one notebook, just use the directory name as the notebook (and
+            # append the extension). Otherwise, add the file name to the
+            # directory.
+            if target_dirs.get(dest, 1) > 1:
+                dest = path.join(dest, base_with_ext)
+            elif dest == '.':
+                dest = base_with_ext
+            else:
+                dest = dest + ext
+
+        res[nb_full_path] = dest
+
+    return res
+
+def mkdirp(dir):
+    if not path.exists(dir):
+        os.makedirs(dir)
+
+def upload_notebooks(build, shard_path):
+    ensure_shard_path_does_not_exist(shard_path)
+
+    notebooks = get_sources_and_targets(build)
+    try:
+        with TemporaryDirectory() as tempdir:
+            info("Copying notebooks to temporary directory.")
+            for nb_full_path, partial_path in notebooks.items():
+                temp_path = path.join(tempdir, partial_path)
+                dir = path.dirname(temp_path)
+                mkdirp(dir)
+                verbose('Copying "{0}" to "{1}"'.format(nb_full_path, temp_path))
+                copy(nb_full_path, temp_path)
+
+            with working_directory(tempdir):
+                info("Uploading notebooks to {0}".format(shard_path))
+                rc, res = dbw('import_dir', ['.', shard_path], capture_stdout=False)
+                if rc != 0:
+                    raise UploadDownloadError(
+                        "Upload failed: {0}".format(res.get('message', '?'))
+                    )
+                else:
+                    info("Uploaded {0} notebooks to {1}.".format(
+                        len(notebooks), shard_path
+                    ))
+    except UploadDownloadError as e:
+        dbw('rm', [shard_path], capture_stdout=False)
+        die(e.message)
+
+def download_notebooks(build, shard_path):
+    ensure_shard_path_exists(shard_path)
+
+    # get_sources_and_targets() returns a dict of
+    # local-path -> remote-partial-path. Reverse it. Bail if there are any
+    # duplicate keys, because it's supposed to be 1:1.
+    remote_to_local = {}
+    for local, remote in get_sources_and_targets(build).items():
+        if remote in remote_to_local:
+            die('(BUG): Found multiple instances of remote path "{0}"'.format(
+                remote
+            ))
+        remote_to_local[remote] = local
+
+    with TemporaryDirectory() as tempdir:
+        info("Downloading notebooks to temporary directory")
+        with working_directory(tempdir):
+            rc, res = dbw('export_dir', [shard_path, '.'])
+            if rc != 0:
+                die("Download failed: {0}".format(res.get('message', '?')))
+
+            for remote, local in remote_to_local.items():
+                if not path.exists(local):
+                    warning(('Cannot find downloaded version of course ' +
+                             'notebook "{0}".').format(local))
+                print('"{0}" -> {1}'.format(remote, local))
+                # Make sure there's a newline at the end of each file.
+                copy(remote, local, ensure_final_newline=True)
+
 def list_notebooks(build):
     for notebook in build.notebooks:
         src_path = path.join(build.source_base, notebook.src)
@@ -960,13 +1248,20 @@ def main():
     global be_verbose
     be_verbose = opts['--verbose']
 
-    bdc_config = opts['MASTER_CFG']
+    bdc_config = os.path.expanduser(opts['-c'])
     course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
+
+    if not path.exists(bdc_config):
+        die('Master configuration file "{0}" does not exist.'.format(bdc_config))
 
     try:
         build = load_build_yaml(course_config)
         if opts['--list-notebooks']:
             list_notebooks(build)
+        elif opts['--upload']:
+            upload_notebooks(build, opts['SHARD_FOLDER_PATH'])
+        elif opts['--download']:
+            download_notebooks(build, opts['SHARD_FOLDER_PATH'])
         else:
             build_course(opts, build, bdc_config)
 

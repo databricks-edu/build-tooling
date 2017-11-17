@@ -5,6 +5,8 @@ This directory contains courseware build tool. (_bdc_ stands for
 consolidate all aspects of the curriculum build process. It _does_ rely on some
 external artifacts. See below for details.
 
+For usage instructions, see [Usage](#usage).
+
 ## Preparing the environment
 
 _bdc_ was written for Python 3, but it will run with Python 2.
@@ -64,9 +66,10 @@ new command window.**
 ### Install _bdc_
 
 Once you've activated the appropriate Python virtual environment, just run
-the following command in this directory:
+the following commands in this directory:
 
 ```
+pip install -r requirements.txt
 python setup.py install
 ```
 
@@ -111,12 +114,115 @@ particular class. Each class that is to be built will have its own build file.
 
 See [build.yaml](build.yaml) in this directory for a fully-documented example.
 
-## Running the build tool
+## Usage
 
-Just invoke
+Just invoke `bdc` with no arguments for a quick usage message.
 
+`bdc` can be invoke several different ways. Each is described below.
+
+### Getting the abbreviated usage message
+
+Invoke bdc with no arguments to get a quick usage message.
+
+### Getting the full usage message
+
+`bdc -h` or `bdc --help`
+
+### Show only the version
+
+`bdc --version`
+
+### Get a list of the notebooks in a course
+
+`bdc --list-notebooks [build-yaml]`
+
+With this command, `bdc` will list the full paths of all the (source) notebooks 
+that comprise a particular course, one per line. `build-yaml` is the path to 
+the course's `build.yaml` file, and it defaults to `build.yaml` in the current
+directory.
+
+### Build a course
+
+`bdc [-o | --overwrite] [(-v | --verbose) [-c master-cfg] [build-yaml]`
+
+This version of the command builds a course, writing the results to a directory
+underneath the `build_directory` path specified in the master config.
+
+If the output directory already exists, the build will fail _unless_ you
+also specify `-o` (or `--overwrite`).
+
+If you specify `-v` (`--verbose`), the build process will emit various verbose
+messages as it builds the course.
+
+`master-cfg` is the path to the master configuration. It defaults to
+`~/.bdc.cfg`.
+
+`build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
+`build.yaml` in the current directory.
+
+### Upload the course's notebooks to a Databricks shard
+
+You can use `bdc` to upload all notebooks for a course to a Databricks shard.
+
+`bdc --upload shard-path [build-yaml]`
+
+This version of the command gets the list of source notebooks from the build 
+file and uploads them to a shard using a layout similar to the build layout.
+You can then edit and test the notebooks in Databricks. When you're done
+editing, you can use `bdc` to download the notebooks again. (See below.) 
+
+`shard-path` is the path to the folder on the Databricks shard. For instance:
+`/Users/foo@example.com/Spark-ML-301`. The folder **must not exist** in the
+shard. If it already exists, the upload will abort.
+
+`build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
+`build.yaml` in the current directory.
+
+#### Prerequisite
+ 
+This option _requires_ the `databricks-cli` package, which is only
+supported on Python 2. You _must_ install and configure the `databricks-cli`
+package. The shard to which the notebooks are uploaded is part of the
+`databricks-cli` configuration.
+
+See <https://docs.databricks.com/user-guide/databricks-cli.html> for details.
+
+### Download the course's notebooks to a Databricks shard
+
+You can use `bdc` to download all notebooks for a course to a Databricks shard.
+
+`bdc --download shard-path [build-yaml]`
+
+This version of the command downloads the contents of the specified Databricks
+shard folder to a local temporary directory. Then, for each downloaded file,
+`bdc` uses the `build.yaml` file to identify the original source file and
+copies the downloaded file over top of the original source.
+
+`shard-path` is the path to the folder on the Databricks shard. For instance:
+`/Users/foo@example.com/Spark-ML-301`. The folder **must exist** in the
+shard. If it doesn't exists, the upload will abort.
+
+`build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
+`build.yaml` in the current directory.
+
+**WARNING**: If the `build.yaml` points to your cloned Git repository,
+**ensure that everything is committed first**. Don't download into a dirty
+Git repository. If the download fails or somehow screws things up, you want to
+be able to reset the Git repository to before you ran the download.
+
+To reset your repository, use:
+ 
 ```
-bdc
+git reset --hard HEAD
 ```
 
-Without any arguments, it'll display a detailed usage message.
+This resets your repository back to the last-committed state.
+
+#### Prerequisite
+ 
+This option _requires_ the `databricks-cli` package, which is only
+supported on Python 2. You _must_ install and configure the `databricks-cli`
+package. The shard to which the notebooks are uploaded is part of the
+`databricks-cli` configuration.
+
+See <https://docs.databricks.com/user-guide/databricks-cli.html> for details.

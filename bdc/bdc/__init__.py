@@ -51,7 +51,7 @@ USAGE = ("""
 Usage:
   {0} (--version)
   {0} (-h | --help)
-  {0} [(-o | --overwrite)] [(-v | --verbose)] MASTER_CFG [BUILD_YAML]
+  {0} [(-o | --overwrite)] [(-v | --verbose)] [-c MASTER_CFG] [BUILD_YAML]
   {0} --list-notebooks [BUILD_YAML]
   {0} --upload [(-v | --verbose)] SHARD_FOLDER_PATH [BUILD_YAML]
   {0} --download [(-v | --verbose)] SHARD_FOLDER_PATH [BUILD_YAML]
@@ -66,6 +66,8 @@ properly for --upload and --download to work.
 
 Options:
   -h --help         Show this screen.
+  -c MASTER_CFG     Specify the location of the master configuration.
+                    [default: ~/.bdc.cfg]
   -o --overwrite    Overwrite the destination directory, if it exists.
   -v --verbose      Print what's going on to standard output.
   --list-notebooks  List the full paths of all notebooks in a course
@@ -194,8 +196,12 @@ info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
 
 Config = namedtuple('Config', ('gendbc', 'build_directory'))
 
-
 class BuildError(Exception):
+    def __init__(self, message):
+        self.message = message
+
+
+class UploadDownloadError(Exception):
     def __init__(self, message):
         self.message = message
 
@@ -738,14 +744,18 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
             # <dest_root> + <notebook.dest> + file
             #
             # <notebook.dest> can have the language in it. If it's not there,
-            # we put the language at the beginning.
+            # we put the language at the beginning--unless the
             lang_dir = lc_lang.capitalize()
             dest_subst = Template(notebook.dest).safe_substitute(
                 {TARGET_LANG: lang_dir}
             )
 
             if dest_subst == notebook.dest:
-                dest_subst = path.join(lang_dir, notebook.dest)
+                if dest_subst.startswith('/'):
+                    # Suppress addition of target language.
+                    dest_subst = dest_subst[1:]
+                else:
+                    dest_subst = path.join(lang_dir, notebook.dest)
 
             # Get the file name extension for the language. Note that this
             # extension INCLUDES the ".".
@@ -777,7 +787,6 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
 
             base, _ = path.splitext(path.basename(notebook.src))
             mp_notebook_dir = path.join(temp_output_dir, base, lc_lang)
-
 
             for type, target_dir in types_and_targets:
                 # Use a recursive glob pattern to find all matching notebooks.
@@ -1048,7 +1057,9 @@ def dbw(subcommand, args, capture_stdout=True):
         if p.returncode is 0:
             return (p.returncode, stdout)
         elif stdout.startswith('Error: {'):
-            return (p.returncode, json.loads(stdout.replace('Error: {', '{')))
+            j = json.loads(stdout.replace('Error: {', '{'))
+            j['message'] = j.get('message', '').replace(r'\n', '\n')
+            return (p.returncode, j)
         else:
             return (p.returncode, {'error_code': 'UNKNOWN', 'message': stdout})
 
@@ -1126,7 +1137,7 @@ def get_sources_and_targets(build):
     target_dirs = {}
     for nb in notebooks:
         dest = map_notebook_dest(nb)
-        if nb.master is not None:
+        if nb.master.get('enabled', False):
             # The destination is a directory. Count how many notebooks
             # end up in each directory.
             target_dirs[dest] = target_dirs.get(dest, 0) + 1
@@ -1138,13 +1149,15 @@ def get_sources_and_targets(build):
         base_with_ext = path.basename(nb_full_path)
         (base_no_ext, ext) = path.splitext(base_with_ext)
         dest = map_notebook_dest(nb)
-        if nb.master is not None:
+        if nb.master.get('enabled', False):
             # The destination is a directory. If the directory contains only
             # one notebook, just use the directory name as the notebook (and
             # append the extension). Otherwise, add the file name to the
             # directory.
             if target_dirs.get(dest, 1) > 1:
                 dest = path.join(dest, base_with_ext)
+            elif dest == '.':
+                dest = base_with_ext
             else:
                 dest = dest + ext
 
@@ -1160,24 +1173,30 @@ def upload_notebooks(build, shard_path):
     ensure_shard_path_does_not_exist(shard_path)
 
     notebooks = get_sources_and_targets(build)
-    with TemporaryDirectory() as tempdir:
-        info("Copying notebooks to temporary directory.")
-        for nb_full_path, partial_path in notebooks.items():
-            temp_path = path.join(tempdir, partial_path)
-            dir = path.dirname(temp_path)
-            mkdirp(dir)
-            copy(nb_full_path, temp_path)
+    try:
+        with TemporaryDirectory() as tempdir:
+            info("Copying notebooks to temporary directory.")
+            for nb_full_path, partial_path in notebooks.items():
+                temp_path = path.join(tempdir, partial_path)
+                dir = path.dirname(temp_path)
+                mkdirp(dir)
+                verbose('Copying "{0}" to "{1}"'.format(nb_full_path, temp_path))
+                copy(nb_full_path, temp_path)
 
-        with working_directory(tempdir):
-            info("Uploading notebooks to {0}".format(shard_path))
-            rc, res = dbw('import_dir', ['.', shard_path], capture_stdout=False)
-            if rc != 0:
-                die("Upload failed: {0}".format(res.get('message', '?')))
-            else:
-                info("Uploaded {0} notebooks to {1}.".format(
-                    len(notebooks), shard_path
-                ))
-
+            with working_directory(tempdir):
+                info("Uploading notebooks to {0}".format(shard_path))
+                rc, res = dbw('import_dir', ['.', shard_path], capture_stdout=False)
+                if rc != 0:
+                    raise UploadDownloadError(
+                        "Upload failed: {0}".format(res.get('message', '?'))
+                    )
+                else:
+                    info("Uploaded {0} notebooks to {1}.".format(
+                        len(notebooks), shard_path
+                    ))
+    except UploadDownloadError as e:
+        dbw('rm', [shard_path], capture_stdout=False)
+        die(e.message)
 
 def download_notebooks(build, shard_path):
     ensure_shard_path_exists(shard_path)
@@ -1202,7 +1221,8 @@ def download_notebooks(build, shard_path):
 
             for remote, local in remote_to_local.items():
                 if not path.exists(local):
-                    die('Cannot find downloaded file "{0}".'.format(local))
+                    warning(('Cannot find downloaded version of course ' +
+                             'notebook "{0}".').format(local))
                 print('"{0}" -> {1}'.format(remote, local))
                 # Make sure there's a newline at the end of each file.
                 copy(remote, local, ensure_final_newline=True)
@@ -1221,8 +1241,11 @@ def main():
     global be_verbose
     be_verbose = opts['--verbose']
 
-    bdc_config = opts['MASTER_CFG']
+    bdc_config = os.path.expanduser(opts['-c'])
     course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
+
+    if not path.exists(bdc_config):
+        die('Master configuration file "{0}" does not exist.'.format(bdc_config))
 
     try:
         build = load_build_yaml(course_config)

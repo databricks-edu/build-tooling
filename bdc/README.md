@@ -200,7 +200,7 @@ copies the downloaded file over top of the original source.
 
 `shard-path` is the path to the folder on the Databricks shard. For instance:
 `/Users/foo@example.com/Spark-ML-301`. The folder **must exist** in the
-shard. If it doesn't exists, the upload will abort.
+shard. If it doesn't exist, the upload will abort.
 
 `build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
 `build.yaml` in the current directory.

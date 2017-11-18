@@ -344,6 +344,7 @@ def die(msg, show_usage=False):
     sys.stderr.write("\n*** ABORTED\n")
     sys.exit(1)
 
+
 def load_build_yaml(yaml_file):
     """
     Load the YAML configuration file that defines the build for a particular
@@ -647,6 +648,11 @@ def move(src, dest):
     shutil.move(src, dest)
 
 
+def mkdirp(dir):
+    if not path.exists(dir):
+        os.makedirs(dir)
+
+
 def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     """
     Copy a source file to a destination file, honoring the --verbose
@@ -681,6 +687,24 @@ def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
                     output.write('\n')
         shutil.copystat(src, dest)
 
+
+def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+    """
+    Copy a source file to a destination file, honoring the --verbose
+    command line option and creating any intermediate destination
+    directories.
+
+    :param src:                  src file
+    :param dest:                 destination file
+    :param ensure_final_newline  if True, ensure that the target file has
+                                 a final newline. Otherwise, just copy the
+                                 file exactly as is, byte for byte.
+    :param encoding              Only used if ensure_file_newline is True.
+                                 Defaults to 'UTF-8'.
+    :return: None
+    """
+    copy(src, dest, ensure_final_newline=ensure_final_newline, encoding=encoding)
+    os.unlink(src)
 
 def markdown_to_html(md, html_out, stylesheet=None):
     """
@@ -1172,9 +1196,6 @@ def get_sources_and_targets(build):
 
     return res
 
-def mkdirp(dir):
-    if not path.exists(dir):
-        os.makedirs(dir)
 
 def upload_notebooks(build, shard_path):
     ensure_shard_path_does_not_exist(shard_path)
@@ -1232,7 +1253,18 @@ def download_notebooks(build, shard_path):
                              'notebook "{0}".').format(local))
                 print('"{0}" -> {1}'.format(remote, local))
                 # Make sure there's a newline at the end of each file.
-                copy(remote, local, ensure_final_newline=True)
+                move(remote, local, ensure_final_newline=True)
+
+            # Are there any leftovers?
+            leftover_files = []
+            for root, dirs, files in os.walk('.'):
+                for f in files:
+                    leftover_files.append(path.relpath(path.join(root, f)))
+            if len(leftover_files) > 0:
+                warning(("These files from {0} aren't in the build file and" +
+                        "were not copied").format(shard_path))
+                for f in leftover_files:
+                    print("    {0}".format(f))
 
 def list_notebooks(build):
     for notebook in build.notebooks:

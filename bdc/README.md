@@ -92,6 +92,10 @@ _bdc_ also depends on the [gendbc](../gendbc/README.md) tool, which is
 written in Scala. Follow the instructions in the _gendbc_ `README.md` file
 to install _gendbc_ in the build environment you'll be using.
 
+**NOTE**: `bdc` expects to find the `gendbc` binary by searching your PATH.
+`gendbc` is installed in `$HOME/local/bin` by default, so make sure that's in
+your PATH.
+
 ### Install the Databricks CLI
 
 If you're using `bdc --upload` or `bdc --download` (see [Usage](#usage)), you

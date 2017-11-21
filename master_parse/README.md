@@ -15,9 +15,10 @@ The tool is usable from either Python 2 or Python 3.
 To install, run
 
 ```
-pip install -r requirements.txt
 python setup.py install
 ```
+
+The setup file installs all required packages, as well as `master_parse`.
 
 ## Command line use
 

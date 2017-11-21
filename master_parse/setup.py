@@ -28,11 +28,7 @@ setup(
     packages=['master_parse'],
     version=version,
     description='Master parse tool',
-    install_requires=['enum34 >= 1.1.6',
-                      'nbformat >= 4.0.1',
-                      'PyYAML >= 3.12'
-                      ],
-
+    install_requires=['enum34 >= 1.1.6'],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',
     license="Creative Commons Attribution-NonCommercial 4.0 International",

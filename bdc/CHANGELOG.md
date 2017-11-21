@@ -1,5 +1,12 @@
 # Change Log for BDC
 
+Version 1.9.0:
+
+* The master configuration file (`bdc.cfg`) is no longer used. `bdc` locates
+  `gendbc` via the path, and it allows specification of the output directory
+  via a new `-d` (or `--dest`) option.
+* Updated documentation in the README.
+
 Version 1.8.0:
 
 * Added ability to upload and download entire course via `databricks`

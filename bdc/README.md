@@ -11,6 +11,9 @@ For usage instructions, see [Usage](#usage).
 
 _bdc_ was written for Python 3, but it will run with Python 2.
 
+**NOTE**: If you plan to use the `--upload` and `--download` features,
+stick with Python 2.
+
 ### Create a Python virtual environment
 
 While it is possible to build the courseware by installing the necessary
@@ -89,25 +92,29 @@ _bdc_ also depends on the [gendbc](../gendbc/README.md) tool, which is
 written in Scala. Follow the instructions in the _gendbc_ `README.md` file
 to install _gendbc_ in the build environment you'll be using.
 
+**NOTE**: `bdc` expects to find the `gendbc` binary by searching your PATH.
+`gendbc` is installed in `$HOME/local/bin` by default, so make sure that's in
+your PATH.
+
+### Install the Databricks CLI
+
+If you're using `bdc --upload` or `bdc --download` (see [Usage](#usage)), you
+also need the [Databricks Command Line Interface](https://docs.databricks.com/user-guide/databricks-cli.html).
+This tool _only_ supports Python 2; you can install it via:
+
+```
+pip install databricks-cli
+``` 
+
+See <https://docs.databricks.com/user-guide/databricks-cli.html> for complete
+installation and configuration details.
+
 ## Configuration
 
-_bdc_ uses two configuration files:
-
-* a master configuration, which configures _bdc_ itself.
-* a per-course configuration
-
-### The master configuration
-
-The _bdc_ configuration file tells _bdc_ about the build environment.
-It's a Python ConfigParser configuration. See
-<https://docs.python.org/3/library/configparser.html>.
-
-See [bdc.cfg](bdc.cfg) in this directory for a fully-documented example.
-
-### The per-class build file
-
-The per-class build file is a YAML file describing the files that comprise a
-particular class. Each class that is to be built will have its own build file.
+_bdc_ uses a per-course build file that describes the course being built. This
+file, conventionally called `build.yaml`, is a YAML file describing the files
+that comprise a particular class. Each class that is to be built will have its 
+own build file.
 
 See [build.yaml](build.yaml) in this directory for a fully-documented example.
 
@@ -140,19 +147,18 @@ directory.
 
 ### Build a course
 
-`bdc [-o | --overwrite] [(-v | --verbose) [-c master-cfg] [build-yaml]`
+`bdc [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [build-yaml]`
 
-This version of the command builds a course, writing the results to a directory
-underneath the `build_directory` path specified in the master config.
+This version of the command builds a course, writing the results to the
+specified destination directory, `DEST`. If the destination directory
+doesn't exist, it defaults to `$HOME/tmp/curriculum/<course-id>` (e.g.,
+`$HOME/tmp/curriculum/Spark-100-105-1.8.11`).
 
-If the output directory already exists, the build will fail _unless_ you
+If the destination directory already exists, the build will fail _unless_ you
 also specify `-o` (or `--overwrite`).
 
 If you specify `-v` (`--verbose`), the build process will emit various verbose
 messages as it builds the course.
-
-`master-cfg` is the path to the master configuration. It defaults to
-`~/.bdc.cfg`.
 
 `build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
 `build.yaml` in the current directory.

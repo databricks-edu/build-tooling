@@ -40,7 +40,7 @@ from backports.tempfile import TemporaryDirectory
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.8.0"
+VERSION = "1.9.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -51,10 +51,10 @@ USAGE = ("""
 Usage:
   {0} (--version)
   {0} (-h | --help)
-  {0} [(-o | --overwrite)] [(-v | --verbose)] [-c MASTER_CFG] [BUILD_YAML]
+  {0} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
   {0} --list-notebooks [BUILD_YAML]
-  {0} --upload [(-v | --verbose)] SHARD_FOLDER_PATH [BUILD_YAML]
-  {0} --download [(-v | --verbose)] SHARD_FOLDER_PATH [BUILD_YAML]
+  {0} --upload [-v | --verbose] SHARD_FOLDER_PATH [BUILD_YAML]
+  {0} --download [-v | --verbose] SHARD_FOLDER_PATH [BUILD_YAML]
 
 MASTER_CFG is the build tool's master configuration file.
 
@@ -65,17 +65,17 @@ by the Databricks CLI. You must install databricks-cli and configure it
 properly for --upload and --download to work.
 
 Options:
-  -h --help         Show this screen.
-  -c MASTER_CFG     Specify the location of the master configuration.
-                    [default: ~/.bdc.cfg]
-  -o --overwrite    Overwrite the destination directory, if it exists.
-  -v --verbose      Print what's going on to standard output.
-  --list-notebooks  List the full paths of all notebooks in a course
-  --upload          Upload all notebooks to a folder on Databricks.
-  --download        Download all notebooks from a folder on Databricks, copying
-                    them into their appropriate locations on the local file
-                    system, as defined in the build.yaml file.
-  --version         Display version and exit.
+  -h --help            Show this screen.
+  -d DEST --dest DEST  Specify output destination. Defaults to
+                       ~/tmp/curriculum/<course_id>
+  -o --overwrite       Overwrite the destination directory, if it exists.
+  -v --verbose         Print what's going on to standard output.
+  --list-notebooks     List the full paths of all notebooks in a course
+  --upload             Upload all notebooks to a folder on Databricks.
+  --download           Download all notebooks from a folder on Databricks,
+                       copying them into their appropriate locations on the 
+                       local file system, as defined in the build.yaml file.
+  --version            Display version and exit.
 
 """.format(PROG, VERSION, DEFAULT_BUILD_FILE))
 
@@ -933,7 +933,7 @@ def copy_instructor_notes(build, dest_root):
                 continue
 
 
-def make_dbc(config, build, labs_dir, dbc_path):
+def make_dbc(gendbc, build, labs_dir, dbc_path):
     """
     Create a DBC file from the labs.
     """
@@ -942,12 +942,12 @@ def make_dbc(config, build, labs_dir, dbc_path):
         simple_labs_dir = path.basename(labs_dir)
         if be_verbose:
             cmd = "{0} {1} {2} {3} {4} {5}".format(
-                config.gendbc, "-v", "-f", build.course_id,
+                gendbc, "-v", "-f", build.course_id,
                 simple_labs_dir, dbc_path
             )
         else:
             cmd = "{0} {1} {2} {3} {4}".format(
-                config.gendbc, "-f", build.course_id, simple_labs_dir, dbc_path
+                gendbc, "-f", build.course_id, simple_labs_dir, dbc_path
             )
 
         verbose("\n*** In {0}:\n{1}\n".format(wd, cmd))
@@ -998,14 +998,20 @@ def remove_empty_subdirectories(directory):
             os.rmdir(dirpath)
 
 
-def build_course(opts, build, bdc_config):
-    config = load_config(bdc_config)
+def build_course(opts, build):
+
     if build.course_info.deprecated:
         die('{0} is deprecated and cannot be built.'.format(
             build.course_info.name
         ))
 
-    dest_dir = path.join(config.build_directory, build.course_id)
+    gendbc = find_in_path('gendbc')
+
+    dest_dir = (
+        opts['--dest'] or
+        path.join(os.getenv("HOME"), "tmp", "curriculum", build.course_id)
+    )
+
     verbose('Publishing to "{0}"'.format(dest_dir))
     if path.isdir(dest_dir):
         if not opts['--overwrite']:
@@ -1020,11 +1026,11 @@ def build_course(opts, build, bdc_config):
     labs_full_path = path.join(dest_dir, STUDENT_LABS_SUBDIR)
     copy_notebooks(build, labs_full_path, dest_dir)
     copy_instructor_notes(build, dest_dir)
-    make_dbc(config, build, labs_full_path, path.join(dest_dir, STUDENT_LABS_DBC))
+    make_dbc(gendbc, build, labs_full_path, path.join(dest_dir, STUDENT_LABS_DBC))
     instructor_labs = path.join(dest_dir, INSTRUCTOR_LABS_SUBDIR)
     if os.path.exists(instructor_labs):
         instructor_dbc = path.join(dest_dir, INSTRUCTOR_LABS_DBC)
-        make_dbc(config, build, instructor_labs, instructor_dbc)
+        make_dbc(gendbc, build, instructor_labs, instructor_dbc)
     copy_slides(build, dest_dir)
     copy_misc_files(build, dest_dir)
     copy_datasets(build, dest_dir)
@@ -1277,14 +1283,14 @@ def list_notebooks(build):
 
 def main():
     opts = parse_args()
+
     global be_verbose
     be_verbose = opts['--verbose']
 
-    bdc_config = os.path.expanduser(opts['-c'])
     course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
 
-    if not path.exists(bdc_config):
-        die('Master configuration file "{0}" does not exist.'.format(bdc_config))
+    dest_dir = (opts['--dest'] or
+                os.path.join(os.getenv("HOME"), "tmp", "curriculum"))
 
     try:
         build = load_build_yaml(course_config)
@@ -1295,7 +1301,7 @@ def main():
         elif opts['--download']:
             download_notebooks(build, opts['SHARD_FOLDER_PATH'])
         else:
-            build_course(opts, build, bdc_config)
+            build_course(opts, build)
 
     except ConfigError as e:
         die('Error in "{0}": {1}'.format(course_config, e.message))

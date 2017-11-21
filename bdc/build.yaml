@@ -53,13 +53,10 @@ notebook_heading:
   #path: /path/to/somewhere
   #enabled: true
 
-# notebook_heading -
-#notebook_heading: /path/to/somewhere
-
-# By default, the directories containing the labs are deleted once the
+# By default, the directories containing the notebooks are deleted once the
 # corresponding DBC files are created. You can set this field to "true"
 # to override that behavior.
-keep_lab_dirs: false
+#keep_lab_dirs: false
 
 # Markdown configuration
 #
@@ -194,7 +191,19 @@ misc_files:
 # ${basename}    - the base file name of the source, WITHOUT the extension
 # ${filename}    - the base file name of the source, WITH the extension
 # ${extension}   - the file extension
-# ${target_lang} - substitute the notebook language (Scala, R, etc.)
+# ${target_lang} - substitute the notebook language (Scala, R, etc.).
+#
+# Notes on ${target_lang}:
+#
+# - If you specify ${target_lang} in the dest value, the target master parse
+#   language is substituted, for each language-generated notebook.
+# - If you don't specify ${target_lang}, it's the same as if you put
+#   ${target_lang} first in the destination path, unless...
+# - ...the path starts with a "/". If the destination path starts with "/",
+#   the target language is omitted from the destination. (This is useful when
+#   you want to use the master parser, but your notebook only supports one
+#   language.)
+
 notebooks:
   -
     src: Overview-History/Introductions.py
@@ -214,7 +223,21 @@ notebooks:
       sql: true
       python: true
   -
-    src: Module1/Notebook1.py
+    src: Module1/Notebook1.scala
+    # With this dest, the output ends up in:
+    #     Module1/Scala/Notebook1_exercises.scala
+    #     Module1/Scala/Notebook1_answers.scala
+    #     Module1/Python/Notebook1_exercises.py
+    #     Module1/PYthon/Notebook1_answers.py
+    dest: Module1/${target_lang}
+    master:
+      enabled: true
+      r: false
+      scala: true
+      sql: false
+      python: true
+  -
+    src: Module1/Notebook2.py
     # With this dest, the output ends up in:
     #     Notebook1_exercises.py
     #     Notebook1_answers.py

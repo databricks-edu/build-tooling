@@ -69,22 +69,19 @@ Once you've activated the appropriate Python virtual environment, just run
 the following commands in this directory:
 
 ```
-pip install -r requirements.txt
 python setup.py install
 ```
 
 ### Install the master parse tool
 
-_bdc_ depends on the [master parse tool](../master_parse), which is written
-in Python. Install that tool by running
+_bdc_ depends on the
+[master parse tool](https://github.com/databricks-edu/build-tooling/tree/master/master_parse).
+See the
+[master_parse README](https://github.com/databricks-edu/build-tooling/blob/master/master_parse/README.md)
+for instructions on how to install that tool. 
 
-```
-python setup.py install
-```
-
-in the `master_parse` source directory.
-
-You need to tell _bdc_ which notebooks to pass through the master parse tool on a per notebook basis in the build.yaml file for a course.
+You need to tell _bdc_ which notebooks to pass through the master parse tool 
+on a per notebook basis in the `build.yaml` file for a course.
 
 ### Install gendbc
 

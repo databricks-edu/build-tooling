@@ -169,6 +169,8 @@ MASTER_PARSE_DEFAULTS = {
     'encoding_out':     'UTF-8'
 }
 
+MASTER_LANGUAGES = ['python', 'scala', 'r', 'sql']
+
 ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
 
 # ---------------------------------------------------------------------------
@@ -230,6 +232,30 @@ class NotebookData(object):
         :return: true or false
         '''
         return self.master and self.master.get('enabled', False)
+
+    def total_master_langs(self):
+        '''
+        Get the number of output languages produced by the master parser
+        for this notebook.
+
+        :return: 0 if the master parser isn't enabled. Number of output
+                 languages otherwise.
+        '''
+        if self.master_enabled():
+            return sum([1 if self.master[o] else 0 for o in MASTER_LANGUAGES])
+        else:
+            return 0
+
+    def master_multiple_langs(self):
+        '''
+        Determine whether the master parser is parsing to multiple languages
+        or not.
+
+        :return: True if master parsing is enabled and parsing to multiple
+                 languages; False if master parsing is disabled or is enabled
+                 but with only one output language.
+        '''
+        return self.total_master_langs() > 0
 
     def __str__(self):
         return "NotebookData(src='{0}', dest='{1}', master={2})".format(
@@ -441,16 +467,25 @@ def load_build_yaml(yaml_file):
             d = Template(dest).safe_substitute({TARGET_LANG: token})
             if token in d:
                 raise ConfigError(
-                    ('Notebook {0}: ${1} found in "dest", but "master" is disabled'.
-                      format(src, TARGET_LANG))
+                    ('Notebook "{0}": ${1} found in "dest", but "master" is ' +
+                     'disabled').format(src, TARGET_LANG)
                 )
 
-        return NotebookData(
+        nb = NotebookData(
             src=src,
             dest=dest,
             master=master,
             run_test=bool_value(obj.get('run_test', 'false'))
         )
+
+        if nb.dest.startswith('/') and nb.total_master_langs() > 1:
+            raise ConfigError(
+                ('Notebook "{0}": A destination that starts with "/" (i.e., ' +
+                 'no language is to be substituted) is not allowed when ' +
+                 'master parsing to multiple output languages.').format(src)
+            )
+
+        return nb
 
     def parse_slide(obj):
         src = required(obj, 'src', 'notebooks')
@@ -1289,11 +1324,9 @@ def main():
 
     course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
 
-    dest_dir = (opts['--dest'] or
-                os.path.join(os.getenv("HOME"), "tmp", "curriculum"))
-
     try:
         build = load_build_yaml(course_config)
+
         if opts['--list-notebooks']:
             list_notebooks(build)
         elif opts['--upload']:

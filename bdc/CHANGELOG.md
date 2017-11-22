@@ -1,5 +1,9 @@
 # Change Log for BDC
 
+Version 1.9.1:
+
+* Added some checks on the use of a leading "/" in notebook destination paths. 
+
 Version 1.9.0:
 
 * The master configuration file (`bdc.cfg`) is no longer used. `bdc` locates

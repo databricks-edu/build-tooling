@@ -1,10 +1,16 @@
 # Change Log for Master Parse Tool
 
-Version 1.7.2
+Version 1.8.0
+
+* Added support for inline callouts. The tokens `:HINT:`, `:CAUTION:`, 
+  `:WARNING:`,`:BESTPRACTICE:`, `:KEYPOINT:`, `:SIDENOTE:`, and `:INSIGHT:`
+  are replaced, inline, with appropriate expansions.
+
+Version 1.7.2:
 
 * Fixes to handle both `%r` and `%md-sandbox`.
 
-Version 1.7.1
+Version 1.7.1:
 
 * Updates to fix handling of `%run`. **Breaks `%r`!**
 

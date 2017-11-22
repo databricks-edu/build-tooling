@@ -23,6 +23,7 @@ import re
 import codecs
 from enum import Enum
 from collections import namedtuple
+from InlineToken import InlineToken, expand_inline_tokens
 
 VERSION = "1.7.2"
 
@@ -60,6 +61,9 @@ class CommandCode(Enum):
     FS                = 'fs'
     SH                = 'sh'
 
+    def is_markdown(self):
+        return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX']
+
 class NotebookKind(Enum):
     DATABRICKS = 'Databricks'
     IPYTHON    = 'IPython'
@@ -79,14 +83,64 @@ class NotebookUser(Enum):
 # Constants
 # -----------------------------------------------------------------------------
 
+INLINE_TOKENS = [
+    InlineToken(
+        title='Hint',
+        tag=':HINT:',
+        template='**${title}:**'
+    ),
+    InlineToken(
+        title='Caution',
+        tag=':CAUTION:',
+        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-warning.svg',
+        style='height:1.3em; top:0.0em'
+    ),
+    InlineToken(
+        tag=':WARNING:',
+        title='Caution',
+        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-warning.svg',
+        style='height:1.3em; top:0.0em'
+    ),
+    InlineToken(
+        tag=':BESTPRACTICE:',
+        title='Best Practice',
+        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-blue-ribbon.svg',
+        style='height:1.75em; top:0.3em'
+    ),
+    InlineToken(
+        tag=':KEYPOINT:',
+        title='Key Point',
+        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-key.png',
+        style='height:1.3em; top:0.1.5em'
+    ),
+    InlineToken(
+        tag=':NOTE:',
+        title='Note',
+        template='**${title}:**'
+    ),
+    InlineToken(
+        tag=':SIDENOTE:',
+        title='Side Note',
+        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-note.webp',
+        style='height:1.75em; top:0.05em; transform:rotate(15deg)'
+    ),
+    InlineToken(
+        tag=':INSIGHT:',
+        title='Insight',
+        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-note.webp',
+        style='height:1.75em; top:0.05em; transform:rotate(15deg)'
+    ),
+]
+
 DEFAULT_TEST_CELL_ANNOTATION = "Run this cell to test your solution."
 
-ALL_CELL_TYPES = {c for c in CommandCode }
+ALL_CELL_TYPES = { c for c in CommandCode }
 CODE_CELL_TYPES = {
     CommandCode.SCALA,
     CommandCode.SQL,
     CommandCode.R,
-    CommandCode.PYTHON}
+    CommandCode.PYTHON
+}
 
 VALID_CELL_TYPES_FOR_LABELS = {
     CommandLabel.IPYTHON_ONLY:    CODE_CELL_TYPES | {CommandCode.MARKDOWN,
@@ -442,6 +496,9 @@ class NotebookGenerator(object):
                             [INSTRUCTOR_NOTE_HEADING] +
                             content
                         )
+
+                    # Expand inline callouts.
+                    content = expand_inline_tokens(INLINE_TOKENS, content)
 
                     inline = CommandLabel.INLINE in labels
 

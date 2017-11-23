@@ -41,9 +41,20 @@ course_info:
   deprecated: false
 
 notebook_type_name:
-  # Specify the substitution names for ${notebook_type}
+  # Specify the substitution names for ${notebook_type}. Only meaningful
+  # with master-parsed output notebooks. There are three notebook types:
+  # See the section on notebooks, below.
+  #
+  # - exercises
+  # - answers
+  # - instructor
+  #
+  # You can use this section to map those types to different strings.
+  # If you don't map a particular type, then it is used as is to replace
+  # references to ${notebook_type}
   exercises: ""
   answers: Solutions
+  #instructor: instructor
 
 # Other variables that can be substituted. If you use any of the predefined
 # names, they will be silently ignored.
@@ -57,7 +68,6 @@ variables:
 #           default will be used.
 # enabled - false to disable the automatic addition of a notebook header to
 #           generated notebooks. true (the default) to add the header.
-
 notebook_heading:
   #path: /path/to/somewhere
   #enabled: true
@@ -96,9 +106,11 @@ src_base: /Users/bmc/src/databricks/training/modules
 #
 # In the <dest> value, the following substitution tokens are permitted:
 #
-# ${basename}  - the base file name of the source, WITHOUT the extension
-# ${filename}  - the base file name of the source, WITH the extension
-# ${extension} - the file extension
+# ${basename}      - the base file name of the source, WITHOUT the extension
+# ${filename}      - the base file name of the source, WITH the extension
+# ${extension}     - the file extension
+# <your variables> - Any variables defined in the "variables" section can
+#                    also be substituted here.
 misc_files:
   -
     src: ClassSetup.pdf
@@ -187,23 +199,28 @@ misc_files:
 #   encoding_out     - the encoding to use when writing the output notebooks.
 #                      Defaults to UTF-8
 #
-# run_test   - Whether or not to test the dataset by running it in a cluster
-#              within a shard. The shard and cluster configuration are specified
-#              in the build tool's master configuration, which is separate
-#              from this courseware build manifest. OPTIONAL. Defaults to false.
-#              (NOTE: NOT YET SUPPORTED.)
-#
 # SUBSTITUTIONS:
 #
-# In the <dest> value, the following substitution tokens are permitted:
+# In the <dest> value, the following substitution tokens are always permitted:
 #
 # ${basename}         - the base file name of the source, WITHOUT the extension
 # ${filename}         - the base file name of the source, WITH the extension
 # ${extension}        - the file extension
+# <your variables>    - Any variables defined in the "variables" section can
+#                       also be substituted.
+#
+# In addition, if master parsing is enabled for a notebook, the following
+# tokens are also permitted.
+#
 # ${target_lang}      - substitute the output notebook language (Scala, R,
-#                       etc.). Only allowed if master parsing is enabled.
+#                       etc.).
 # ${target_extension} - substitute the output notebook extension (.scala, .r,
-#                       etc.). Only allowed if master parsing is enabled.
+#                       etc.).
+# ${notebook_type}    - The output notebook type (exercises, answers, or
+#                       instructor). If you've included a "notebook_type_name"
+#                       mapping, then those strings will be used. Otherwise,
+#                       "exercises", "answers" and "instructor" will be used,
+#                       as appropriate.
 #
 # Notes on ${target_lang}:
 #
@@ -212,7 +229,11 @@ misc_files:
 # - If you don't specify ${target_lang}, and there are multiple languages
 #   selected in the "master" section, you'll get an error.
 
-notebook-defaults:
+notebook_defaults:
+  # Here, you can set default values for the "master" section and the
+  # "dest" value. These defaults are applied to all notebooks that don't
+  # have explicit values for them. Expansions in "dest" are deferred until
+  # runtime (i.e., they're not expanded here).
   master:
     enabled: true
     scala: false
@@ -221,6 +242,7 @@ notebook-defaults:
 
 
 notebooks:
+  # List of notebooks in the course.
   -
     src: Overview-History/Introductions.py
     # With this dest, you'll get an error, because the output location is

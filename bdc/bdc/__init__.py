@@ -27,9 +27,11 @@ import contextlib
 import markdown2
 import codecs
 import re
+from datetime import datetime
 from textwrap import TextWrapper
 import master_parse
 from grizzled.file import eglob
+from util import merge_dicts, bool_value
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -40,7 +42,7 @@ from backports.tempfile import TemporaryDirectory
 # Constants
 # ---------------------------------------------------------------------------
 
-VERSION = "1.9.0"
+VERSION = "1.10.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -93,6 +95,7 @@ SLIDES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Slides")
 DATASETS_SUBDIR = path.join(STUDENT_FILES_SUBDIR, "Datasets")
 INSTRUCTOR_NOTES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "InstructorNotes")
 TARGET_LANG = 'target_lang'
+TARGET_EXTENSION = 'target_extension'
 
 # EXT_LANG is used when parsing the YAML file.
 EXT_LANG = {'.py':    'Python',
@@ -157,6 +160,26 @@ h4 {
 }
 """
 
+# Used to create a Scala version notebook in the top-level. This is a string
+# template, with the following variables:
+#
+# {course_id}       - the course ID
+# {version}         - the version
+# {build_timestamp} - the build timestamp, in printable format
+VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
+
+// MAGIC %md # Course: ${course_id}
+// MAGIC <br/>
+// MAGIC * Version ${version}
+// MAGIC * Built ${build_timestamp}
+// MAGIC
+// MAGIC Copyright \u00a9 2017 Databricks, Inc.
+"""
+
+# The version notebook file name. Use as a format string, with {0} as the
+# version number.
+VERSION_NOTEBOOK_FILE = "Version-{0}.scala"
+
 # Always generate Databricks notebooks.
 MASTER_PARSE_DEFAULTS = {
     'enabled':          False,
@@ -212,17 +235,23 @@ class ConfigError(BuildError):
     def __init__(self, message):
         self.message = message
 
+NotebookDefaults = namedtuple('NotebookDefaults', ('dest, master'))
 
 class NotebookData(object):
     def __init__(self,
                  src,
                  dest,
                  run_test=False,
-                 master=None):
+                 master=None,
+                 notebook_defaults=None):
         self.src = src
         self.dest = dest
         self.run_test = run_test
-        self.master = master or dict(MASTER_PARSE_DEFAULTS)
+        if master:
+            self.master = master
+        else:
+            self.master = merge_dicts(MASTER_PARSE_DEFAULTS,
+                                      notebook_defaults.get('master', {}))
 
     def master_enabled(self):
         '''
@@ -273,6 +302,7 @@ CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
                                        'deprecated'))
 MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 
+NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 
 class BuildData(object):
     def __init__(self,
@@ -284,9 +314,9 @@ class BuildData(object):
                  datasets,
                  misc_files,
                  keep_lab_dirs,
-                 notebook_heading_path,
-                 add_heading,
-                 markdown_cfg):
+                 notebook_heading,
+                 markdown_cfg,
+                 variables=None):
         self.build_file_path = build_file_path
         self.course_directory = path.dirname(build_file_path)
         self.notebooks = notebooks
@@ -297,8 +327,16 @@ class BuildData(object):
         self.markdown = markdown_cfg
         self.misc_files = misc_files
         self.keep_lab_dirs = keep_lab_dirs
-        self.notebook_heading_path = notebook_heading_path
-        self.add_heading = add_heading
+        self.notebook_heading = notebook_heading
+        self.variables = variables or {}
+
+    @property
+    def notebook_heading_path(self):
+        return self.notebook_heading.path
+
+    @property
+    def add_heading(self):
+        return self.notebook_heading.enabled
 
     @property
     def name(self):
@@ -315,15 +353,11 @@ class BuildData(object):
         return '{0}-{1}'.format(self.name, self.course_info.version)
 
     def __str__(self):
-        return (
-            'BuildData(course_info={0}, notebooks={1}, source_base={2}, ' +
-            'slides={3}, datasets={4}, markdown={5}, file_path={6}, ' +
-            'misc_files={7}'
-        ).format(
-            self.course_info, self.notebooks, self.source_base,
-            self.slides, self.datasets, self.markdown, self.build_file_path,
-            self.misc_files
-        )
+        fields = []
+        for field, value in self.__dict__.items():
+            v = '"{0}"'.format(value) if isinstance(value, str) else value
+            fields.append('{0}={1}'.format(field, v))
+        return 'BuildData({0})'.format(', '.join(fields))
 
     def __repr__(self):
         return str(self)
@@ -381,76 +415,86 @@ def load_build_yaml(yaml_file):
     with open(yaml_file, 'r') as y:
         contents = yaml.safe_load(y)
 
-    def bool_value(s):
-        if isinstance(s, bool):
-            return s
-
-        sl = s.lower()
-        if sl in ('t', 'true', '1', 'yes'):
-            return True
-        elif sl in ('f', 'false', '0', 'no'):
-            return False
-        else:
-            raise ConfigError('Bad boolean value: "{0}"'.format(s))
-
     def bool_field(d, key, default=False):
         val = d.get(key, default)
-        return bool_value(val)
+        try:
+            return bool_value(val)
+        except ValueError as e:
+            raise ConfigError(e.message)
 
     def required(d, key, where):
         v = d.get(key)
         if v is None:
             raise ConfigError(
-                '{0}: Missing required "{1}" value in "{2}".'.format(
+                '"{0}": Missing required "{1}" value in "{2}".'.format(
                     yaml_file, key, where
                 )
             )
         return v
 
-    def subst(dest, src, allow_lang=True):
+    def subst(dest, src, allow_lang=True, extra_vars=None):
+        if extra_vars is None:
+            extra_vars = {}
         base_with_ext = path.basename(src)
         (base_no_ext, ext) = path.splitext(base_with_ext)
         fields = {
-            'basename':     base_no_ext,
-            'extension':    ext,
-            'filename':     base_with_ext,
-            # Note: ${target_lang} is substituted by process_master_notebook,
-            # so it has to be explicitly preserved here, if it exists.
-            TARGET_LANG:   '${' + TARGET_LANG + '}',
+            'basename':        base_no_ext,
+            'extension':       ext,
+            'filename':        base_with_ext,
+            # Note: ${target_lang} and ${target_extension} are substituted by
+            # process_master_notebook, so they have to be explicitly preserved
+            # here, if they exist.
+            TARGET_LANG:      '${' + TARGET_LANG + '}',
+            TARGET_EXTENSION: '${' + TARGET_EXTENSION + '}',
         }
         if allow_lang:
             fields['lang'] = EXT_LANG.get(ext, "???")
 
+        fields.update(extra_vars)
+
         return Template(dest).substitute(fields)
 
-    def parse_notebook(obj):
+    def parse_notebook_defaults(contents, section_name):
+        cfg = contents.get(section_name)
+        if not cfg:
+            return NotebookDefaults(dest=None, master={})
+
+        res = NotebookDefaults(dest=cfg.get('dest'),
+                               master=cfg.get('master', {}))
+        leftover_keys = set(cfg.keys()) - {'dest', 'master'}
+        if len(leftover_keys) > 0:
+            raise ConfigError(
+                '"{0}" section has extra fields: {1}'.format(
+                    section_name, ', '.join(leftover_keys)
+                )
+            )
+        return res
+
+    def parse_notebook(obj, notebook_defaults, extra_vars):
         bad_dest = re.compile('^\.\./*|^\./*')
         src = required(obj, 'src', 'notebooks section')
-        dest = subst(required(obj, 'dest', 'notebooks section'), src)
+        dest = required(obj, 'dest', 'notebooks section')
+        dest = subst(dest, src, extra_vars=extra_vars)
         if bool_field(obj, 'skip'):
             verbose('Skipping notebook {0}'.format(src))
             return None
 
         master = dict(MASTER_PARSE_DEFAULTS)
+        master.update(notebook_defaults.master)
         master.update(obj.get('master', {}))
-        extra_keys = master.keys() - MASTER_PARSE_DEFAULTS.keys()
+
+        extra_keys = set(master.keys()) - set(MASTER_PARSE_DEFAULTS.keys())
         if len(extra_keys) > 0:
             raise ConfigError(
-                ('Notebook {0}: Unknown fields in "master" section: {1}'.format(
-                    src, ', '.join(sorted(extra_keys))
-                ))
+                ('Notebook "{0}": Unknown fields in "master" section: ' +
+                 '"{1}"').format(src, ', '.join(sorted(extra_keys)))
             )
 
         _, dest_ext = os.path.splitext(dest)
         if master and master.get('enabled', False):
-            if dest_ext:
-                raise ConfigError(
-                    ('Notebook {0}: When "master" is enabled, "dest" must be ' +
-                    'a directory.').format(src)
-                )
             if bad_dest.match(dest):
                 raise ConfigError(
-                    ('Notebook {0}: Relative destinations ("{1}") are ' +
+                    ('Notebook "{0}": Relative destinations ("{1}") are ' +
                      'disallowed.').format(src, dest)
                 )
 
@@ -458,17 +502,25 @@ def load_build_yaml(yaml_file):
             _, src_ext = os.path.splitext(src)
             if (not dest_ext) or (dest_ext != src_ext):
                 raise ConfigError(
-                    ('Notebook {0}: "master" is disabled, so "dest" should ' +
+                    ('Notebook "{0}": "master" is disabled, so "dest" should ' +
                      'have extension "{1}".').format(src, src_ext)
                 )
-            # Check for the presence of ${target_lang} by substituting something
-            # that should never appear in a destination, then searching for it.
-            token = u'\u2122$$$$$$$$$$\u2122'
-            d = Template(dest).safe_substitute({TARGET_LANG: token})
-            if token in d:
-                raise ConfigError(
-                    ('Notebook "{0}": ${1} found in "dest", but "master" is ' +
-                     'disabled').format(src, TARGET_LANG)
+            # Check for the presence of ${target_lang} or ${target_extension}
+            # by substituting something that should never appear in a
+            # destination, then searching for it.
+            target_lang_token = u'\u2122$$$$$$$$$$\u2122'
+            target_ext_token  = u'\u2122!!!!!!!!!!\u2122'
+            d = Template(dest).safe_substitute({
+                TARGET_LANG: target_lang_token,
+                TARGET_EXTENSION: target_ext_token
+
+            })
+            for (token, name) in ((target_lang_token, TARGET_LANG),
+                                  (target_ext_token, TARGET_EXTENSION)):
+                if token in d:
+                    raise ConfigError(
+                      ('Notebook "{0}": ${1} found in "dest", but "master" ' +
+                       'is disabled.').format(src, name)
                 )
 
         nb = NotebookData(
@@ -487,7 +539,7 @@ def load_build_yaml(yaml_file):
 
         return nb
 
-    def parse_slide(obj):
+    def parse_slide(obj, extra_vars):
         src = required(obj, 'src', 'notebooks')
         dest = required(obj, 'dest', 'notebooks')
         if bool_field(obj, 'skip'):
@@ -496,10 +548,10 @@ def load_build_yaml(yaml_file):
         else:
             return SlideData(
                 src=src,
-                dest=subst(dest, src, allow_lang=False)
+                dest=subst(dest, src, allow_lang=False, extra_vars=extra_vars)
             )
 
-    def parse_misc_file(obj):
+    def parse_misc_file(obj, extra_vars):
         src = required(obj, 'src', 'misc_files')
         dest = required(obj, 'dest', 'misc_files')
         if bool_field(obj, 'skip'):
@@ -508,10 +560,10 @@ def load_build_yaml(yaml_file):
         else:
             return MiscFileData(
                 src=src,
-                dest=subst(dest, src, allow_lang=False)
+                dest=subst(dest, src, allow_lang=False, extra_vars=extra_vars)
             )
 
-    def parse_dataset(obj):
+    def parse_dataset(obj, extra_vars):
         src = required(obj, 'src', 'notebooks')
         dest = required(obj, 'dest', 'notebooks')
         if bool_field(obj, 'skip'):
@@ -521,17 +573,17 @@ def load_build_yaml(yaml_file):
             src_dir = path.dirname(src)
             return DatasetData(
                 src=src,
-                dest=subst(dest, src, allow_lang=False),
+                dest=subst(dest, src, allow_lang=False, extra_vars=extra_vars),
                 license=path.join(src_dir, 'LICENSE.md'),
                 readme=path.join(src_dir, 'README.md')
             )
 
-    def parse_file_section(section, parse):
+    def parse_file_section(section, parse, *args):
         # Use the supplied parse function to parse each element in the
         # supplied section, filtering out None results from the function.
         # Convert the entire result to a tuple.
         return tuple(
-            filter(lambda o: o != None, [parse(i) for i in section])
+            filter(lambda o: o != None, [parse(i, *args) for i in section])
         )
 
     def parse_markdown(obj):
@@ -541,6 +593,7 @@ def load_build_yaml(yaml_file):
             stylesheet = None
         return MarkdownInfo(html_stylesheet=stylesheet)
 
+    variables = contents.get('variables', {})
     notebooks_cfg = required(contents, 'notebooks', 'build')
     slides_cfg = contents.get('slides', [])
     misc_files_cfg = contents.get('misc_files', [])
@@ -560,23 +613,27 @@ def load_build_yaml(yaml_file):
     build_yaml_dir = path.dirname(build_yaml_full)
     src_base = path.abspath(path.join(build_yaml_dir, src_base))
 
+    notebook_defaults = parse_notebook_defaults(contents, 'notebook-defaults')
+
     if slides_cfg:
-        slides = parse_file_section(slides_cfg, parse_slide)
+        slides = parse_file_section(slides_cfg, parse_slide, variables)
     else:
         slides = None
 
     if datasets_cfg:
-        datasets = parse_file_section(datasets_cfg, parse_dataset)
+        datasets = parse_file_section(datasets_cfg, parse_dataset, variables)
     else:
         datasets = None
 
     if misc_files_cfg:
-        misc_files = parse_file_section(misc_files_cfg, parse_misc_file)
+        misc_files = parse_file_section(misc_files_cfg, parse_misc_file,
+                                        variables)
     else:
         misc_files = None
 
     if notebooks_cfg:
-        notebooks = parse_file_section(notebooks_cfg, parse_notebook)
+        notebooks = parse_file_section(notebooks_cfg, parse_notebook,
+                                       notebook_defaults, variables)
     else:
         notebooks = None
 
@@ -593,9 +650,12 @@ def load_build_yaml(yaml_file):
         source_base=src_base,
         misc_files=misc_files,
         keep_lab_dirs=bool_field(contents, 'keep_lab_dirs'),
-        add_heading=notebook_heading.get('enabled', True),
-        notebook_heading_path=notebook_heading.get('path'),
-        markdown_cfg=parse_markdown(contents.get('markdown'))
+        notebook_heading=NotebookHeading(
+            path=notebook_heading.get('path'),
+            enabled=notebook_heading.get('enabled', True)
+        ),
+        markdown_cfg=parse_markdown(contents.get('markdown')),
+        variables=variables
     )
 
     return data
@@ -1033,6 +1093,12 @@ def remove_empty_subdirectories(directory):
             os.rmdir(dirpath)
 
 
+def write_version_notebook(dir, notebook_contents, version):
+    nb_path = path.join(dir, VERSION_NOTEBOOK_FILE.format(version))
+    with codecs.open(nb_path, 'w', encoding='UTF-8') as out:
+        out.write(notebook_contents)
+
+
 def build_course(opts, build):
 
     if build.course_info.deprecated:
@@ -1058,13 +1124,22 @@ def build_course(opts, build):
     for d in [INSTRUCTOR_FILES_SUBDIR, STUDENT_FILES_SUBDIR]:
         os.makedirs(path.join(dest_dir, d))
 
+    version = build.course_info.version
+    version_notebook = Template(VERSION_NOTEBOOK_TEMPLATE).substitute({
+        'course_id':       build.course_info.name,
+        'version':         version,
+        'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+    })
+
     labs_full_path = path.join(dest_dir, STUDENT_LABS_SUBDIR)
     copy_notebooks(build, labs_full_path, dest_dir)
     copy_instructor_notes(build, dest_dir)
+    write_version_notebook(labs_full_path, version_notebook, version)
     make_dbc(gendbc, build, labs_full_path, path.join(dest_dir, STUDENT_LABS_DBC))
     instructor_labs = path.join(dest_dir, INSTRUCTOR_LABS_SUBDIR)
     if os.path.exists(instructor_labs):
         instructor_dbc = path.join(dest_dir, INSTRUCTOR_LABS_DBC)
+        write_version_notebook(instructor_labs, version_notebook, version)
         make_dbc(gendbc, build, instructor_labs, instructor_dbc)
     copy_slides(build, dest_dir)
     copy_misc_files(build, dest_dir)

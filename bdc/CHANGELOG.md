@@ -1,8 +1,13 @@
 # Change Log for BDC
 
-Version 1.9.1:
+Version 1.10.0
 
-* Added some checks on the use of a leading "/" in notebook destination paths. 
+* Added `variables` section to `build.yaml`, allowing definition of arbitrary
+  variables for substitution.
+* `bdc` now automatically generates a top-level version notebook in the DBC
+  files.
+* Added a `notebook-defaults` section to capture default notebook settings.
+* Moved some general-purpose functions into separate `util` module.  
 
 Version 1.9.0:
 

@@ -40,6 +40,15 @@ course_info:
   version: version
   deprecated: false
 
+notebook_type_name:
+  # Specify the substitution names for ${notebook_type}
+  exercises: ""
+  answers: Solutions
+
+# Other variables that can be substituted. If you use any of the predefined
+# names, they will be silently ignored.
+variables:
+  foo: bar
 
 # notebook_heading defines how the notebook heading is handled.
 #
@@ -68,7 +77,7 @@ markdown:
 # src_base: Location of the base directory for the source curriculum
 # material, relative to the location of THIS FILE. This will almost always
 # be "../../modules". REQUIRED.
-src_base: ../../modules
+src_base: /Users/bmc/src/databricks/training/modules
 
 # misc_files: Files that should be copied to the course directory. Paths
 # are relative to THIS FILE (not to <src_base>). These files are copied to
@@ -188,33 +197,34 @@ misc_files:
 #
 # In the <dest> value, the following substitution tokens are permitted:
 #
-# ${basename}    - the base file name of the source, WITHOUT the extension
-# ${filename}    - the base file name of the source, WITH the extension
-# ${extension}   - the file extension
-# ${target_lang} - substitute the notebook language (Scala, R, etc.).
+# ${basename}         - the base file name of the source, WITHOUT the extension
+# ${filename}         - the base file name of the source, WITH the extension
+# ${extension}        - the file extension
+# ${target_lang}      - substitute the output notebook language (Scala, R,
+#                       etc.). Only allowed if master parsing is enabled.
+# ${target_extension} - substitute the output notebook extension (.scala, .r,
+#                       etc.). Only allowed if master parsing is enabled.
 #
 # Notes on ${target_lang}:
 #
 # - If you specify ${target_lang} in the dest value, the target master parse
 #   language is substituted, for each language-generated notebook.
-# - If you don't specify ${target_lang}, it's the same as if you put
-#   ${target_lang} first in the destination path, unless...
-# - ...the path starts with a "/". If the destination path starts with "/",
-#   the target language is omitted from the destination. (This is useful when
-#   you want to use the master parser, but your notebook only supports one
-#   language.)
+# - If you don't specify ${target_lang}, and there are multiple languages
+#   selected in the "master" section, you'll get an error.
+
+notebook-defaults:
+  master:
+    enabled: true
+    scala: false
+    sql: true
+  dest: $basename.$target_extension
+
 
 notebooks:
   -
     src: Overview-History/Introductions.py
-    # With this dest, the output ends up in:
-    #     Scala/Overview-History/Introductions_exercises.scala
-    #     Scala/Overview-History/Introductions_answers.scala
-    #     Python/Overview-History/Introductions_exercises.py
-    #     Python/Overview-History/Introductions_exercises.py
-    #     SQL/Overview-History/Introductions_exercises.sql
-    #     SQL/Overview-History/Introductions_exercises.sql
-    # etc.
+    # With this dest, you'll get an error, because the output location is
+    # ambiguous.
     dest: Overview-History
     master:
       enabled: true
@@ -241,13 +251,24 @@ notebooks:
     # With this dest, the output ends up in:
     #     Notebook1_exercises.py
     #     Notebook1_answers.py
-    dest: /Notebook1
+    # You don't get an error because there's only a single output language.
+    dest: Notebook1
     master:
       enabled: true
       r: false
       scala: false
       sql: false
       python: true
+
+  -
+    src: Module2/Foo.py
+    #dest: $target_lang/Module2/$notebook_type/$basename.$target_extension
+    dest: $common_dest
+    master:
+      enabled: true
+      python: true
+      scala: true
+
   -
     src: Overview-History/Welcome.py
     dest: Python/01-${basename} ($lang).py

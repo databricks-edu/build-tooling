@@ -1,6 +1,8 @@
 '''
-Utility functions
+Utility functions and classes
 '''
+
+from abc import ABCMeta
 
 def merge_dicts(dict1, dict2):
     '''
@@ -35,3 +37,21 @@ def bool_value(s):
         return False
     else:
         raise ValueError('Bad boolean value: "{0}"'.format(s))
+
+class DefaultStrMixin:
+    '''
+    Provides default implementations of __str__() and __repr__(). These
+    implementations assume that all arguments passed to the constructor are
+    captured in same-named fields in "self".
+    '''
+    __metaclass__ = ABCMeta
+
+    def __str__(self):
+        fields = []
+        for field, value in self.__dict__.items():
+            v = '"{0}"'.format(value) if isinstance(value, str) else value
+            fields.append('{0}={1}'.format(field, v))
+        return '{0}({1})'.format(self.__class__.__name__, ', '.join(fields))
+
+    def __repr__(self):
+        return self.__str__()

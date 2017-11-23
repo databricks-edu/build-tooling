@@ -31,7 +31,7 @@ from datetime import datetime
 from textwrap import TextWrapper
 import master_parse
 from grizzled.file import eglob
-from util import merge_dicts, bool_value
+from util import merge_dicts, bool_value, DefaultStrMixin
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -222,36 +222,32 @@ info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
 Config = namedtuple('Config', ('gendbc', 'build_directory'))
 
 class BuildError(Exception):
-    def __init__(self, message):
-        self.message = message
+    pass
 
 
 class UploadDownloadError(Exception):
-    def __init__(self, message):
-        self.message = message
-
+    pass
 
 class ConfigError(BuildError):
-    def __init__(self, message):
-        self.message = message
+    pass
 
 NotebookDefaults = namedtuple('NotebookDefaults', ('dest, master'))
 
-class NotebookData(object):
+class NotebookData(object, DefaultStrMixin):
     def __init__(self,
                  src,
                  dest,
-                 run_test=False,
                  master=None,
                  notebook_defaults=None):
+        super(NotebookData, self).__init__()
         self.src = src
         self.dest = dest
-        self.run_test = run_test
         if master:
             self.master = master
         else:
             self.master = merge_dicts(MASTER_PARSE_DEFAULTS,
                                       notebook_defaults.get('master', {}))
+        self.notebook_defaults = notebook_defaults
 
     def master_enabled(self):
         '''
@@ -286,13 +282,6 @@ class NotebookData(object):
         '''
         return self.total_master_langs() > 0
 
-    def __str__(self):
-        return "NotebookData(src='{0}', dest='{1}', master={2})".format(
-            self.src, self.dest, self.master
-        )
-
-    def __repr__(self):
-        return self.__str__()
 
 MiscFileData = namedtuple('MiscFileData', ('src', 'dest'))
 SlideData = namedtuple('SlideData', ('src', 'dest'))
@@ -304,7 +293,7 @@ MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 
-class BuildData(object):
+class BuildData(object, DefaultStrMixin):
     def __init__(self,
                  build_file_path,
                  source_base,
@@ -352,15 +341,6 @@ class BuildData(object):
         '''
         return '{0}-{1}'.format(self.name, self.course_info.version)
 
-    def __str__(self):
-        fields = []
-        for field, value in self.__dict__.items():
-            v = '"{0}"'.format(value) if isinstance(value, str) else value
-            fields.append('{0}={1}'.format(field, v))
-        return 'BuildData({0})'.format(', '.join(fields))
-
-    def __repr__(self):
-        return str(self)
 
 # ---------------------------------------------------------------------------
 # Functions
@@ -523,12 +503,7 @@ def load_build_yaml(yaml_file):
                        'is disabled.').format(src, name)
                 )
 
-        nb = NotebookData(
-            src=src,
-            dest=dest,
-            master=master,
-            run_test=bool_value(obj.get('run_test', 'false'))
-        )
+        nb = NotebookData(src=src, dest=dest, master=master)
 
         if nb.dest.startswith('/') and nb.total_master_langs() > 1:
             raise ConfigError(
@@ -613,7 +588,7 @@ def load_build_yaml(yaml_file):
     build_yaml_dir = path.dirname(build_yaml_full)
     src_base = path.abspath(path.join(build_yaml_dir, src_base))
 
-    notebook_defaults = parse_notebook_defaults(contents, 'notebook-defaults')
+    notebook_defaults = parse_notebook_defaults(contents, 'notebook_defaults')
 
     if slides_cfg:
         slides = parse_file_section(slides_cfg, parse_slide, variables)
@@ -1401,7 +1376,7 @@ def main():
 
     try:
         build = load_build_yaml(course_config)
-
+        print(build)
         if opts['--list-notebooks']:
             list_notebooks(build)
         elif opts['--upload']:

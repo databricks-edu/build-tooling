@@ -730,22 +730,27 @@ def ensure_parent_dir_exists(target):
         os.makedirs(dir)
 
 
-def move(src, dest):
-    """
-    Move a source file to a new destination, ensuring that any intermediate
-    destinations are created.
 
-    :param src:   src file
-    :param dest:  destination file
+def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+    """
+    Copy a source file to a destination file, honoring the --verbose
+    command line option and creating any intermediate destination
+    directories.
+
+    :param src:                  src file
+    :param dest:                 destination file
+    :param ensure_final_newline  if True, ensure that the target file has
+                                 a final newline. Otherwise, just copy the
+                                 file exactly as is, byte for byte.
+    :param encoding              Only used if ensure_file_newline is True.
+                                 Defaults to 'UTF-8'.
     :return: None
     """
-    if not path.exists(src):
-        raise ConfigError('"{0}" does not exist.'.format(src))
-    src = path.abspath(src)
-    dest = path.abspath(dest)
-    ensure_parent_dir_exists(dest)
     verbose('mv "{0}" "{1}"'.format(src, dest))
-    shutil.move(src, dest)
+    _do_copy(
+        src, dest, ensure_final_newline=ensure_final_newline, encoding=encoding
+    )
+    os.unlink(src)
 
 
 def mkdirp(dir):
@@ -768,12 +773,21 @@ def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
                                  Defaults to 'UTF-8'.
     :return: None
     """
+    verbose('cp "{0}" "{1}"'.format(src, dest))
+    _do_copy(
+        src, dest, ensure_final_newline=ensure_final_newline, encoding=encoding
+    )
+
+
+def _do_copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+    # Workhorse function that actually copies a file. Used by move() and
+    # copy().
     if not path.exists(src):
         raise ConfigError('"{0}" does not exist.'.format(src))
     src = path.abspath(src)
     dest = path.abspath(dest)
     ensure_parent_dir_exists(dest)
-    verbose('cp "{0}" "{1}"'.format(src, dest))
+
     if not ensure_final_newline:
         shutil.copy2(src, dest)
     else:
@@ -787,24 +801,6 @@ def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
                     output.write('\n')
         shutil.copystat(src, dest)
 
-
-def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
-    """
-    Copy a source file to a destination file, honoring the --verbose
-    command line option and creating any intermediate destination
-    directories.
-
-    :param src:                  src file
-    :param dest:                 destination file
-    :param ensure_final_newline  if True, ensure that the target file has
-                                 a final newline. Otherwise, just copy the
-                                 file exactly as is, byte for byte.
-    :param encoding              Only used if ensure_file_newline is True.
-                                 Defaults to 'UTF-8'.
-    :return: None
-    """
-    copy(src, dest, ensure_final_newline=ensure_final_newline, encoding=encoding)
-    os.unlink(src)
 
 def markdown_to_html(md, html_out, stylesheet=None):
     """

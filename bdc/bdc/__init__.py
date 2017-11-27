@@ -31,7 +31,7 @@ from datetime import datetime
 from textwrap import TextWrapper
 import master_parse
 from grizzled.file import eglob
-from util import merge_dicts, bool_value, DefaultStrMixin
+from util import merge_dicts, bool_value, DefaultStrMixin, variable_ref_pattern
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -96,6 +96,11 @@ DATASETS_SUBDIR = path.join(STUDENT_FILES_SUBDIR, "Datasets")
 INSTRUCTOR_NOTES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "InstructorNotes")
 TARGET_LANG = 'target_lang'
 TARGET_EXTENSION = 'target_extension'
+TARGET_LANG_RE = variable_ref_pattern(TARGET_LANG)
+TARGET_EXTENSION_RE = variable_ref_pattern(TARGET_EXTENSION)
+
+print(TARGET_LANG_RE.pattern)
+print(TARGET_EXTENSION_RE.pattern)
 
 # EXT_LANG is used when parsing the YAML file.
 EXT_LANG = {'.py':    'Python',
@@ -234,6 +239,9 @@ class ConfigError(BuildError):
 NotebookDefaults = namedtuple('NotebookDefaults', ('dest, master'))
 
 class NotebookData(object, DefaultStrMixin):
+    '''
+    Parsed notebook data.
+    '''
     def __init__(self,
                  src,
                  dest,
@@ -294,6 +302,9 @@ MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 
 class BuildData(object, DefaultStrMixin):
+    '''
+    Parsed build data.
+    '''
     def __init__(self,
                  build_file_path,
                  source_base,
@@ -306,6 +317,7 @@ class BuildData(object, DefaultStrMixin):
                  notebook_heading,
                  markdown_cfg,
                  variables=None):
+        super(BuildData, self).__init__()
         self.build_file_path = build_file_path
         self.course_directory = path.dirname(build_file_path)
         self.notebooks = notebooks
@@ -389,6 +401,8 @@ def load_build_yaml(yaml_file):
     """
     Load the YAML configuration file that defines the build for a particular
     class. Returns a BuildData object. Throws ConfigError on error.
+
+    :param yaml_file  the path to the build file to be parsed
     """
     import yaml
     verbose("Loading {0}...".format(yaml_file))
@@ -417,22 +431,47 @@ def load_build_yaml(yaml_file):
             extra_vars = {}
         base_with_ext = path.basename(src)
         (base_no_ext, ext) = path.splitext(base_with_ext)
+
+        if '@' in dest:
+            raise ConfigError('The "@" character is disallowed in destinations.')
+
+        # Note: ${target_lang} and ${target_extension} are substituted by
+        # process_master_notebook, so they have to be explicitly preserved
+        # here, if they exist. This logic escapes them by removing the "$"
+        # and surrounding the rest with @ ... @
+
+        adj_dest = dest
+        subbed = True
+        while subbed:
+            subbed = False
+            for p in (TARGET_EXTENSION_RE, TARGET_LANG_RE):
+                m = p.match(adj_dest)
+                if m:
+                    var = '@{0}@'.format(m.group(2).replace(r'$', ''))
+                    adj_dest = (
+                        m.group(1) + var + m.group(3)
+                    )
+                    subbed = True
+
         fields = {
             'basename':        base_no_ext,
             'extension':       ext,
             'filename':        base_with_ext,
-            # Note: ${target_lang} and ${target_extension} are substituted by
-            # process_master_notebook, so they have to be explicitly preserved
-            # here, if they exist.
-            TARGET_LANG:      '${' + TARGET_LANG + '}',
-            TARGET_EXTENSION: '${' + TARGET_EXTENSION + '}',
         }
         if allow_lang:
             fields['lang'] = EXT_LANG.get(ext, "???")
 
         fields.update(extra_vars)
 
-        return Template(dest).substitute(fields)
+        # Restore escaped variables.
+        adj_dest = Template(adj_dest).substitute(fields)
+        escaped = re.compile(r'^([^@]*)@([^@]+)@(.*)$')
+        m = escaped.match(adj_dest)
+        while m:
+            adj_dest = m.group(1) + '$' + m.group(2) + m.group(3)
+            m = escaped.match(adj_dest)
+
+        return adj_dest
 
     def parse_notebook_defaults(contents, section_name):
         cfg = contents.get(section_name)
@@ -485,22 +524,13 @@ def load_build_yaml(yaml_file):
                     ('Notebook "{0}": "master" is disabled, so "dest" should ' +
                      'have extension "{1}".').format(src, src_ext)
                 )
-            # Check for the presence of ${target_lang} or ${target_extension}
-            # by substituting something that should never appear in a
-            # destination, then searching for it.
-            target_lang_token = u'\u2122$$$$$$$$$$\u2122'
-            target_ext_token  = u'\u2122!!!!!!!!!!\u2122'
-            d = Template(dest).safe_substitute({
-                TARGET_LANG: target_lang_token,
-                TARGET_EXTENSION: target_ext_token
-
-            })
-            for (token, name) in ((target_lang_token, TARGET_LANG),
-                                  (target_ext_token, TARGET_EXTENSION)):
-                if token in d:
+            for pat in (TARGET_LANG_RE, TARGET_EXTENSION_RE):
+                m = pat.match(dest)
+                if m:
+                    print(m.groups())
                     raise ConfigError(
-                      ('Notebook "{0}": ${1} found in "dest", but "master" ' +
-                       'is disabled.').format(src, name)
+                      ('Notebook "{0}": "{1}" found in "dest", but "master" ' +
+                       'is disabled.').format(src, m.group(2))
                 )
 
         nb = NotebookData(src=src, dest=dest, master=master)

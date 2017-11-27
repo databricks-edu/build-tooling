@@ -3,6 +3,7 @@ Utility functions and classes
 '''
 
 from abc import ABCMeta
+import re
 
 def merge_dicts(dict1, dict2):
     '''
@@ -37,6 +38,29 @@ def bool_value(s):
         return False
     else:
         raise ValueError('Bad boolean value: "{0}"'.format(s))
+
+def variable_ref_pattern(variable_name):
+    '''
+    Convert a variable name into a regular expression that will will match
+    a reference to the variable. The returned regular expression has three
+    groups:
+
+    Group 1 - The portion of the string that precedes the variable reference
+    Group 2 - The variable reference
+    Group 3 - The portion of the string those follows the variable reference
+
+    :param variable_name: the variable name
+
+    :return: The compiled regular expression
+    '''
+    pat = (r'^(.*)(\$\{' +
+           variable_name +
+           r'\}|\$' +
+           variable_name +
+           r'[^a-zA-Z_]|\$' +
+           variable_name +
+           r'$)(.*)$')
+    return re.compile(pat)
 
 class DefaultStrMixin:
     '''

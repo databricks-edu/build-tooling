@@ -341,7 +341,7 @@ class BuildData(object, DefaultStrMixin):
     def course_id(self):
         '''
         The course ID, which is a combination of the course name and the
-        version, suitable for use as a directory name.
+        version.
 
         :return: the course ID string
         '''
@@ -995,7 +995,7 @@ def build_course(opts, build):
 
     dest_dir = (
         opts['--dest'] or
-        path.join(os.getenv("HOME"), "tmp", "curriculum", build.course_id)
+        path.join(os.getenv("HOME"), "tmp", "curriculum", build.name)
     )
 
     verbose('Publishing to "{0}"'.format(dest_dir))

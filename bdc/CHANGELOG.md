@@ -2,6 +2,10 @@
 
 Version 1.10.0
 
+* `bdc` now generates a version-stamped notebook, with version information,
+  at the top level of the generated build, providing an easy way for students
+  to determine the course version, even if they rename the folder after import.
+* `bdc` no longer includes the version number in the top-level DBC folder.
 * A new `bdc_min_version` configuration item is now _required_. It identifies
   the minimum version of `bdc` required to parse a particular `build.yaml`.
 * Added `variables` section to `build.yaml`, allowing definition of arbitrary

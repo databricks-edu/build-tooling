@@ -285,6 +285,22 @@ def working_directory(path):
         os.chdir(prev)
 
 
+def find_in_path(command):
+    '''
+    Find a command in the path, or bail.
+
+    :param command:  the command to find
+    :return: the location. Throws an exception otherwise.
+    '''
+    path = [p for p in os.getenv('PATH', '').split(os.pathsep) if len(p) > 0]
+    for d in path:
+        p = os.path.join(d, command)
+        if os.path.isfile(p) and os.access(p, os.X_OK):
+            return p
+    else:
+        raise Exception("""Can't find "{0}" in PATH.""".format(command))
+
+
 def ensure_parent_dir_exists(path):
     '''
     Ensures that the parent directory of a path exists.

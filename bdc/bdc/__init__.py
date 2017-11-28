@@ -34,7 +34,7 @@ from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
                      working_directory, move, copy, mkdirp, markdown_to_html,
                      warning, info, emit_error, verbose, set_verbosity,
                      verbosity_is_enabled, ensure_parent_dir_exists,
-                     parse_semver)
+                     parse_semver, find_in_path)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -1042,22 +1042,6 @@ def build_course(opts, build):
     print("\nPublished {0}, version {1} to {2}\n".format(
         build.course_info.name, build.course_info.version, dest_dir
     ))
-
-
-def find_in_path(command):
-    '''
-    Find a command in the path, or bail.
-
-    :param command:  the command to find
-    :return: the location. Throws an exception otherwise.
-    '''
-    path = [p for p in os.getenv('PATH', '').split(os.pathsep) if len(p) > 0]
-    for d in path:
-        p = os.path.join(d, command)
-        if os.path.isfile(p) and os.access(p, os.X_OK):
-            return p
-    else:
-        raise Exception("""Can't find "{0}" in PATH.""".format(command))
 
 
 def dbw(subcommand, args, capture_stdout=True):

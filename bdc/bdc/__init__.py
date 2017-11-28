@@ -23,15 +23,16 @@ import os
 from os import path
 from string import Template
 import shutil
-import contextlib
-import markdown2
 import codecs
 import re
 from datetime import datetime
 from textwrap import TextWrapper
 import master_parse
 from grizzled.file import eglob
-from util import merge_dicts, bool_value, DefaultStrMixin, variable_ref_pattern
+from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
+                     variable_ref_patterns, matches_variable_ref,
+                     working_directory, ensure_parent_dir_exists, move,
+                     copy, mkdirp, markdown_to_html)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -94,13 +95,17 @@ STUDENT_LABS_DBC = path.join(STUDENT_FILES_SUBDIR, "Labs.dbc")
 SLIDES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Slides")
 DATASETS_SUBDIR = path.join(STUDENT_FILES_SUBDIR, "Datasets")
 INSTRUCTOR_NOTES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "InstructorNotes")
+
+# Post master-parse variables (and associated regexps)
 TARGET_LANG = 'target_lang'
 TARGET_EXTENSION = 'target_extension'
-TARGET_LANG_RE = variable_ref_pattern(TARGET_LANG)
-TARGET_EXTENSION_RE = variable_ref_pattern(TARGET_EXTENSION)
+NOTEBOOK_TYPE = 'notebook_type'
 
-print(TARGET_LANG_RE.pattern)
-print(TARGET_EXTENSION_RE.pattern)
+POST_MASTER_PARSE_VARIABLES = {
+    TARGET_LANG:         variable_ref_patterns(TARGET_LANG),
+    TARGET_EXTENSION:    variable_ref_patterns(TARGET_EXTENSION),
+    NOTEBOOK_TYPE:       variable_ref_patterns(NOTEBOOK_TYPE),
+}
 
 # EXT_LANG is used when parsing the YAML file.
 EXT_LANG = {'.py':    'Python',
@@ -111,59 +116,6 @@ EXT_LANG = {'.py':    'Python',
 
 # LANG_EXT: Mapping of language (in lower case) to extension
 LANG_EXT = dict([(v.lower(), k) for k, v in EXT_LANG.items()])
-
-# This is the HTML template into which the converted Markdown will be inserted.
-# There are several substitution parameters:
-#
-# $title - the document's title
-# $css   - where the stylesheet is inserted
-# $body  - where the converted Markdown HTML goes
-DEFAULT_HTML_TEMPLATE = """<!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>$title</title>
-    <style type="text/css">
-$css
-    </style>
-  </head>
-  <body>
-$body
-  </body>
-</html>
-"""
-
-DEFAULT_CSS = """body {
-  font-family: sans-serif;
-  margin-left: 0.75in;
-  margin-right: 0.5in;
-}
-tt, pre, code {
-  font-family: Consolas, Menlo, monospace;
-}
-table thead tr th {
-  border-bottom: 1px solid #ccc;
-}
-table tbody tr:nth-child(even) {
-  background: #ccc;
-}
-table tbody tr:nth-child(odd) {
-  background: #fff;
-}
-tr td {
-  padding: 5px;
-}
-h1, h2, h3, h4, h5, h6 {
-  font-family: Newslab, sans-serif;
-  margin-left: -0.25in;
-}
-h3 {
-  font-style: italic;
-}
-h4 {
-  text-decoration: underline;
-}
-"""
 
 # Used to create a Scala version notebook in the top-level. This is a string
 # template, with the following variables:
@@ -205,7 +157,6 @@ ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
 # Globals
 # ---------------------------------------------------------------------------
 
-html_template = Template(DEFAULT_HTML_TEMPLATE)
 be_verbose = False
 errors = 0
 
@@ -403,6 +354,8 @@ def load_build_yaml(yaml_file):
     class. Returns a BuildData object. Throws ConfigError on error.
 
     :param yaml_file  the path to the build file to be parsed
+
+    :return the Build object, representing the parsed build.yaml
     """
     import yaml
     verbose("Loading {0}...".format(yaml_file))
@@ -435,22 +388,21 @@ def load_build_yaml(yaml_file):
         if '@' in dest:
             raise ConfigError('The "@" character is disallowed in destinations.')
 
-        # Note: ${target_lang} and ${target_extension} are substituted by
-        # process_master_notebook, so they have to be explicitly preserved
-        # here, if they exist. This logic escapes them by removing the "$"
-        # and surrounding the rest with @ ... @
+        # A set of variables is expanded only after master parsing; all others
+        # are expanded here. Any references to post master-parse variables
+        # (expanded in process_master_notebook) must be explicitly preserved
+        # here. This logic escapes them by removing the "$" and surrounding the
+        # rest with @ ... @. The escaping is undone, below.
 
         adj_dest = dest
         subbed = True
         while subbed:
             subbed = False
-            for p in (TARGET_EXTENSION_RE, TARGET_LANG_RE):
-                m = p.match(adj_dest)
+            for pats in POST_MASTER_PARSE_VARIABLES.values():
+                m = matches_variable_ref(pats, adj_dest)
                 if m:
-                    var = '@{0}@'.format(m.group(2).replace(r'$', ''))
-                    adj_dest = (
-                        m.group(1) + var + m.group(3)
-                    )
+                    var = '@{0}@'.format(m[1].replace(r'$', ''))
+                    adj_dest = m[0] + var + m[2]
                     subbed = True
 
         fields = {
@@ -524,13 +476,12 @@ def load_build_yaml(yaml_file):
                     ('Notebook "{0}": "master" is disabled, so "dest" should ' +
                      'have extension "{1}".').format(src, src_ext)
                 )
-            for pat in (TARGET_LANG_RE, TARGET_EXTENSION_RE):
-                m = pat.match(dest)
+            for pats in POST_MASTER_PARSE_VARIABLES.values():
+                m = matches_variable_ref(pats, dest)
                 if m:
-                    print(m.groups())
                     raise ConfigError(
                       ('Notebook "{0}": "{1}" found in "dest", but "master" ' +
-                       'is disabled.').format(src, m.group(2))
+                       'is disabled.').format(src, m[1])
                 )
 
         nb = NotebookData(src=src, dest=dest, master=master)
@@ -709,121 +660,6 @@ def parse_args():
     return docopt(USAGE, version=VERSION)
 
 
-@contextlib.contextmanager
-def working_directory(path):
-    """
-    Simple context manager that runs the code under "with" in a specified
-    directory, returning to the original directory when the "with" exits.
-    """
-    prev = os.getcwd()
-    try:
-        os.chdir(path)
-        yield
-    finally:
-        os.chdir(prev)
-
-
-def ensure_parent_dir_exists(target):
-    dir = path.dirname(target)
-    if not path.exists(dir):
-        verbose('mkdir -p "{0}"'.format(dir))
-        os.makedirs(dir)
-
-
-
-def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
-    """
-    Copy a source file to a destination file, honoring the --verbose
-    command line option and creating any intermediate destination
-    directories.
-
-    :param src:                  src file
-    :param dest:                 destination file
-    :param ensure_final_newline  if True, ensure that the target file has
-                                 a final newline. Otherwise, just copy the
-                                 file exactly as is, byte for byte.
-    :param encoding              Only used if ensure_file_newline is True.
-                                 Defaults to 'UTF-8'.
-    :return: None
-    """
-    verbose('mv "{0}" "{1}"'.format(src, dest))
-    _do_copy(
-        src, dest, ensure_final_newline=ensure_final_newline, encoding=encoding
-    )
-    os.unlink(src)
-
-
-def mkdirp(dir):
-    if not path.exists(dir):
-        os.makedirs(dir)
-
-
-def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
-    """
-    Copy a source file to a destination file, honoring the --verbose
-    command line option and creating any intermediate destination
-    directories.
-
-    :param src:                  src file
-    :param dest:                 destination file
-    :param ensure_final_newline  if True, ensure that the target file has
-                                 a final newline. Otherwise, just copy the
-                                 file exactly as is, byte for byte.
-    :param encoding              Only used if ensure_file_newline is True.
-                                 Defaults to 'UTF-8'.
-    :return: None
-    """
-    verbose('cp "{0}" "{1}"'.format(src, dest))
-    _do_copy(
-        src, dest, ensure_final_newline=ensure_final_newline, encoding=encoding
-    )
-
-
-def _do_copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
-    # Workhorse function that actually copies a file. Used by move() and
-    # copy().
-    if not path.exists(src):
-        raise ConfigError('"{0}" does not exist.'.format(src))
-    src = path.abspath(src)
-    dest = path.abspath(dest)
-    ensure_parent_dir_exists(dest)
-
-    if not ensure_final_newline:
-        shutil.copy2(src, dest)
-    else:
-        with codecs.open(src, mode='r', encoding=encoding) as input:
-            with codecs.open(dest, mode='w', encoding=encoding) as output:
-                last_line_had_nl = False
-                for line in input:
-                    output.write(line)
-                    last_line_had_nl = line[-1] == '\n'
-                if not last_line_had_nl:
-                    output.write('\n')
-        shutil.copystat(src, dest)
-
-
-def markdown_to_html(md, html_out, stylesheet=None):
-    """
-    Convert a Markdown file to HTML, writing it to the specified HTML file.
-    If the stylesheet is specified, it is inserted.
-    """
-    verbose('Generating "{0}" from "{1}"'.format(html_out, md))
-    with codecs.open(md, mode='r', encoding='UTF-8') as input:
-        text = input.read()
-        body = markdown2.markdown(text, extras=['fenced-code-blocks',
-                                                'tables'])
-        if not stylesheet:
-            stylesheet = DEFAULT_CSS
-        with codecs.open(html_out, mode='w', encoding='UTF-8') as output:
-            output.write(
-                html_template.substitute(
-                    body=body,
-                    title=path.basename(md),
-                    css=stylesheet
-                )
-            )
-
-
 def copy_info_file(src_file, target_file, build):
     """
     Copy a file that contains some kind of readable information (e.g., a
@@ -837,7 +673,11 @@ def copy_info_file(src_file, target_file, build):
         target_full = path.abspath(target_file)
         html_out = path.join(path.dirname(target_full),
                                 src_simple + '.html')
-        markdown_to_html(src_file, html_out, build.markdown.html_stylesheet)
+        markdown_to_html(
+            markdown=src_file,
+            html_out=html_out,
+            html_template=None,
+            stylesheet=build.markdown.html_stylesheet)
 
 
 def process_master_notebook(dest_root, notebook, src_path, add_heading,

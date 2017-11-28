@@ -164,9 +164,9 @@ def emit_error(msg):
 
     :param msg: The message
     '''
-    print('***\n')
-    print(_error_wrapper.fill(msg) + "\n")
-    print('***\n')
+    print('***')
+    print(_error_wrapper.fill(msg))
+    print('***')
 
 
 def merge_dicts(dict1, dict2):

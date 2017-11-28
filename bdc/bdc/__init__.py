@@ -33,7 +33,7 @@ from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
                      variable_ref_patterns, matches_variable_ref,
                      working_directory, move, copy, mkdirp, markdown_to_html,
                      warning, info, emit_error, verbose, set_verbosity,
-                     verbosity_is_enabled)
+                     verbosity_is_enabled, ensure_parent_dir_exists)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -142,6 +142,7 @@ MASTER_PARSE_DEFAULTS = {
     'scala':            True,
     'sql':              False,
     'answers':          True,
+    'instructor':       True,
     'encoding_in':      'UTF-8',
     'encoding_out':     'UTF-8'
 }
@@ -178,10 +179,31 @@ class NotebookType(Enum):
     ANSWERS = 'answers'
 
     @classmethod
-    def default_mappings(self):
+    def default_mappings(cls):
+        return {
+            NotebookType.EXERCISES:  'exercises',
+            NotebookType.INSTRUCTOR: 'instructor',
+            NotebookType.ANSWERS:    'answers',
+        }
+
+    def suffix_for(self):
+        '''
+        Get the filename suffix for the notebook type (e.g., '_exercises').
+
+        :return: the suffix
+        '''
+        return NotebookType.suffixes()[self]
+
+    @classmethod
+    def suffixes(cls):
+        '''
+        Get a dict of NotebookType -> suffix mappings
+
+        :return: the mappings
+        '''
         return {
             NotebookType.EXERCISES:  '_exercises',
-            NotebookType.INSTRUCTOR: '',
+            NotebookType.INSTRUCTOR: '_instructor',
             NotebookType.ANSWERS:    '_answers',
         }
 
@@ -407,7 +429,7 @@ def load_build_yaml(yaml_file):
 
         fields = {
             'basename':        base_no_ext,
-            'extension':       ext,
+            'extension':       ext[1:] if ext.startswith('') else ext,
             'filename':        base_with_ext,
         }
         if allow_lang:
@@ -468,14 +490,26 @@ def load_build_yaml(yaml_file):
                  '"{1}"').format(src, ', '.join(sorted(extra_keys)))
             )
 
+        master_enabled = master and master.get('enabled')
         _, dest_ext = os.path.splitext(dest)
-        if master and master.get('enabled', False):
-            if bad_dest.match(dest):
-                raise ConfigError(
-                    ('Notebook "{0}": Relative destinations ("{1}") are ' +
-                     'disallowed.').format(src, dest)
-                )
+        if master_enabled and bad_dest.match(dest):
+            raise ConfigError(
+                ('Notebook "{0}": Relative destinations ("{1}") are ' +
+                 'disallowed.').format(src, dest)
+            )
 
+        if master_enabled:
+            total_langs = len([k for k in MASTER_LANGUAGES if master.get(k, False)])
+            if (total_langs > 1):
+                pat = POST_MASTER_PARSE_VARIABLES[TARGET_LANG]
+                if not matches_variable_ref(pat, dest):
+                    raise ConfigError(
+                        ('Notebook "{0}": When multiple master parser languages ' +
+                         'are used, you must substitute ${1} in the ' +
+                         'destination.').format(
+                            src, TARGET_LANG, TARGET_EXTENSION
+                        )
+                    )
         else:
             _, src_ext = os.path.splitext(src)
             if (not dest_ext) or (dest_ext != src_ext):
@@ -674,15 +708,18 @@ def copy_info_file(src_file, target_file, build):
 
 
 def process_master_notebook(dest_root, notebook, src_path, add_heading,
-                            notebook_heading_path):
+                            notebook_heading_path, notebook_type_map):
     """
     Process a master notebook.
 
-    :param dest_root:  top-level target directory for build
-    :param notebook:   the notebook data from the build YAML
-    :param src_path:   the pre-calculated path to the source notebook
-    :param dest_path:  the path to the target directory, calculated from
-                       dest_root and notebook.dest
+    :param dest_root:             top-level target directory for build
+    :param notebook:              the notebook data from the build YAML
+    :param src_path:              the pre-calculated path to the source notebook
+    :param dest_path:             the path to the target directory, calculated
+                                  from dest_root and notebook.dest
+    :param notebook_heading_path: path to notebook heading file, if any
+    :param add_heading:           whether or not to add the heading
+    :param notebook_type_map:     a dict of NotebookType to strings
     :return: None
     """
     verbose("notebook={0}\ndest_root={1}".format(notebook, dest_root))
@@ -700,22 +737,7 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
             if not master.get(lc_lang):
                 continue
 
-            # This language is desired. Calculate the path. The path is
-            # <dest_root> + <notebook.dest> + file
-            #
-            # <notebook.dest> can have the language in it. If it's not there,
-            # we put the language at the beginning--unless the
-            lang_dir = lc_lang.capitalize()
-            dest_subst = Template(notebook.dest).safe_substitute(
-                {TARGET_LANG: lang_dir}
-            )
-
-            if dest_subst == notebook.dest:
-                if dest_subst.startswith('/'):
-                    # Suppress addition of target language.
-                    dest_subst = dest_subst[1:]
-                else:
-                    dest_subst = path.join(lang_dir, notebook.dest)
+            # This language is desired.
 
             # Get the file name extension for the language. Note that this
             # extension INCLUDES the ".".
@@ -726,7 +748,7 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
             # will make finding the files simple. In this glob pattern, {0} is
             # the notebook type (e.g., "_answers"), and {1} is the file
             # extension (e.g., ".py")
-            glob_template = "**/*_{0}*{1}"
+            glob_template = "**/*{0}*{1}"
 
             # Copy all answers notebooks and exercises notebooks to the student
             # labs directory. Copy all instructor notebooks to the instructor
@@ -735,34 +757,44 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
             student_dir = path.join(dest_root, STUDENT_LABS_SUBDIR)
             instructor_dir = path.join(dest_root, INSTRUCTOR_LABS_SUBDIR)
 
-            types_and_targets = [
-                ("exercises", student_dir),
-                ("instructor", instructor_dir),
-            ]
+            types_and_targets = [(NotebookType.EXERCISES, student_dir)]
+
+            if master['instructor']:
+                types_and_targets.append(
+                  (NotebookType.INSTRUCTOR, instructor_dir)
+                )
 
             if master['answers']:
-                types_and_targets.append(
-                    ("answers", student_dir)
-                )
+                types_and_targets.append((NotebookType.ANSWERS, student_dir))
 
             base, _ = path.splitext(path.basename(notebook.src))
             mp_notebook_dir = path.join(temp_output_dir, base, lc_lang)
 
-            for type, target_dir in types_and_targets:
+            lang_dir = lc_lang.capitalize()
+            for notebook_type, target_dir in types_and_targets:
                 # Use a recursive glob pattern to find all matching notebooks.
                 # Note that eglob returns a generator.
                 copied = 0
-                glob_pattern = glob_template.format(type, lang_ext)
+                suffix = NotebookType.suffix_for(notebook_type)
+                glob_pattern = glob_template.format(suffix, lang_ext)
                 matches = eglob(glob_pattern, mp_notebook_dir)
+                ext = LANG_EXT[lc_lang]
+                dest_subst = Template(notebook.dest).safe_substitute({
+                    TARGET_LANG: lang_dir,
+                    TARGET_EXTENSION: ext[1:] if ext.startswith('') else ext,
+                    NOTEBOOK_TYPE: notebook_type_map.get(notebook_type, '')
+                })
+                if dest_subst.startswith(os.path.sep):
+                    dest_subst = dest_subst[len(os.path.sep):]
 
                 for f in matches:
-                    target = path.join(target_dir, dest_subst, path.basename(f))
+                    target = path.normpath(path.join(target_dir, dest_subst))
                     copy(f, target)
                     copied += 1
 
                 if copied == 0:
                     error('Found no generated {0} {1} notebooks for "{2}"!'.
-                        format(lang, type, notebook.src)
+                        format(lang, notebook_type.value, notebook.src)
                     )
 
     verbose("Running master parse on {0}".format(src_path))
@@ -808,7 +840,8 @@ def copy_notebooks(build, labs_dir, dest_root):
                 notebook=notebook,
                 src_path=src_path,
                 notebook_heading_path=build.notebook_heading_path,
-                add_heading=build.add_heading
+                add_heading=build.add_heading,
+                notebook_type_map=build.notebook_type_map
             )
         else:
             dest_path = path.join(labs_dir, notebook.dest)
@@ -929,6 +962,7 @@ def remove_empty_subdirectories(directory):
 
 def write_version_notebook(dir, notebook_contents, version):
     nb_path = path.join(dir, VERSION_NOTEBOOK_FILE.format(version))
+    ensure_parent_dir_exists(nb_path)
     with codecs.open(nb_path, 'w', encoding='UTF-8') as out:
         out.write(notebook_contents)
 

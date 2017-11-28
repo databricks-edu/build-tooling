@@ -3,11 +3,34 @@
 Version 1.10.0
 
 * Added `variables` section to `build.yaml`, allowing definition of arbitrary
-  variables for substitution.
+  variables for substitution. See the sample `build.yaml` for details.
 * `bdc` now automatically generates a top-level version notebook in the DBC
   files.
 * Added a `notebook-defaults` section to capture default notebook settings.
-* Moved some general-purpose functions into separate `util` module.  
+  You can specify default `dest` patterns and the defaults for `master` in
+  this new section.
+* Added a `$target_extension` substitution, allowing you to substitute the
+  post-master parse target file extension into a notebook destination, if
+  master parsing is enabled. (The extension is substituted _without_ the 
+  leading ".".)  
+* Added a `$notebook_type` substitution, allowing you to substitute the
+  type of the notebook (answers, exercises or instructor) into the notebook
+  destination, if master parsing is enabled.
+* Added an option `notebook_type_name` section that allows you to define
+  alternate strings for the `$notebook_type` substitution. See the sample
+  `build.yaml` for details.
+* Changed the substitution of `$extension` so that it does _not_ include
+  the leading ".".  
+* Added a `master.instructor` setting, allowing you to control whether or not
+  instructor notebooks are generated. It's true, by default.
+* The target master parse language is _no longer_ automatically inserted.
+  If you enable master parsing, and you specify more than one language, you
+  _must_ use an explicit substitution of `$target_lang` in the notebook
+  destination; otherwise, `bdc` will abort. If you only have a single language,
+  you can omit `$target_lang`. 
+* Removed the use of a leading "/" in a notebook destination as a means to 
+  suppress the automatic insertion of the target language.
+* Moved some general-purpose functions into separate `bdcutil` module.
 
 Version 1.9.0:
 

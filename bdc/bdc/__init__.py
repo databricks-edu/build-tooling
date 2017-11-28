@@ -621,10 +621,17 @@ def load_build_yaml(yaml_file):
             )
         )
 
-    if min_version > parse_semver(VERSION):
+    # Ignore the patch level. A patch version (usually a bug fix) should NEVER
+    # break build parsing.
+    min_major_minor = min_version[0:2]
+    cur_major_minor = parse_semver(VERSION)[0:2]
+    print("min_major_minor={0}, cur_major_minor={1}".format(min_major_minor, cur_major_minor))
+    if min_major_minor > cur_major_minor:
         raise ConfigError(
-            ("This build requires bdc version {0} or greater, but " +
-             "you're using bdc version {1}.").format(bdc_min_version, VERSION)
+            ("This build requires bdc version {0}.x or greater, but " +
+             "you're using bdc version {1}.").format(
+                '.'.join(map(str, min_major_minor)), VERSION
+            )
         )
 
     variables = contents.get('variables', {})

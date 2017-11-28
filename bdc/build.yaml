@@ -2,8 +2,10 @@
 
 # bdc_min_version: The minimum version of bdc necessary to parse the file.
 #                  REQUIRED, as of bdc version 1.10.0. Must be of the form:
-#                  <major.minor.patch> (e.g., 1.10.0)
-bdc_min_version: 1.10.0
+#                  <major.minor.patch> (e.g., 1.10.0) or <major.minor>
+#                  (e.g., 1.10). The patch number is NOT considered, as bdc
+#                  should never break build parsing with a patch release.
+bdc_min_version: 1.10
 
 # course_info: Basic information about the course being built.
 #

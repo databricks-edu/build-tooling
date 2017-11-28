@@ -33,7 +33,8 @@ from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
                      variable_ref_patterns, matches_variable_ref,
                      working_directory, move, copy, mkdirp, markdown_to_html,
                      warning, info, emit_error, verbose, set_verbosity,
-                     verbosity_is_enabled, ensure_parent_dir_exists)
+                     verbosity_is_enabled, ensure_parent_dir_exists,
+                     parse_semver)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -378,9 +379,6 @@ def load_build_yaml(yaml_file):
     :return the Build object, representing the parsed build.yaml
     """
     import yaml
-    verbose("Loading {0}...".format(yaml_file))
-    with open(yaml_file, 'r') as y:
-        contents = yaml.safe_load(y)
 
     def bool_field(d, key, default=False):
         val = d.get(key, default)
@@ -393,9 +391,7 @@ def load_build_yaml(yaml_file):
         v = d.get(key)
         if v is None:
             raise ConfigError(
-                '"{0}": Missing required "{1}" value in "{2}".'.format(
-                    yaml_file, key, where
-                )
+                'Missing required "{0}" value in "{1}".'.format(key, where)
             )
         return v
 
@@ -609,6 +605,27 @@ def load_build_yaml(yaml_file):
                 ))
         return res
 
+    # Main function logic
+
+    verbose("Loading {0}...".format(yaml_file))
+    with open(yaml_file, 'r') as y:
+        contents = yaml.safe_load(y)
+
+    bdc_min_version = required(contents, 'bdc_min_version', 'build')
+    try:
+        min_version = parse_semver(bdc_min_version)
+    except ValueError as e:
+        raise ConfigError(
+            'Bad value of "{0}" for "bdc_min_version": {1}'.format(
+                bdc_min_version, e.message
+            )
+        )
+
+    if min_version > parse_semver(VERSION):
+        raise ConfigError(
+            ("This build requires bdc version {0} or greater, but " +
+             "you're using bdc version {1}.").format(bdc_min_version, VERSION)
+        )
 
     variables = contents.get('variables', {})
     notebooks_cfg = required(contents, 'notebooks', 'build')

@@ -169,6 +169,26 @@ def emit_error(msg):
     print('***')
 
 
+def parse_semver(version):
+    '''
+    Parse a semantic version string (e.g., 1.10.30) into a 3-tuple of
+    integers. Raises ValueError for a malformed version string.
+
+    :param version:  the string to parse
+
+    :return:  A `(major, minor, patch)` tuple of ints.
+    '''
+    nums = version.split('.')
+    if len(nums) != 3:
+        raise ValueError('"{0}" is a malformed version string'.format(version))
+    try:
+        return tuple([int(i) for i in nums])
+    except ValueError as e:
+        raise ValueError('"{0}" is a malformed version string: {1}'.format(
+            version, e.message
+        ))
+
+
 def merge_dicts(dict1, dict2):
     '''
     Merge two dictionaries, producing a third one

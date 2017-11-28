@@ -1,8 +1,9 @@
 # Template for bdc build YAML file.
-#
-# NOTE: This file contains only the configuration information for a particular
-# class. bdc uses a separate configuration file to define the build environment
-# for ALL courseware builds.
+
+# bdc_min_version: The minimum version of bdc necessary to parse the file.
+#                  REQUIRED, as of bdc version 1.10.0. Must be of the form:
+#                  <major.minor.patch> (e.g., 1.10.0)
+bdc_min_version: 1.10.0
 
 # course_info: Basic information about the course being built.
 #

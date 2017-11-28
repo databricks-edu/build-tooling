@@ -15,6 +15,7 @@ from future import standard_library
 standard_library.install_aliases()
 
 from string import Template
+from textwrap import TextWrapper
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -73,9 +74,100 @@ h4 {
 }
 """
 
+COLUMNS = int(os.getenv('COLUMNS', '79'))
+WARNING_PREFIX = "*** WARNING: "
+
+# ---------------------------------------------------------------------------
+# Module globals
+# ---------------------------------------------------------------------------
+
+_verbose = False
+_verbose_prefix = ''
+
+# Text wrappers
+_warning_wrapper = TextWrapper(width=COLUMNS,
+                               subsequent_indent=' ' * len(WARNING_PREFIX))
+
+_verbose_wrapper = TextWrapper(width=COLUMNS)
+
+_error_wrapper = TextWrapper(width=COLUMNS)
+
+_info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
+
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
+
+def set_verbosity(verbose, verbose_prefix):
+    '''
+    Set or clear verbose messages.
+
+    :param verbose:        True or False to enable or disable verbosity
+    :param verbose_prefix  string to use as a prefix for verbose messages, or
+                           None (or empty string) for no prefix
+    '''
+    global _verbose
+    global _verbose_prefix
+    global _verbose_wrapper
+
+    _verbose = verbose
+    if verbose_prefix:
+        _verbose_prefix = verbose_prefix
+        _verbose_wrapper = TextWrapper(
+            width=COLUMNS,
+            subsequent_indent=' ' * len(verbose_prefix)
+        )
+
+
+def verbosity_is_enabled():
+    '''
+    Determine whether verbosity is on or off.
+
+    :return:  True or False
+    '''
+    return _verbose
+
+
+def verbose(msg):
+    '''
+    Conditionally emit a verbose message. See also set_verbosity().
+
+    :param msg: the message
+
+    :return:
+    '''
+    if _verbose:
+        print(_verbose_wrapper.fill("{0}{1}".format(_verbose_prefix, msg)))
+
+
+def warning(msg):
+    '''
+    Emit a warning message.
+
+    :param msg: The message
+    '''
+    print(_warning_wrapper.fill('{0}{1}'.format(WARNING_PREFIX, msg)))
+
+
+def info(msg):
+    '''
+    Emit an informational message.
+
+    :param msg: The message
+    '''
+    print(_info_wrapper.fill(msg))
+
+
+def emit_error(msg):
+    '''
+    Emit an error message.
+
+    :param msg: The message
+    '''
+    print('***\n')
+    print(_error_wrapper.fill(msg) + "\n")
+    print('***\n')
+
 
 def merge_dicts(dict1, dict2):
     '''

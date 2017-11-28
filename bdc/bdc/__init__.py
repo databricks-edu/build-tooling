@@ -26,14 +26,14 @@ import shutil
 import codecs
 import re
 from datetime import datetime
-from textwrap import TextWrapper
 from enum import Enum
 import master_parse
 from grizzled.file import eglob
 from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
                      variable_ref_patterns, matches_variable_ref,
-                     working_directory, ensure_parent_dir_exists, move,
-                     copy, mkdirp, markdown_to_html)
+                     working_directory, move, copy, mkdirp, markdown_to_html,
+                     warning, info, emit_error, verbose, set_verbosity,
+                     verbosity_is_enabled)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -82,10 +82,6 @@ Options:
   --version            Display version and exit.
 
 """.format(PROG, VERSION, DEFAULT_BUILD_FILE))
-
-COLUMNS = int(os.getenv('COLUMNS', '79'))
-VERBOSE_PREFIX = "{0}: ".format(PROG)
-WARNING_PREFIX = "*** WARNING: "
 
 INSTRUCTOR_FILES_SUBDIR = "InstructorFiles" # instructor files subdir
 INSTRUCTOR_LABS_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Instructor-Labs")
@@ -158,19 +154,7 @@ ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
 # Globals
 # ---------------------------------------------------------------------------
 
-be_verbose = False
 errors = 0
-
-# Text wrappers
-warning_wrapper = TextWrapper(width=COLUMNS,
-                              subsequent_indent=' ' * len(WARNING_PREFIX))
-
-verbose_wrapper = TextWrapper(width=COLUMNS,
-                              subsequent_indent=' ' * len(VERBOSE_PREFIX))
-
-error_wrapper = TextWrapper(width=COLUMNS)
-
-info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
 
 # ---------------------------------------------------------------------------
 # Classes
@@ -345,32 +329,10 @@ class BuildData(object, DefaultStrMixin):
 # Functions
 # ---------------------------------------------------------------------------
 
-
-def verbose(msg):
-    """Conditionally emit a verbose message."""
-    if be_verbose:
-        print(verbose_wrapper.fill("{0}{1}".format(VERBOSE_PREFIX, msg)))
-
-
-def warning(msg):
-    print(warning_wrapper.fill('{0}{1}'.format(WARNING_PREFIX, msg)))
-
-
-def info(msg):
-    print(info_wrapper.fill(msg))
-
-
 def error(msg):
-    """
-    Emit a message to standard error.
-
-    :param msg: the message
-    """
     global errors
     errors += 1
-    sys.stderr.write("***\n")
-    sys.stderr.write(error_wrapper.fill(msg) + "\n")
-    sys.stderr.write("***\n")
+    emit_error(msg)
 
 
 def die(msg, show_usage=False):
@@ -416,6 +378,8 @@ def load_build_yaml(yaml_file):
         return v
 
     def subst(dest, src, allow_lang=True, extra_vars=None):
+        # Handles parse-time variable substitution. Some variables are
+        # substituted later.
         if extra_vars is None:
             extra_vars = {}
         base_with_ext = path.basename(src)
@@ -820,7 +784,7 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
                 notebook_heading_path=notebook_heading_path,
                 encoding_in=master['encoding_in'],
                 encoding_out=master['encoding_out'],
-                enable_verbosity=be_verbose,
+                enable_verbosity=verbosity_is_enabled(),
                 add_heading=add_heading
             )
             master_parse.process_notebooks(params)
@@ -905,7 +869,7 @@ def make_dbc(gendbc, build, labs_dir, dbc_path):
     wd = path.dirname(labs_dir)
     with working_directory(wd):
         simple_labs_dir = path.basename(labs_dir)
-        if be_verbose:
+        if verbosity_is_enabled():
             cmd = "{0} {1} {2} {3} {4} {5}".format(
                 gendbc, "-v", "-f", build.course_id,
                 simple_labs_dir, dbc_path
@@ -915,7 +879,7 @@ def make_dbc(gendbc, build, labs_dir, dbc_path):
                 gendbc, "-f", build.course_id, simple_labs_dir, dbc_path
             )
 
-        verbose("\n*** In {0}:\n{1}\n".format(wd, cmd))
+        verbose("\nIn {0}:\n{1}\n".format(wd, cmd))
         rc = os.system(cmd)
         if rc != 0:
             raise BuildError("Failed to create DBC: " + cmd)
@@ -1264,8 +1228,8 @@ def list_notebooks(build):
 def main():
     opts = parse_args()
 
-    global be_verbose
-    be_verbose = opts['--verbose']
+    if opts['--verbose']:
+        set_verbosity(True, verbose_prefix='bdc: ')
 
     course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
 

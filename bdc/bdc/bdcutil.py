@@ -281,11 +281,15 @@ class DefaultStrMixin:
     __metaclass__ = ABCMeta
 
     def __str__(self):
+        indent = ' ' * (len(self.__class__.__name__) + 1)
         fields = []
-        for field, value in self.__dict__.items():
+        for key in sorted(self.__dict__.keys()):
+            value = self.__dict__[key]
             v = '"{0}"'.format(value) if isinstance(value, str) else value
-            fields.append('{0}={1}'.format(field, v))
-        return '{0}({1})'.format(self.__class__.__name__, ', '.join(fields))
+            fields.append('{0}={1}'.format(key, v))
+
+        delim = ',\n{0}'.format(indent)
+        return '{0}({1})'.format(self.__class__.__name__, delim.join(fields))
 
     def __repr__(self):
         return self.__str__()

@@ -27,6 +27,7 @@ import codecs
 import re
 from datetime import datetime
 from textwrap import TextWrapper
+from enum import Enum
 import master_parse
 from grizzled.file import eglob
 from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
@@ -175,8 +176,6 @@ info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
 # Classes
 # ---------------------------------------------------------------------------
 
-Config = namedtuple('Config', ('gendbc', 'build_directory'))
-
 class BuildError(Exception):
     pass
 
@@ -184,10 +183,38 @@ class BuildError(Exception):
 class UploadDownloadError(Exception):
     pass
 
+
 class ConfigError(BuildError):
     pass
 
+
+class NotebookType(Enum):
+    EXERCISES = 'exercises'
+    INSTRUCTOR = 'instructor'
+    ANSWERS = 'answers'
+
+    @classmethod
+    def default_mappings(self):
+        return {
+            NotebookType.EXERCISES:  '_exercises',
+            NotebookType.INSTRUCTOR: '',
+            NotebookType.ANSWERS:    '_answers',
+        }
+
+    def __repr__(self):
+        return 'NotebookType.{0}'.format(self.name)
+
+
 NotebookDefaults = namedtuple('NotebookDefaults', ('dest, master'))
+MiscFileData = namedtuple('MiscFileData', ('src', 'dest'))
+SlideData = namedtuple('SlideData', ('src', 'dest'))
+DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
+CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
+                                       'schedule', 'instructor_prep',
+                                       'deprecated'))
+MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
+NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
+
 
 class NotebookData(object, DefaultStrMixin):
     '''
@@ -242,16 +269,6 @@ class NotebookData(object, DefaultStrMixin):
         return self.total_master_langs() > 0
 
 
-MiscFileData = namedtuple('MiscFileData', ('src', 'dest'))
-SlideData = namedtuple('SlideData', ('src', 'dest'))
-DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
-CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
-                                       'schedule', 'instructor_prep',
-                                       'deprecated'))
-MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
-
-NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
-
 class BuildData(object, DefaultStrMixin):
     '''
     Parsed build data.
@@ -267,7 +284,25 @@ class BuildData(object, DefaultStrMixin):
                  keep_lab_dirs,
                  notebook_heading,
                  markdown_cfg,
+                 notebook_type_map,
                  variables=None):
+        '''
+        Create a new BuildData object.
+
+        :param build_file_path:       path to the build file, for reference
+        :param source_base:           value of source base field
+        :param course_info:           parsed CourseInfo object
+        :param notebooks:             list of parsed Notebook objects
+        :param slides:                parsed SlideInfo object
+        :param datasets:              parsed DatasetData object
+        :param misc_files:            parsed MiscFilesData object
+        :param keep_lab_dirs:         value of keep_lab_dirs setting
+        :param notebook_heading:      parsed NotebookHeading object
+        :param markdown_cfg:          parsed MarkdownInfo object
+        :param notebook_type_map:     a dict mapping notebook types to strings.
+                                      Keys are from the NotebookType enum.
+        :param variables:             a map of user-defined variables
+        '''
         super(BuildData, self).__init__()
         self.build_file_path = build_file_path
         self.course_directory = path.dirname(build_file_path)
@@ -280,6 +315,7 @@ class BuildData(object, DefaultStrMixin):
         self.misc_files = misc_files
         self.keep_lab_dirs = keep_lab_dirs
         self.notebook_heading = notebook_heading
+        self.notebook_type_map = notebook_type_map
         self.variables = variables or {}
 
     @property
@@ -444,7 +480,14 @@ def load_build_yaml(yaml_file):
     def parse_notebook(obj, notebook_defaults, extra_vars):
         bad_dest = re.compile('^\.\./*|^\./*')
         src = required(obj, 'src', 'notebooks section')
-        dest = required(obj, 'dest', 'notebooks section')
+
+        dest = obj.get('dest', notebook_defaults.dest)
+        if not dest:
+            raise ConfigError(
+                ('Notebook "{0}": Missing "dest" section, and no default ' +
+                 '"dest" in notebook defaults.').format(src)
+            )
+
         dest = subst(dest, src, extra_vars=extra_vars)
         if bool_field(obj, 'skip'):
             verbose('Skipping notebook {0}'.format(src))
@@ -549,6 +592,26 @@ def load_build_yaml(yaml_file):
             stylesheet = None
         return MarkdownInfo(html_stylesheet=stylesheet)
 
+    def parse_notebook_types(contents):
+        res = NotebookType.default_mappings()
+        names_to_keys = dict([(t.value, t) for t in NotebookType])
+
+        invalid_keys = set()
+        for k, v in contents.get('notebook_type_name', {}).items():
+            t = names_to_keys.get(k)
+            if not t:
+                invalid_keys.add(k)
+            else:
+                res[t] = v
+
+        if invalid_keys:
+            raise ConfigError(
+                'Unknown key(s) in "notebook_type_name" section: {0}'.format(
+                    ', '.join(invalid_keys)
+                ))
+        return res
+
+
     variables = contents.get('variables', {})
     notebooks_cfg = required(contents, 'notebooks', 'build')
     slides_cfg = contents.get('slides', [])
@@ -611,45 +674,11 @@ def load_build_yaml(yaml_file):
             enabled=notebook_heading.get('enabled', True)
         ),
         markdown_cfg=parse_markdown(contents.get('markdown')),
+        notebook_type_map=parse_notebook_types(contents),
         variables=variables
     )
 
     return data
-
-
-def load_config(config_path):
-    """
-    Load the master configuration file for the build tool. Returns a
-    Config object (see above). Throws a ConfigError on error.
-    """
-    p = ConfigParser()
-    p.read(config_path)
-
-    def required_path(section, option):
-        val = path.expanduser(p.get(section, option))
-        if val is None:
-            raise ConfigError(
-                'Missing required "{0}.{1}" value in configuration'.format(
-                    section, option
-                )
-            )
-        return val
-
-    def must_be_absolute(section, option, path):
-        if not os.path.isabs(path):
-            raise ConfigError(
-                'Section [{0}]: Option {1} is not an absolute path.'.format(
-                    section, option
-                )
-            )
-        return path
-
-    opts = [
-        must_be_absolute('main', i, required_path('main', i))
-        for i in ('gendbc', 'build_directory')
-    ]
-
-    return Config(*opts)
 
 
 def parse_args():
@@ -1242,7 +1271,6 @@ def main():
 
     try:
         build = load_build_yaml(course_config)
-        print(build)
         if opts['--list-notebooks']:
             list_notebooks(build)
         elif opts['--upload']:

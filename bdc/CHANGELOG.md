@@ -1,5 +1,11 @@
 # Change Log for BDC
 
+Version 1.10.1:
+
+* Fixed `--upload` and `--download`, which broke due to all the changes in
+  1.10.0.
+* Added Python 2 check. (Python 3 is no longer supported.)
+
 Version 1.10.0
 
 * `bdc` now generates a version-stamped notebook, with version information,

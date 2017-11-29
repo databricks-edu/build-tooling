@@ -2,6 +2,8 @@
 
 Version 1.9.0:
 
+* Video tag is now `-- VIDEO id [title]`, where `id` is a video ID. Videos
+  are now assumed to reside on Wistia.com.
 * `:HINT:` now expands to an image and text, not just text.
 * `:NOTE:` has been removed. (Use `:SIDENOTE:`, instead.)
 * `:KEYPOINT:`, `:INSIGHT:`, `:WARNING` have been removed.

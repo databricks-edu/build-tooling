@@ -14,10 +14,6 @@ import sys
 import subprocess
 import json
 
-if sys.version_info >= (3,):
-    from configparser import ConfigParser
-else:
-    from ConfigParser import ConfigParser
 from collections import namedtuple
 import os
 from os import path
@@ -1236,7 +1232,7 @@ def build_course(opts, build):
 
     dest_dir = (
         opts['--dest'] or
-        joinpath(os.getenv("HOME"), "tmp", "curriculum", build.name)
+        joinpath(os.getenv("HOME"), "tmp", "curriculum", build.course_id)
     )
 
     verbose('Publishing to "{0}"'.format(dest_dir))

@@ -5,7 +5,9 @@
 #                  <major.minor.patch> (e.g., 1.10.0) or <major.minor>
 #                  (e.g., 1.10). The patch number is NOT considered, as bdc
 #                  should never break build parsing with a patch release.
-bdc_min_version: 1.10
+#
+# WARNING: Be sure to quote this value, so it isn't interpreted as a float!
+bdc_min_version: "1.10"
 
 # course_info: Basic information about the course being built.
 #

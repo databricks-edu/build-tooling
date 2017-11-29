@@ -34,7 +34,7 @@ from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
                      working_directory, move, copy, mkdirp, markdown_to_html,
                      warning, info, emit_error, verbose, set_verbosity,
                      verbosity_is_enabled, ensure_parent_dir_exists,
-                     parse_semver, find_in_path)
+                     parse_version_string, find_in_path)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -612,8 +612,13 @@ def load_build_yaml(yaml_file):
         contents = yaml.safe_load(y)
 
     bdc_min_version = required(contents, 'bdc_min_version', 'build')
+    if isinstance(bdc_min_version, float):
+        raise ConfigError(
+            '"bdc_min_version" of the form <major>.<minor> must be in quotes.'
+        )
+
     try:
-        min_version = parse_semver(bdc_min_version)
+        min_version = parse_version_string(bdc_min_version)
     except ValueError as e:
         raise ConfigError(
             'Bad value of "{0}" for "bdc_min_version": {1}'.format(
@@ -624,8 +629,7 @@ def load_build_yaml(yaml_file):
     # Ignore the patch level. A patch version (usually a bug fix) should NEVER
     # break build parsing.
     min_major_minor = min_version[0:2]
-    cur_major_minor = parse_semver(VERSION)[0:2]
-    print("min_major_minor={0}, cur_major_minor={1}".format(min_major_minor, cur_major_minor))
+    cur_major_minor = parse_version_string(VERSION)[0:2]
     if min_major_minor > cur_major_minor:
         raise ConfigError(
             ("This build requires bdc version {0}.x or greater, but " +
@@ -1041,7 +1045,8 @@ def build_course(opts, build):
     # folder.
     if not build.keep_lab_dirs:
         shutil.rmtree(labs_full_path)
-        shutil.rmtree(instructor_labs)
+        if path.exists(instructor_labs):
+            shutil.rmtree(instructor_labs)
 
     if errors > 0:
         raise BuildError("{0} error(s).".format(errors))

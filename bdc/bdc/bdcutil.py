@@ -169,17 +169,19 @@ def emit_error(msg):
     print('***')
 
 
-def parse_semver(version):
+def parse_version_string(version):
     '''
-    Parse a semantic version string (e.g., 1.10.30) into a 3-tuple of
-    integers. Raises ValueError for a malformed version string.
+    Parse a semantic version string (e.g., 1.10.30) or a partial
+    <major>.<minor> semver string (e.g., 1.10) into a tuple of
+    (major, minor, patch) or (major, minor) integers. Raises ValueError for
+    a malformed version string. The patch level (third number) is ignored
 
     :param version:  the string to parse
 
-    :return:  A `(major, minor, patch)` tuple of ints.
+    :return:  A `(major, minor)` tuple of ints.
     '''
     nums = version.split('.')
-    if len(nums) != 3:
+    if len(nums) not in (2, 3):
         raise ValueError('"{0}" is a malformed version string'.format(version))
     try:
         return tuple([int(i) for i in nums])

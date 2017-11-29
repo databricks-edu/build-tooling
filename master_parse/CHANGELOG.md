@@ -1,10 +1,26 @@
 # Change Log for Master Parse Tool
 
-Version 1.7.2
+Version 1.9.0:
+
+* Video tag is now `-- VIDEO id [title]`, where `id` is a video ID. Videos
+  are now assumed to reside on Wistia.com.
+* `:HINT:` now expands to an image and text, not just text.
+* `:NOTE:` has been removed. (Use `:SIDENOTE:`, instead.)
+* `:KEYPOINT:`, `:INSIGHT:`, `:WARNING` have been removed.
+* Fixed code that renders inline tokens (`:HINT:`, etc.) to render them in
+  `%md-sandbox` if necessary.
+
+Version 1.8.0
+
+* Added support for inline callouts. The tokens `:HINT:`, `:CAUTION:`, 
+  `:WARNING:`,`:BESTPRACTICE:`, `:KEYPOINT:`, `:SIDENOTE:`, and `:INSIGHT:`
+  are replaced, inline, with appropriate expansions.
+
+Version 1.7.2:
 
 * Fixes to handle both `%r` and `%md-sandbox`.
 
-Version 1.7.1
+Version 1.7.1:
 
 * Updates to fix handling of `%run`. **Breaks `%r`!**
 

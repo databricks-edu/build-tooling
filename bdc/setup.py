@@ -33,6 +33,7 @@ setup(
                       'markdown2 >= 2.3.5',
                       'backports.tempfile >= 1.0',
                       'grizzled-python >= 1.1.0',
+                      'enum34 >= 1.1.6',
                       'PyYAML >= 3.12'],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

@@ -23,8 +23,10 @@ import re
 import codecs
 from enum import Enum
 from collections import namedtuple
+from string import Template
+from InlineToken import InlineToken, expand_inline_tokens
 
-VERSION = "1.7.2"
+VERSION = "1.9.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -60,6 +62,9 @@ class CommandCode(Enum):
     FS                = 'fs'
     SH                = 'sh'
 
+    def is_markdown(self):
+        return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX']
+
 class NotebookKind(Enum):
     DATABRICKS = 'Databricks'
     IPYTHON    = 'IPython'
@@ -79,14 +84,55 @@ class NotebookUser(Enum):
 # Constants
 # -----------------------------------------------------------------------------
 
+def _s3_icon_url(image):
+    return (
+        'https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/' +
+        image
+    )
+
+INLINE_TOKENS = [
+    InlineToken(
+        title='Hint',
+        tag=':HINT:',
+        image=_s3_icon_url('icon-light-bulb.svg'),
+        template=r'<img alt="${title}" title="${title}" style="${style}" src="${image}"/>&nbsp;**${title}:**',
+        style='height:1.75em; top:0.3em'
+    ),
+    InlineToken(
+        title='Caution',
+        tag=':CAUTION:',
+        image=_s3_icon_url('icon-warning.svg'),
+        style='height:1.3em; top:0.0em'
+    ),
+    InlineToken(
+        tag=':BESTPRACTICE:',
+        title='Best Practice',
+        image=_s3_icon_url('icon-blue-ribbon.svg'),
+        style='height:1.75em; top:0.3em'
+    ),
+    #InlineToken(
+    #    tag=':KEYPOINT:',
+    #    title='Key Point',
+    #    image=_s3_icon_url('icon-key.svg'),
+    #    style='height:1.3em; top:0.1.5em'
+    #),
+    InlineToken(
+        tag=':SIDENOTE:',
+        title='Side Note',
+        image=_s3_icon_url('icon-note.webp'),
+        style='height:1.75em; top:0.05em; transform:rotate(15deg)'
+    ),
+]
+
 DEFAULT_TEST_CELL_ANNOTATION = "Run this cell to test your solution."
 
-ALL_CELL_TYPES = {c for c in CommandCode }
+ALL_CELL_TYPES = { c for c in CommandCode }
 CODE_CELL_TYPES = {
     CommandCode.SCALA,
     CommandCode.SQL,
     CommandCode.R,
-    CommandCode.PYTHON}
+    CommandCode.PYTHON
+}
 
 VALID_CELL_TYPES_FOR_LABELS = {
     CommandLabel.IPYTHON_ONLY:    CODE_CELL_TYPES | {CommandCode.MARKDOWN,
@@ -123,15 +169,18 @@ DEFAULT_ENCODING_IN = 'utf-8'
 DEFAULT_ENCODING_OUT = 'utf-8'
 DEFAULT_OUTPUT_DIR = 'build_mp'
 
-# VIDEO_TEMPLATE requires {0} and {1}
-VIDEO_TEMPLATE = """<div style="width: 30%; height: auto; background: black; border: 1px solid black; border-radius: 10px 10px 10px 10px;">
-  <div style="width: 95%; display: block; margin: auto">
-    <a href="{0}" target="video" style="text-decoration: none">
-      <img src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/video-button.png" style=""/>
-      <div style="width: 100%; text-align: center; color: white; margin-top: 40px; margin-bottom: 20px">{1}</div>
-    </a>
-  </div>
-</div>"""
+# VIDEO_TEMPLATE (a string template) requires ${id} and ${title}. ${title}
+# is currently ignored.
+VIDEO_TEMPLATE = (
+'''<script src="https://fast.wistia.com/embed/medias/${id}.jsonp" async></script>
+<script src="https://s3-us-west-2.amazonaws.com/files.training.databricks.com/courses/spark-sql/Wistia.js" async></script>
+<div class="wistia_embed wistia_async_${id}" style="height:360px;width:640px;color:red">
+  Error displaying video. Please click the link, below.
+</div>
+<a target="_blank" href="https://fast.wistia.net/embed/iframe/${id}?seo=false">
+<img style="width:16px" alt="Opens in new tab" src="''' + _s3_icon_url('external-link-icon.png') +
+'''"/>&nbsp;Watch full-screen.</a>
+''')
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
@@ -443,6 +492,12 @@ class NotebookGenerator(object):
                             content
                         )
 
+                    # Expand inline callouts.
+                    (content, sandbox) = expand_inline_tokens(INLINE_TOKENS,
+                                                              content)
+                    if sandbox:
+                        code = CommandCode.MARKDOWN_SANDBOX
+
                     inline = CommandLabel.INLINE in labels
 
                     discard_labels = self.discard_labels
@@ -542,14 +597,18 @@ class NotebookGenerator(object):
             arg_string = line[m.end():]
             if len(arg_string.strip()) == 0:
                 raise Exception(
-                    'Cell {0}: "{1}" is not of form: VIDEO <url> [<title>]'.format(
+                    'Cell {0}: "{1}" is not of form: VIDEO <id> [<title>]'.format(
                     cell_num, line
                     )
                 )
 
             args = arg_string.split(None, 1)
-            (url, title) = args if len(args) == 2 else (args[0], "")
-            new_content = new_content + VIDEO_TEMPLATE.format(url, title).split('\n')
+            (id, title) = args if len(args) == 2 else (args[0], "video")
+            expanded = Template(VIDEO_TEMPLATE).safe_substitute({
+                'title': title,
+                'id':    id
+            })
+            new_content = new_content + expanded.split('\n')
 
         return new_content
 

@@ -1,8 +1,13 @@
 # Template for bdc build YAML file.
+
+# bdc_min_version: The minimum version of bdc necessary to parse the file.
+#                  REQUIRED, as of bdc version 1.10.0. Must be of the form:
+#                  <major.minor.patch> (e.g., 1.10.0) or <major.minor>
+#                  (e.g., 1.10). The patch number is NOT considered, as bdc
+#                  should never break build parsing with a patch release.
 #
-# NOTE: This file contains only the configuration information for a particular
-# class. bdc uses a separate configuration file to define the build environment
-# for ALL courseware builds.
+# WARNING: Be sure to quote this value, so it isn't interpreted as a float!
+bdc_min_version: "1.10"
 
 # course_info: Basic information about the course being built.
 #
@@ -40,18 +45,26 @@ course_info:
   version: version
   deprecated: false
 
+notebook_type_name:
+  # Specify the substitution names for ${notebook_type}. Only meaningful
+  # with master-parsed output notebooks. There are three notebook types:
+  # See the section on notebooks, below.
+  #
+  # - exercises
+  # - answers
+  # - instructor
+  #
+  # You can use this section to map those types to different strings.
+  # If you don't map a particular type, then it is used as is to replace
+  # references to ${notebook_type}
+  exercises: ""
+  answers: Solutions
+  #instructor: instructor
 
-# notebook_heading defines how the notebook heading is handled.
-#
-# path    - Path to a file containing Markdown and/or HTML, to be used as the
-#           first cell in all generated notebooks. If not specified, the
-#           default will be used.
-# enabled - false to disable the automatic addition of a notebook header to
-#           generated notebooks. true (the default) to add the header.
-
-notebook_heading:
-  #path: /path/to/somewhere
-  #enabled: true
+# Other variables that can be substituted. If you use any of the predefined
+# names, they will be silently ignored.
+variables:
+  foo: bar
 
 # By default, the directories containing the notebooks are deleted once the
 # corresponding DBC files are created. You can set this field to "true"
@@ -65,10 +78,26 @@ notebook_heading:
 markdown:
   #html_stylesheet:
 
+# The folder (relative to the top of the DBC) in which to store student files,
+# such as the generated Labs.dbc. OPTIONAL. Defaults to "StudentFiles". Can
+# be empty, to store all files at the top level.
+#
+# WARNING: This setting MUST NOT match the instructor_dir setting.
+
+#student_dir: StudentFiles
+
+# The folder (relative to the top of the DBC) in which to store instructor
+# files, such as the generated Instructor-Labs.dbc. OPTIONAL. Defaults to
+# "InstructorFiles". Can be empty, to store all files at the top level.
+#
+# WARNING: This setting MUST NOT match the student_dir setting.
+
+#instructor_dir: InstructorFiles
+
 # src_base: Location of the base directory for the source curriculum
 # material, relative to the location of THIS FILE. This will almost always
 # be "../../modules". REQUIRED.
-src_base: ../../modules
+src_base: /Users/bmc/src/databricks/training/modules
 
 # misc_files: Files that should be copied to the course directory. Paths
 # are relative to THIS FILE (not to <src_base>). These files are copied to
@@ -87,9 +116,11 @@ src_base: ../../modules
 #
 # In the <dest> value, the following substitution tokens are permitted:
 #
-# ${basename}  - the base file name of the source, WITHOUT the extension
-# ${filename}  - the base file name of the source, WITH the extension
-# ${extension} - the file extension
+# ${basename}      - the base file name of the source, WITHOUT the extension
+# ${filename}      - the base file name of the source, WITH the extension
+# ${extension}     - the file extension
+# <your variables> - Any variables defined in the "variables" section can
+#                    also be substituted here.
 misc_files:
   -
     src: ClassSetup.pdf
@@ -168,7 +199,10 @@ misc_files:
 #                      master:
 #                        enabled: true
 #
-#   answers          - whether or not to generate answer notebooks. True by default.
+#   answers          - whether or not to generate answer notebooks. True by
+#                      default.
+#   instructor       - whether or not to generate answer notebooks. True by
+#                      default.
 #   scala            - true to generate a Scala notebook. True by default.
 #   python           - true to generate a Python notebook. True by default.
 #   r                - true to generate an R notebook. False by default.
@@ -177,44 +211,65 @@ misc_files:
 #                      Defaults to UTF-8
 #   encoding_out     - the encoding to use when writing the output notebooks.
 #                      Defaults to UTF-8
-#
-# run_test   - Whether or not to test the dataset by running it in a cluster
-#              within a shard. The shard and cluster configuration are specified
-#              in the build tool's master configuration, which is separate
-#              from this courseware build manifest. OPTIONAL. Defaults to false.
-#              (NOTE: NOT YET SUPPORTED.)
+#   heading          - a subsection defining notebook heading settings for this
+#                      notebook.
+#     path           - the path to the notebook heading. Must be HTML or
+#                      Markdown and is inserted into a "%md-sandbox" cell.
+#                      Default: An internal default is used.
+#     enabled        - Whether or not to add a heading to the notebook. True
+#                      by default. One use case for setting it to false:
+#                      Notebooks that are only intended to be run via "%run"
 #
 # SUBSTITUTIONS:
 #
-# In the <dest> value, the following substitution tokens are permitted:
+# In the <dest> value, the following substitution tokens are always permitted:
 #
-# ${basename}    - the base file name of the source, WITHOUT the extension
-# ${filename}    - the base file name of the source, WITH the extension
-# ${extension}   - the file extension
-# ${target_lang} - substitute the notebook language (Scala, R, etc.).
+# ${basename}         - the base file name of the source, WITHOUT the extension
+# ${filename}         - the base file name of the source, WITH the extension
+# ${extension}        - the file extension, without any leading "."
+# <your variables>    - Any variables defined in the "variables" section can
+#                       also be substituted.
+#
+# In addition, if master parsing is enabled for a notebook, the following
+# tokens are also permitted.
+#
+# ${target_lang}      - substitute the output notebook language (Scala, R,
+#                       Python, SQL).
+# ${target_extension} - substitute the output notebook extension, without any
+#                       leading "." (e.g., "scala", "py", "r", "sql")
+# ${notebook_type}    - The output notebook type (exercises, answers, or
+#                       instructor). If you've included a "notebook_type_name"
+#                       mapping, then those strings will be used. Otherwise,
+#                       "exercises", "answers" and "instructor" will be used,
+#                       as appropriate.
 #
 # Notes on ${target_lang}:
 #
 # - If you specify ${target_lang} in the dest value, the target master parse
 #   language is substituted, for each language-generated notebook.
-# - If you don't specify ${target_lang}, it's the same as if you put
-#   ${target_lang} first in the destination path, unless...
-# - ...the path starts with a "/". If the destination path starts with "/",
-#   the target language is omitted from the destination. (This is useful when
-#   you want to use the master parser, but your notebook only supports one
-#   language.)
+# - If you don't specify ${target_lang}, and there are multiple languages
+#   selected in the "master" section, you'll get an error.
+
+notebook_defaults:
+  # Here, you can set default values for the "master" section and the
+  # "dest" value. These defaults are applied to all notebooks that don't
+  # have explicit values for them. Expansions in "dest" are deferred until
+  # runtime (i.e., they're not expanded here).
+  master:
+    enabled: true
+    scala: false
+    sql: true
+    heading:
+      #path: /path/to/notebook/heading
+  dest: $basename.$target_extension
+
 
 notebooks:
+  # List of notebooks in the course.
   -
     src: Overview-History/Introductions.py
-    # With this dest, the output ends up in:
-    #     Scala/Overview-History/Introductions_exercises.scala
-    #     Scala/Overview-History/Introductions_answers.scala
-    #     Python/Overview-History/Introductions_exercises.py
-    #     Python/Overview-History/Introductions_exercises.py
-    #     SQL/Overview-History/Introductions_exercises.sql
-    #     SQL/Overview-History/Introductions_exercises.sql
-    # etc.
+    # With this dest, you'll get an error, because the output location is
+    # ambiguous.
     dest: Overview-History
     master:
       enabled: true
@@ -241,33 +296,31 @@ notebooks:
     # With this dest, the output ends up in:
     #     Notebook1_exercises.py
     #     Notebook1_answers.py
-    dest: /Notebook1
+    # You don't get an error because there's only a single output language.
+    dest: Notebook1
     master:
       enabled: true
       r: false
       scala: false
       sql: false
       python: true
+
   -
-    src: Overview-History/Welcome.py
-    dest: Python/01-${basename} ($lang).py
-    run_test: true
+    src: Module2/Foo.py
+    #dest: $target_lang/Module2/$notebook_type/$basename.$target_extension
+    dest: $common_dest
+    master:
+      enabled: true
+      python: true
+      scala: true
+
   -
-    src: RDD-Fundamentals/lab01-Washington-Crime/Python/Lab.py
-    dest: Python/RDD-Fundamentals/01-${basename} ($lang).py
-    run_test: true
-  -
-    src: RDD-Fundamentals/lab01-Washington-Crime/Python/Solutions.py
-    dest: Python/RDD-Fundamentals/01-${basename} ($lang).py
-    run_test: true
-  -
-    src: RDD-Fundamentals/lab01-Washington-Crime/Scala/Lab.scala
-    dest: Scala/RDD-Fundamentals/01-${basename} ($lang).scala
-    run_test: true
-  -
-    src: RDD-Fundamentals/lab01-Washington-Crime/Scala/Solutions.scala
-    dest: Scala/RDD-Fundamentals/01-${basename} ($lang).scala
-    run_test: true
+    src: Module2/Includes/Shared.py
+    dest: $target_lang/Module2/Includes/$basename.$target_extension
+    master:
+      enabled: true
+      scala: false
+      add_heading: false
 
 # slides: PowerPoint slides to be included in the courseware. The slides are
 #         copied to the destination directory's "InstructorFiles" subdirectory.

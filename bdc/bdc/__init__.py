@@ -28,13 +28,13 @@ from datetime import datetime
 from enum import Enum
 import master_parse
 from grizzled.file import eglob
-from bdcutil import (merge_dicts, bool_value, bool_field, DefaultStrMixin,
-                     variable_ref_patterns, matches_variable_ref,
-                     working_directory, move, copy, mkdirp, markdown_to_html,
-                     warning, info, emit_error, verbose, set_verbosity,
-                     verbosity_is_enabled, ensure_parent_dir_exists,
-                     parse_version_string, find_in_path, rm_rf, joinpath,
-                     dict_get_and_del)
+from bdc.bdcutil import (merge_dicts, bool_value, bool_field, DefaultStrMixin,
+                         variable_ref_patterns, matches_variable_ref,
+                         working_directory, move, copy, mkdirp, markdown_to_html,
+                         warning, info, emit_error, verbose, set_verbosity,
+                         verbosity_is_enabled, ensure_parent_dir_exists,
+                         parse_version_string, find_in_path, rm_rf, joinpath,
+                         dict_get_and_del)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory

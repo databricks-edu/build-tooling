@@ -33,7 +33,7 @@ from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
                      working_directory, move, copy, mkdirp, markdown_to_html,
                      warning, info, emit_error, verbose, set_verbosity,
                      verbosity_is_enabled, ensure_parent_dir_exists,
-                     parse_version_string, find_in_path, rm_rf)
+                     parse_version_string, find_in_path, rm_rf, joinpath)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -83,15 +83,15 @@ Options:
 
 """.format(PROG, VERSION, DEFAULT_BUILD_FILE))
 
-INSTRUCTOR_FILES_SUBDIR = "InstructorFiles" # instructor files subdir
-INSTRUCTOR_LABS_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Instructor-Labs")
-INSTRUCTOR_LABS_DBC = path.join(INSTRUCTOR_FILES_SUBDIR, "Instructor-Labs.dbc")
-STUDENT_FILES_SUBDIR = "StudentFiles"    # student files subdir
-STUDENT_LABS_SUBDIR = path.join(STUDENT_FILES_SUBDIR, "Labs")
-STUDENT_LABS_DBC = path.join(STUDENT_FILES_SUBDIR, "Labs.dbc")
-SLIDES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "Slides")
-DATASETS_SUBDIR = path.join(STUDENT_FILES_SUBDIR, "Datasets")
-INSTRUCTOR_NOTES_SUBDIR = path.join(INSTRUCTOR_FILES_SUBDIR, "InstructorNotes")
+DEFAULT_INSTRUCTOR_FILES_SUBDIR = "InstructorFiles"
+INSTRUCTOR_LABS_SUBDIR = "Instructor-Labs"
+INSTRUCTOR_LABS_DBC = "Instructor-Labs.dbc"
+DEFAULT_STUDENT_FILES_SUBDIR = "StudentFiles"
+STUDENT_LABS_DBC = "Labs.dbc"               # in the student directory
+STUDENT_LABS_SUBDIR = "Labs"                # in the student directory
+SLIDES_SUBDIR = "Slides"                    # in the instructor directory
+DATASETS_SUBDIR = "Datasets"                # in the student directory
+INSTRUCTOR_NOTES_SUBDIR = "InstructorNotes" # in the instructor directory
 
 # Post master-parse variables (and associated regexps)
 TARGET_LANG = 'target_lang'
@@ -282,6 +282,8 @@ class BuildData(object, DefaultStrMixin):
     def __init__(self,
                  build_file_path,
                  source_base,
+                 student_dir,
+                 instructor_dir,
                  course_info,
                  notebooks,
                  slides,
@@ -315,6 +317,8 @@ class BuildData(object, DefaultStrMixin):
         self.notebooks = notebooks
         self.course_info = course_info
         self.source_base = source_base
+        self.student_dir = student_dir
+        self.instructor_dir = instructor_dir
         self.slides = slides
         self.datasets = datasets
         self.markdown = markdown_cfg
@@ -566,8 +570,8 @@ def load_build_yaml(yaml_file):
             return DatasetData(
                 src=src,
                 dest=subst(dest, src, allow_lang=False, extra_vars=extra_vars),
-                license=path.join(src_dir, 'LICENSE.md'),
-                readme=path.join(src_dir, 'README.md')
+                license=joinpath(src_dir, 'LICENSE.md'),
+                readme=joinpath(src_dir, 'README.md')
             )
 
     def parse_file_section(section, parse, *args):
@@ -655,7 +659,7 @@ def load_build_yaml(yaml_file):
     src_base = required(contents, 'src_base', 'build')
     build_yaml_full = path.abspath(yaml_file)
     build_yaml_dir = path.dirname(build_yaml_full)
-    src_base = path.abspath(path.join(build_yaml_dir, src_base))
+    src_base = path.abspath(joinpath(build_yaml_dir, src_base))
 
     notebook_defaults = parse_notebook_defaults(contents, 'notebook_defaults')
 
@@ -685,6 +689,17 @@ def load_build_yaml(yaml_file):
     if notebook_heading is None:
         notebook_heading = {}
 
+    student_dir = contents.get('student_dir', DEFAULT_STUDENT_FILES_SUBDIR)
+    instructor_dir = contents.get('instructor_dir',
+                                  DEFAULT_INSTRUCTOR_FILES_SUBDIR)
+
+    if student_dir == instructor_dir:
+        raise ConfigError(
+            ('"student_dir" and "instructor_dir" cannot be the same. ' +
+             '"student_dir" is "{0}". ' +
+             '"instructor_dir" is "{1}".').format(student_dir, instructor_dir)
+        )
+
     data = BuildData(
         build_file_path=build_yaml_full,
         course_info=course_info,
@@ -692,6 +707,8 @@ def load_build_yaml(yaml_file):
         slides=slides,
         datasets=datasets,
         source_base=src_base,
+        student_dir=student_dir,
+        instructor_dir=instructor_dir,
         misc_files=misc_files,
         keep_lab_dirs=bool_field(contents, 'keep_lab_dirs'),
         notebook_heading=NotebookHeading(
@@ -725,7 +742,7 @@ def copy_info_file(src_file, target_file, build):
     (src_simple, ext) = path.splitext(src_base)
     if (ext == '.md') or (ext == '.markdown'):
         target_full = path.abspath(target_file)
-        html_out = path.join(path.dirname(target_full),
+        html_out = joinpath(path.dirname(target_full),
                                 src_simple + '.html')
         markdown_to_html(
             markdown=src_file,
@@ -734,8 +751,7 @@ def copy_info_file(src_file, target_file, build):
             stylesheet=build.markdown.html_stylesheet)
 
 
-def process_master_notebook(dest_root, notebook, src_path, add_heading,
-                            notebook_heading_path, notebook_type_map):
+def process_master_notebook(dest_root, notebook, src_path, build):
     """
     Process a master notebook.
 
@@ -750,6 +766,16 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
     :return: None
     """
     verbose("notebook={0}\ndest_root={1}".format(notebook, dest_root))
+    notebook_heading_path = build.notebook_heading_path
+    add_heading = build.add_heading
+    notebook_type_map = build.notebook_type_map
+    student_labs_subdir = joinpath(build.student_dir, STUDENT_LABS_SUBDIR)
+    student_labs_dbc = joinpath(build.student_dir, STUDENT_LABS_DBC)
+    instructor_labs_subdir = joinpath(build.instructor_dir,
+                                       INSTRUCTOR_LABS_SUBDIR)
+    instructor_labs_dbc = joinpath(build.instructor_dir, INSTRUCTOR_LABS_DBC)
+    student_dir = joinpath(dest_root, student_labs_subdir)
+    instructor_dir = joinpath(dest_root, instructor_labs_subdir)
 
     def move_master_notebooks(master, temp_output_dir):
         """
@@ -781,9 +807,6 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
             # labs directory. Copy all instructor notebooks to the instructor
             # labs directory.
 
-            student_dir = path.join(dest_root, STUDENT_LABS_SUBDIR)
-            instructor_dir = path.join(dest_root, INSTRUCTOR_LABS_SUBDIR)
-
             types_and_targets = [(NotebookType.EXERCISES, student_dir)]
 
             if master['instructor']:
@@ -795,7 +818,7 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
                 types_and_targets.append((NotebookType.ANSWERS, student_dir))
 
             base, _ = path.splitext(path.basename(notebook.src))
-            mp_notebook_dir = path.join(temp_output_dir, base, lc_lang)
+            mp_notebook_dir = joinpath(temp_output_dir, base, lc_lang)
 
             lang_dir = lc_lang.capitalize()
             for notebook_type, target_dir in types_and_targets:
@@ -815,7 +838,7 @@ def process_master_notebook(dest_root, notebook, src_path, add_heading,
                     dest_subst = dest_subst[len(os.path.sep):]
 
                 for f in matches:
-                    target = path.normpath(path.join(target_dir, dest_subst))
+                    target = path.normpath(joinpath(target_dir, dest_subst))
                     copy(f, target)
                     copied += 1
 
@@ -860,18 +883,16 @@ def copy_notebooks(build, labs_dir, dest_root):
     """
     os.makedirs(labs_dir)
     for notebook in build.notebooks:
-        src_path = path.join(build.source_base, notebook.src)
+        src_path = joinpath(build.source_base, notebook.src)
         if notebook.master_enabled():
             process_master_notebook(
                 dest_root=dest_root,
                 notebook=notebook,
                 src_path=src_path,
-                notebook_heading_path=build.notebook_heading_path,
-                add_heading=build.add_heading,
-                notebook_type_map=build.notebook_type_map
+                build=build
             )
         else:
-            dest_path = path.join(labs_dir, notebook.dest)
+            dest_path = joinpath(labs_dir, notebook.dest)
             copy(src_path, dest_path)
 
         remove_empty_subdirectories(dest_root)
@@ -915,8 +936,12 @@ def copy_instructor_notes(build, dest_root):
                 keep = True
 
             if keep:
-                s = path.join(dirpath, f)
-                t = path.join(dest_root, INSTRUCTOR_NOTES_SUBDIR, rel_dir, f)
+                s = joinpath(dirpath, f)
+                t = joinpath(dest_root,
+                              build.instructor_dir,
+                              INSTRUCTOR_NOTES_SUBDIR,
+                              rel_dir,
+                              f)
                 verbose("Copying {0} to {1}".format(s, t))
                 copy_info_file(s, t, build)
                 continue
@@ -951,8 +976,11 @@ def copy_slides(build, dest_root):
     """
     if build.slides:
         for f in build.slides:
-            src = path.join(build.source_base, f.src)
-            dest = path.join(dest_root, SLIDES_SUBDIR, f.dest)
+            src = joinpath(build.source_base, f.src)
+            dest = joinpath(dest_root,
+                             build.instructor_dir,
+                             SLIDES_SUBDIR,
+                             f.dest)
             copy(src, dest)
 
 
@@ -962,8 +990,8 @@ def copy_misc_files(build, dest_root):
     """
     if build.misc_files:
         for f in build.misc_files:
-            s = path.join(build.course_directory, f.src)
-            t = path.join(dest_root, f.dest)
+            s = joinpath(build.course_directory, f.src)
+            t = joinpath(dest_root, f.dest)
             copy_info_file(s, t, build)
 
 
@@ -974,8 +1002,11 @@ def copy_datasets(build, dest_root):
     if build.datasets:
         for ds in build.datasets:
             for i in (ds.src, ds.license, ds.readme):
-                source = path.join(build.course_directory, i)
-                target = path.join(dest_root, DATASETS_SUBDIR, ds.dest,
+                source = joinpath(build.course_directory, i)
+                target = joinpath(dest_root,
+                                   build.student_dir,
+                                   DATASETS_SUBDIR,
+                                   ds.dest,
                                    path.basename(i))
                 copy(source, target)
 
@@ -988,7 +1019,7 @@ def remove_empty_subdirectories(directory):
 
 
 def write_version_notebook(dir, notebook_contents, version):
-    nb_path = path.join(dir, VERSION_NOTEBOOK_FILE.format(version))
+    nb_path = joinpath(dir, VERSION_NOTEBOOK_FILE.format(version))
     ensure_parent_dir_exists(nb_path)
     with codecs.open(nb_path, 'w', encoding='UTF-8') as out:
         out.write(notebook_contents)
@@ -1005,7 +1036,7 @@ def build_course(opts, build):
 
     dest_dir = (
         opts['--dest'] or
-        path.join(os.getenv("HOME"), "tmp", "curriculum", build.name)
+        joinpath(os.getenv("HOME"), "tmp", "curriculum", build.name)
     )
 
     verbose('Publishing to "{0}"'.format(dest_dir))
@@ -1016,8 +1047,8 @@ def build_course(opts, build):
 
         rm_rf(dest_dir)
 
-    for d in [INSTRUCTOR_FILES_SUBDIR, STUDENT_FILES_SUBDIR]:
-        os.makedirs(path.join(dest_dir, d))
+    for d in (build.instructor_dir, build.student_dir):
+        mkdirp(joinpath(dest_dir, d))
 
     version = build.course_info.version
     version_notebook = Template(VERSION_NOTEBOOK_TEMPLATE).substitute({
@@ -1026,14 +1057,23 @@ def build_course(opts, build):
         'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
     })
 
-    labs_full_path = path.join(dest_dir, STUDENT_LABS_SUBDIR)
+    labs_full_path = joinpath(dest_dir, build.student_dir, STUDENT_LABS_SUBDIR)
     copy_notebooks(build, labs_full_path, dest_dir)
     copy_instructor_notes(build, dest_dir)
     write_version_notebook(labs_full_path, version_notebook, version)
-    make_dbc(gendbc, build, labs_full_path, path.join(dest_dir, STUDENT_LABS_DBC))
-    instructor_labs = path.join(dest_dir, INSTRUCTOR_LABS_SUBDIR)
+
+    make_dbc(gendbc=gendbc,
+             build=build,
+             labs_dir=labs_full_path,
+             dbc_path=joinpath(dest_dir, build.student_dir, STUDENT_LABS_DBC))
+
+    instructor_labs = joinpath(dest_dir,
+                                build.instructor_dir,
+                                INSTRUCTOR_LABS_SUBDIR)
     if os.path.exists(instructor_labs):
-        instructor_dbc = path.join(dest_dir, INSTRUCTOR_LABS_DBC)
+        instructor_dbc = joinpath(dest_dir,
+                                   build.instructor_dir,
+                                   INSTRUCTOR_LABS_DBC)
         write_version_notebook(instructor_labs, version_notebook, version)
         make_dbc(gendbc, build, instructor_labs, instructor_dbc)
     copy_slides(build, dest_dir)
@@ -1128,7 +1168,7 @@ def ensure_shard_path_does_not_exist(shard_path):
 
 
 def notebook_is_transferrable(nb, build):
-    nb_full_path = path.abspath(path.join(build.source_base, nb.src))
+    nb_full_path = path.abspath(joinpath(build.source_base, nb.src))
     if not os.path.exists(nb_full_path):
         warning('Notebook "{0}" does not exist.'.format(nb_full_path))
         return False
@@ -1169,7 +1209,7 @@ def get_sources_and_targets(build):
             target_dirs[dest] = target_dirs.get(dest, 0) + 1
 
     for nb in notebooks:
-        nb_full_path = path.abspath(path.join(build.source_base, nb.src))
+        nb_full_path = path.abspath(joinpath(build.source_base, nb.src))
 
         # Construct partial path from target path.
         base_with_ext = path.basename(nb_full_path)
@@ -1181,7 +1221,7 @@ def get_sources_and_targets(build):
             # append the extension). Otherwise, add the file name to the
             # directory.
             if target_dirs.get(dest, 1) > 1:
-                dest = path.join(dest, base_with_ext)
+                dest = joinpath(dest, base_with_ext)
             elif dest == '.':
                 dest = base_with_ext
             else:
@@ -1200,7 +1240,7 @@ def upload_notebooks(build, shard_path):
         with TemporaryDirectory() as tempdir:
             info("Copying notebooks to temporary directory.")
             for nb_full_path, partial_path in notebooks.items():
-                temp_path = path.join(tempdir, partial_path)
+                temp_path = joinpath(tempdir, partial_path)
                 dir = path.dirname(temp_path)
                 mkdirp(dir)
                 verbose('Copying "{0}" to "{1}"'.format(nb_full_path, temp_path))
@@ -1254,7 +1294,7 @@ def download_notebooks(build, shard_path):
             leftover_files = []
             for root, dirs, files in os.walk('.'):
                 for f in files:
-                    leftover_files.append(path.relpath(path.join(root, f)))
+                    leftover_files.append(path.relpath(joinpath(root, f)))
             if len(leftover_files) > 0:
                 warning(("These files from {0} aren't in the build file and" +
                         "were not copied").format(shard_path))
@@ -1263,7 +1303,7 @@ def download_notebooks(build, shard_path):
 
 def list_notebooks(build):
     for notebook in build.notebooks:
-        src_path = path.join(build.source_base, notebook.src)
+        src_path = joinpath(build.source_base, notebook.src)
         print(src_path)
 
 # ---------------------------------------------------------------------------

@@ -333,12 +333,24 @@ def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     os.unlink(src)
 
 
+def joinpath(*pieces):
+    '''
+    Similar to os.path.join(), this function joins the path components, but
+    also normalizes the path.
+
+    :param pieces: the path pieces
+
+    :return: the joined an normalized path
+    '''
+    return os.path.normpath(os.path.join(*pieces))
+
+
 def rm_rf(path):
     '''
     Equivalent of "rm -rf dir", this function is similar to
     shutil.rmtree(dir), except that it doesn't abort if the directory does
     not exist. It also silently handles regular files. This function throws
-    an OSError if the passed file is neither a regular file nor a directory. 
+    an OSError if the passed file is neither a regular file nor a directory.
 
     :param path: The directory or file to (recursively) remove, if it
                         exists.

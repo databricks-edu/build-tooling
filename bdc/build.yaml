@@ -89,6 +89,22 @@ notebook_heading:
 markdown:
   #html_stylesheet:
 
+# The folder (relative to the top of the DBC) in which to store student files,
+# such as the generated Labs.dbc. OPTIONAL. Defaults to "StudentFiles". Can
+# be empty, to store all files at the top level.
+#
+# WARNING: This setting MUST NOT match the instructor_dir setting.
+
+#student_dir: StudentFiles
+
+# The folder (relative to the top of the DBC) in which to store instructor
+# files, such as the generated Instructor-Labs.dbc. OPTIONAL. Defaults to
+# "InstructorFiles". Can be empty, to store all files at the top level.
+#
+# WARNING: This setting MUST NOT match the student_dir setting.
+
+#instructor_dir: InstructorFiles
+
 # src_base: Location of the base directory for the source curriculum
 # material, relative to the location of THIS FILE. This will almost always
 # be "../../modules". REQUIRED.

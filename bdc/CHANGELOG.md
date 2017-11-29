@@ -9,6 +9,9 @@ Version 1.10.0
 * A new `bdc_min_version` configuration item is now _required_. It identifies
   the minimum version of `bdc` required to parse a particular `build.yaml`.
   See the sample `build.yaml` for full details.
+* The student and instructor subdirectories (in the DBC) can now be configured
+  by `student_dir` and `instructor_dir`, respectively. If not specified, they
+  default to `student_dir=StudentFile` and `instructor_dir=InstructorFiles`.
 * Added `variables` section to `build.yaml`, allowing definition of arbitrary
   variables for substitution. See the sample `build.yaml` for details.
 * `bdc` now automatically generates a top-level version notebook in the DBC

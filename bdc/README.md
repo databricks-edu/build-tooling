@@ -9,10 +9,8 @@ For usage instructions, see [Usage](#usage).
 
 ## Preparing the environment
 
-_bdc_ was written for Python 3, but it will run with Python 2.
-
-**NOTE**: If you plan to use the `--upload` and `--download` features,
-stick with Python 2.
+_bdc_ only works on Python 2, because the `--upload` and `--download` features
+use the Databricks CLI, which is Python 2-only. 
 
 ### Create a Python virtual environment
 

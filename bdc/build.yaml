@@ -179,6 +179,10 @@ misc_files:
 #              convenient alternative to commenting the entire entry out.
 #              OPTIONAL. Default: false
 #
+# upload_download - True if this notebook should be transferred during upload
+#              or download operations, false otherwise. (False is useful when
+#              double-processing a notebook.)
+#
 # master     - If this section is present, it marks the notebook as a master
 #              notebook to be processed by the master parse tool, and it
 #              contain master parse parameters. If this section is missing,
@@ -317,6 +321,7 @@ notebooks:
   -
     src: Module2/Includes/Shared.py
     dest: $target_lang/Module2/Includes/$basename.$target_extension
+    upload_download: false
     master:
       enabled: true
       scala: false

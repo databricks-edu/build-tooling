@@ -11,6 +11,13 @@ from future import standard_library
 standard_library.install_aliases()
 
 import sys
+
+if sys.version_info[0] != 2:
+    print("bdc only works on Python 2. You're using Python {0}.".format(
+        '.'.join([str(i) for i in sys.version_info[0:3]])
+    ))
+    sys.exit(1)
+
 import subprocess
 import json
 
@@ -43,7 +50,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.10.0"
+VERSION = "1.10.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -400,6 +407,7 @@ class NotebookData(object, DefaultStrMixin):
     def __init__(self,
                  src,
                  dest,
+                 upload_download=True,
                  master=None,
                  notebook_defaults=None):
         super(NotebookData, self).__init__()
@@ -411,6 +419,7 @@ class NotebookData(object, DefaultStrMixin):
             self.master = merge_dicts(MASTER_PARSE_DEFAULTS,
                                       notebook_defaults.get('master', {}))
         self.notebook_defaults = notebook_defaults
+        self.upload_download = upload_download
 
     def master_enabled(self):
         '''
@@ -725,14 +734,12 @@ def load_build_yaml(yaml_file):
                        'is disabled.').format(src, m[1])
                 )
 
-        nb = NotebookData(src=src, dest=dest, master=master)
-
-        if nb.dest.startswith('/') and nb.total_master_langs() > 1:
-            raise ConfigError(
-                ('Notebook "{0}": A destination that starts with "/" (i.e., ' +
-                 'no language is to be substituted) is not allowed when ' +
-                 'master parsing to multiple output languages.').format(src)
-            )
+        nb = NotebookData(
+            src=src,
+            dest=dest,
+            master=master,
+            upload_download=bool_field(obj, 'upload_download', True)
+        )
 
         return nb
 
@@ -1369,6 +1376,12 @@ def notebook_is_transferrable(nb, build):
         warning('Notebook "{0}" does not exist.'.format(nb_full_path))
         return False
 
+    if not nb.upload_download:
+        info('Skipping notebook "{0}": It has upload_download disabled.'.format(
+            nb_full_path
+        ))
+        return False
+
     return True
 
 
@@ -1382,12 +1395,20 @@ def get_sources_and_targets(build):
     :return: A dict of source names to partial-path target names
     '''
     template_data = {
-        TARGET_LANG: ''
+        TARGET_LANG: '',
+        NOTEBOOK_TYPE: '',
     }
     def map_notebook_dest(nb):
+        template_data2 = {}
+        template_data2.update(template_data)
+        _, ext = path.splitext(nb.src)
+        if ext:
+            ext = ext[1:] # skip leading '.'
+
+        template_data2[TARGET_EXTENSION] = ext
         return path.normpath(
             leading_slashes.sub(
-                '', Template(nb.dest).safe_substitute(template_data)
+                '', Template(nb.dest).safe_substitute(template_data2)
             )
         )
 
@@ -1399,7 +1420,7 @@ def get_sources_and_targets(build):
     target_dirs = {}
     for nb in notebooks:
         dest = map_notebook_dest(nb)
-        if nb.master.get('enabled', False):
+        if nb.master.enabled:
             # The destination is a directory. Count how many notebooks
             # end up in each directory.
             target_dirs[dest] = target_dirs.get(dest, 0) + 1
@@ -1410,18 +1431,9 @@ def get_sources_and_targets(build):
         # Construct partial path from target path.
         base_with_ext = path.basename(nb_full_path)
         (base_no_ext, ext) = path.splitext(base_with_ext)
+        if len(ext) > 0:
+            ext = ext[1:] # remove the leading "."
         dest = map_notebook_dest(nb)
-        if nb.master.get('enabled', False):
-            # The destination is a directory. If the directory contains only
-            # one notebook, just use the directory name as the notebook (and
-            # append the extension). Otherwise, add the file name to the
-            # directory.
-            if target_dirs.get(dest, 1) > 1:
-                dest = joinpath(dest, base_with_ext)
-            elif dest == '.':
-                dest = base_with_ext
-            else:
-                dest = dest + ext
 
         res[nb_full_path] = dest
 
@@ -1507,6 +1519,7 @@ def list_notebooks(build):
 # ---------------------------------------------------------------------------
 
 def main():
+
     opts = parse_args()
 
     if opts['--verbose']:

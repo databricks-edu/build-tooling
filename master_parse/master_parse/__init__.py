@@ -95,7 +95,8 @@ INLINE_TOKENS = [
         title='Hint',
         tag=':HINT:',
         image=_s3_icon_url('icon-light-bulb.svg'),
-        template=r'<img alt="${title}" title="${title}" style="${style}" src="${image}"/>&nbsp;**${title}:**'
+        template=r'<img alt="${title}" title="${title}" style="${style}" src="${image}"/>&nbsp;**${title}:**',
+        style='height:1.75em; top:0.3em'
     ),
     InlineToken(
         title='Caution',
@@ -492,7 +493,10 @@ class NotebookGenerator(object):
                         )
 
                     # Expand inline callouts.
-                    content = expand_inline_tokens(INLINE_TOKENS, content)
+                    (content, sandbox) = expand_inline_tokens(INLINE_TOKENS,
+                                                              content)
+                    if sandbox:
+                        code = CommandCode.MARKDOWN_SANDBOX
 
                     inline = CommandLabel.INLINE in labels
 

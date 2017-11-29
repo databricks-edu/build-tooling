@@ -7,6 +7,8 @@ Version 1.9.0:
 * `:HINT:` now expands to an image and text, not just text.
 * `:NOTE:` has been removed. (Use `:SIDENOTE:`, instead.)
 * `:KEYPOINT:`, `:INSIGHT:`, `:WARNING` have been removed.
+* Fixed code that renders inline tokens (`:HINT:`, etc.) to render them in
+  `%md-sandbox` if necessary.
 
 Version 1.8.0
 

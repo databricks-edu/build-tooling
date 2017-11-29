@@ -67,17 +67,21 @@ def expand_inline_tokens(tokens, content):
                      expand
     :param content:  a list of lines to check and expand, if necessary
 
-    :return: possibly new list of lines
+    :return: A tuple (new_content, needs_sandbox), where new_content is the
+             possibly-changed content and needs_sandbox indicates whether or
+             not the resulting Markdown should be sandboxed.
     '''
     new_content = []
+    needs_sandbox = False
     for line in content:
         new_line = line
-        for callout in tokens:
-            new_line = callout.expand_in_string(new_line)
+        for token in tokens:
+            new_line = token.expand_in_string(new_line)
+            needs_sandbox = needs_sandbox or ('style=' in new_line)
 
         new_content.append(new_line)
 
-    return new_content
+    return (new_content, needs_sandbox)
 
 
 class InlineToken(object):

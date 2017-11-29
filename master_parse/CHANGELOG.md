@@ -1,5 +1,11 @@
 # Change Log for Master Parse Tool
 
+Version 1.9.0:
+
+* `:HINT:` now expands to an image and text, not just text.
+* `:NOTE:` has been removed. (Use `:SIDENOTE:`, instead.)
+* `:KEYPOINT:`, `:INSIGHT:`, `:WARNING` have been removed.
+
 Version 1.8.0
 
 * Added support for inline callouts. The tokens `:HINT:`, `:CAUTION:`, 

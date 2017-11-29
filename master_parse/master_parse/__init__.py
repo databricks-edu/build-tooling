@@ -83,51 +83,41 @@ class NotebookUser(Enum):
 # Constants
 # -----------------------------------------------------------------------------
 
+def _s3_icon_url(image):
+    return (
+        'https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/' +
+        image
+    )
+
 INLINE_TOKENS = [
     InlineToken(
         title='Hint',
         tag=':HINT:',
-        template='**${title}:**'
+        image=_s3_icon_url('icon-light-bulb.svg'),
+        template=r'<img alt="${title}" title="${title}" style="${style}" src="${image}"/>&nbsp;**${title}:**'
     ),
     InlineToken(
         title='Caution',
         tag=':CAUTION:',
-        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-warning.svg',
-        style='height:1.3em; top:0.0em'
-    ),
-    InlineToken(
-        tag=':WARNING:',
-        title='Caution',
-        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-warning.svg',
+        image=_s3_icon_url('icon-warning.svg'),
         style='height:1.3em; top:0.0em'
     ),
     InlineToken(
         tag=':BESTPRACTICE:',
         title='Best Practice',
-        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-blue-ribbon.svg',
+        image=_s3_icon_url('icon-blue-ribbon.svg'),
         style='height:1.75em; top:0.3em'
     ),
-    InlineToken(
-        tag=':KEYPOINT:',
-        title='Key Point',
-        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-key.png',
-        style='height:1.3em; top:0.1.5em'
-    ),
-    InlineToken(
-        tag=':NOTE:',
-        title='Note',
-        template='**${title}:**'
-    ),
+    #InlineToken(
+    #    tag=':KEYPOINT:',
+    #    title='Key Point',
+    #    image=_s3_icon_url('icon-key.svg'),
+    #    style='height:1.3em; top:0.1.5em'
+    #),
     InlineToken(
         tag=':SIDENOTE:',
         title='Side Note',
-        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-note.webp',
-        style='height:1.75em; top:0.05em; transform:rotate(15deg)'
-    ),
-    InlineToken(
-        tag=':INSIGHT:',
-        title='Insight',
-        image='https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-note.webp',
+        image=_s3_icon_url('icon-note.webp'),
         style='height:1.75em; top:0.05em; transform:rotate(15deg)'
     ),
 ]

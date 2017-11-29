@@ -1,5 +1,5 @@
 '''
-Callout class, used to configure inline callouts for easy search and replace.
+Inline token class, used to configure inline callouts for easy search and replace.
 
 Doctests:
 

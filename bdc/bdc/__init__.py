@@ -28,12 +28,13 @@ from datetime import datetime
 from enum import Enum
 import master_parse
 from grizzled.file import eglob
-from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
+from bdcutil import (merge_dicts, bool_value, bool_field, DefaultStrMixin,
                      variable_ref_patterns, matches_variable_ref,
                      working_directory, move, copy, mkdirp, markdown_to_html,
                      warning, info, emit_error, verbose, set_verbosity,
                      verbosity_is_enabled, ensure_parent_dir_exists,
-                     parse_version_string, find_in_path, rm_rf, joinpath)
+                     parse_version_string, find_in_path, rm_rf, joinpath,
+                     dict_get_and_del)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -42,6 +43,8 @@ from backports.tempfile import TemporaryDirectory
 
 # ---------------------------------------------------------------------------
 # Constants
+#
+# (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
 VERSION = "1.10.0"
@@ -106,7 +109,6 @@ POST_MASTER_PARSE_VARIABLES = {
 
 # EXT_LANG is used when parsing the YAML file.
 EXT_LANG = {'.py':    'Python',
-            '.ipynb': 'ipython',
             '.r':     'R',
             '.scala': 'Scala',
             '.sql':   'SQL'}
@@ -134,21 +136,6 @@ VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
 # version number.
 VERSION_NOTEBOOK_FILE = "Version-{0}.scala"
 
-# Always generate Databricks notebooks.
-MASTER_PARSE_DEFAULTS = {
-    'enabled':          False,
-    'python':           True,
-    'r':                False,
-    'scala':            True,
-    'sql':              False,
-    'answers':          True,
-    'instructor':       True,
-    'encoding_in':      'UTF-8',
-    'encoding_out':     'UTF-8'
-}
-
-MASTER_LANGUAGES = ['python', 'scala', 'r', 'sql']
-
 ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
 
 # ---------------------------------------------------------------------------
@@ -172,6 +159,14 @@ class UploadDownloadError(Exception):
 class ConfigError(BuildError):
     pass
 
+
+class UnknownFieldsError(ConfigError):
+    def __init__(self, parent_section, section_name, unknown_keys):
+        super(ConfigError, self).__init__(
+            '"{0}": Unknown fields in "{1}" section: {2}'.format(
+                parent_section, section_name, ', '.join(unknown_keys)
+            )
+        )
 
 class NotebookType(Enum):
     EXERCISES = 'exercises'
@@ -211,7 +206,6 @@ class NotebookType(Enum):
         return 'NotebookType.{0}'.format(self.name)
 
 
-NotebookDefaults = namedtuple('NotebookDefaults', ('dest, master'))
 MiscFileData = namedtuple('MiscFileData', ('src', 'dest'))
 SlideData = namedtuple('SlideData', ('src', 'dest'))
 DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
@@ -220,6 +214,187 @@ CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
                                        'deprecated'))
 MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
+
+class NotebookDefaults(object, DefaultStrMixin):
+    def __init__(self, dest=None, master=None):
+        '''
+        Create a new NotebookDefaults object.
+
+        :param dest:    The destination value (str)
+        :param master:  The master parse section (dict, not MasterParseInfo)
+        '''
+        self.dest = dest
+        self.master = master or {}
+
+
+class MasterParseInfo(object, DefaultStrMixin):
+    LANGUAGES = ('python', 'scala', 'r', 'sql')
+
+    VALID_FIELDS = {
+        'enabled': bool,
+        'python': bool,
+        'scala': bool,
+        'r': bool,
+        'sql': bool,
+        'answers': bool,
+        'exercises': bool,
+        'instructor': bool,
+        'heading': NotebookHeading.__class__,
+        'encoding_in': str,
+        'encoding_out': str
+    }
+
+    VALID_HEADING_FIELDS = {
+        'path': str,
+        'enabled': bool
+    }
+
+    '''
+    Parsed master parser data for a notebook.
+    '''
+    def __init__(self,
+                 enabled=False,
+                 python=True,
+                 scala=True,
+                 r=False,
+                 sql=False,
+                 answers=True,
+                 exercises=True,
+                 instructor=True,
+                 heading=NotebookHeading(path=None, enabled=True),
+                 encoding_in='UTF-8',
+                 encoding_out='UTF-8'):
+        '''
+        Create a new parsed master parse data object
+
+        :param enabled:      whether master parsing is enabled for the notebook
+        :param python:       whether Python notebook generation is enabled
+        :param scala:        whether Scala notebook generation is enabled
+        :param r:            whether R notebook generation is enabled
+        :param sql:          whether SQL notebook generation is enabled
+        :param answers:      whether to generate answer notebooks
+        :param exercises:    whether to generate exercises notebook
+        :param instructor:   whether to generate instructor notebooks
+        :param heading:      heading information (a NotebookHeading object)
+        :param encoding_in:  the encoding of the source notebooks
+        :param encoding_out: the encoding to use when writing notebooks
+        '''
+        self.enabled      = enabled
+        self.python       = python
+        self.scala        = scala
+        self.r            = r
+        self.sql          = sql
+        self.answers      = answers
+        self.exercises    = exercises
+        self.instructor   = instructor
+        self.heading      = heading
+        self.encoding_in  = encoding_in
+        self.encoding_out = encoding_out
+
+    def lang_is_enabled(self, lang):
+        '''
+        Determine if a specific language is enabled.
+
+        :param lang:  the name (string) for the language, in lower case
+
+        :return: True if it's enable, False if not
+        '''
+        return self.__getattribute__(lang)
+
+    def enabled_langs(self):
+        '''
+        Return a list of the enabled languages. e.g., ['scala', 'python']
+
+        :return: the list of enabled languages, which could be empty
+        '''
+        return [i for i in self.LANGUAGES if self.__getattribute__(i)]
+
+    def update_from_dict(self, d):
+        '''
+        Update the fields in this master parse record from a dictionary.
+        The dictionary should represent a master parse dictionary (e.g., as
+        parsed from YAML). Keys can be missing. Extra keys are ignored.
+
+        :param d: the dictionary
+        '''
+        for k in self.VALID_FIELDS.keys():
+            if k in d:
+                if k == 'heading':
+                    heading_data = d[k]
+                    if isinstance(heading_data, NotebookHeading):
+                        self.heading = heading_data
+                    else:
+                        self.heading = self._parse_heading(d[k])
+                else:
+                    self.__setattr__(k, d[k])
+
+    @classmethod
+    def extra_keys(cls, d):
+        '''
+        Check a dictionary of master parse value for extra (unknown) keys.
+
+        :param d: the dictionary to check
+
+        :return: any unknown keys, or None if there aren't any.
+        '''
+        extra = set(d.keys()) - set(cls.VALID_FIELDS.keys())
+        heading = d.get('heading', {})
+        for k in (set(heading.keys()) - set(cls.VALID_HEADING_FIELDS.keys())):
+            extra.add('heading.{0}'.format(k))
+
+        if len(extra) == 0:
+            extra = None
+
+        return extra
+
+    @classmethod
+    def from_dict(cls, d):
+        '''
+        Create a MasterParseData object from a dictionary of values.
+
+        :param d: the dictionary.
+
+        :return: The object. Throws exceptions on error. Extra keys are not
+                 interpreted as an error here; callers can report those errors
+                 with more context.
+        '''
+        heading = cls._parse_heading_data(d.get('heading'))
+
+        return MasterParseInfo(
+            enabled=bool_field(d, 'enabled', False),
+            python=bool_field(d, 'python', True),
+            scala=bool_field(d, 'scala', True),
+            r=bool_field(d, 'r', True),
+            sql=bool_field(d, 'sql', False),
+            answers=bool_field(d, 'answers', True),
+            exercises=bool_field(d, 'exercises', True),
+            instructor=bool_field(d, 'instructor', True),
+            heading=heading,
+            encoding_in=d.get('encoding_in', 'UTF-8'),
+            encoding_out=d.get('encoding_out', 'UTF-8')
+        )
+
+    def to_dict(self):
+        '''
+        Convert this object into a dictionary.
+
+        :return: the dictionary of fields
+        '''
+        res = {}
+        res.update(self.__dict__)
+        return res
+
+    @classmethod
+    def _parse_heading(cls, heading_data):
+        if heading_data:
+            heading = NotebookHeading(
+                path=heading_data.get('path'),
+                enabled=bool_field(heading_data, 'enabled', True)
+            )
+        else:
+            heading = NotebookHeading(path=None, enabled=True)
+
+        return heading
 
 
 class NotebookData(object, DefaultStrMixin):
@@ -248,7 +423,7 @@ class NotebookData(object, DefaultStrMixin):
 
         :return: true or false
         '''
-        return self.master and self.master.get('enabled', False)
+        return self.master.enabled
 
     def total_master_langs(self):
         '''
@@ -258,10 +433,7 @@ class NotebookData(object, DefaultStrMixin):
         :return: 0 if the master parser isn't enabled. Number of output
                  languages otherwise.
         '''
-        if self.master_enabled():
-            return sum([1 if self.master[o] else 0 for o in MASTER_LANGUAGES])
-        else:
-            return 0
+        return len(self.master.enabled_langs()) if self.master.enabled else 0
 
     def master_multiple_langs(self):
         '''
@@ -290,7 +462,6 @@ class BuildData(object, DefaultStrMixin):
                  datasets,
                  misc_files,
                  keep_lab_dirs,
-                 notebook_heading,
                  markdown_cfg,
                  notebook_type_map,
                  variables=None):
@@ -324,17 +495,8 @@ class BuildData(object, DefaultStrMixin):
         self.markdown = markdown_cfg
         self.misc_files = misc_files
         self.keep_lab_dirs = keep_lab_dirs
-        self.notebook_heading = notebook_heading
         self.notebook_type_map = notebook_type_map
         self.variables = variables or {}
-
-    @property
-    def notebook_heading_path(self):
-        return self.notebook_heading.path
-
-    @property
-    def add_heading(self):
-        return self.notebook_heading.enabled
 
     @property
     def name(self):
@@ -350,6 +512,24 @@ class BuildData(object, DefaultStrMixin):
         '''
         return '{0}-{1}'.format(self.name, self.course_info.version)
 
+# ---------------------------------------------------------------------------
+# Class-dependent Constants
+# ---------------------------------------------------------------------------
+
+# Always generate Databricks notebooks.
+MASTER_PARSE_DEFAULTS = {
+    'enabled':          False,
+    'add_heading':      True,
+    'python':           True,
+    'r':                False,
+    'scala':            True,
+    'sql':              False,
+    'answers':          True,
+    'instructor':       True,
+    'encoding_in':      'UTF-8',
+    'encoding_out':     'UTF-8',
+    'heading':          NotebookHeading(path=None, enabled=True),
+}
 
 # ---------------------------------------------------------------------------
 # Functions
@@ -382,13 +562,6 @@ def load_build_yaml(yaml_file):
     :return the Build object, representing the parsed build.yaml
     """
     import yaml
-
-    def bool_field(d, key, default=False):
-        val = d.get(key, default)
-        try:
-            return bool_value(val)
-        except ValueError as e:
-            raise ConfigError(e.message)
 
     def required(d, key, where):
         v = d.get(key)
@@ -446,25 +619,64 @@ def load_build_yaml(yaml_file):
 
         return adj_dest
 
+    def parse_dict(d, fields_spec, outer_section, section):
+        res = {}
+        for field, type in fields_spec.items():
+            if field not in d:
+                continue
+            if type is bool:
+                try:
+                    res[field] = bool_value(d[field])
+                except ValueError as e:
+                    raise ConfigError(
+                        '{0}: Bad value for "{1}" in section "{2}": {3}'.format(
+                            outer_section, field, section, e.message
+                        )
+                    )
+                continue
+            # Anything else gets copied as is for now.
+            res[field] = d[field]
+
+        return res
+
+    def parse_master_section(data, section_name):
+        # Parse the master section, returning a (possibly partial)
+        # dictionary (NOT a MasterParseInfo object).
+        extra_keys = MasterParseInfo.extra_keys(data)
+        if extra_keys:
+            raise UnknownFieldsError(section_name, "master", extra_keys)
+
+        master = parse_dict(data, MasterParseInfo.VALID_FIELDS,
+                            section_name, 'master')
+        heading = master.get('heading')
+        if not heading:
+            heading = NotebookHeading(path=None, enabled=True)
+        else:
+            heading = parse_dict(heading, MasterParseInfo.VALID_HEADING_FIELDS,
+                                 section_name, 'master.heading')
+        master['heading'] = heading
+
+        return master
+
     def parse_notebook_defaults(contents, section_name):
         cfg = contents.get(section_name)
         if not cfg:
-            return NotebookDefaults(dest=None, master={})
+            return NotebookDefaults(dest=None, master=None)
 
-        res = NotebookDefaults(dest=cfg.get('dest'),
-                               master=cfg.get('master', {}))
-        leftover_keys = set(cfg.keys()) - {'dest', 'master'}
-        if len(leftover_keys) > 0:
-            raise ConfigError(
-                '"{0}" section has extra fields: {1}'.format(
-                    section_name, ', '.join(leftover_keys)
-                )
-            )
+        master = parse_master_section(dict_get_and_del(cfg, 'master', {}),
+                                      'notebook_defaults')
+        res = NotebookDefaults(dest=dict_get_and_del(cfg, 'dest', None),
+                               master=master)
+
+        if len(cfg.keys()) > 0:
+            raise UnknownFieldsError("build", section_name, cfg.keys())
+
         return res
 
     def parse_notebook(obj, notebook_defaults, extra_vars):
         bad_dest = re.compile('^\.\./*|^\./*')
         src = required(obj, 'src', 'notebooks section')
+        section = 'Notebook "{0}"'.format(src)
 
         dest = obj.get('dest', notebook_defaults.dest)
         if not dest:
@@ -478,27 +690,20 @@ def load_build_yaml(yaml_file):
             verbose('Skipping notebook {0}'.format(src))
             return None
 
-        master = dict(MASTER_PARSE_DEFAULTS)
-        master.update(notebook_defaults.master)
-        master.update(obj.get('master', {}))
+        master = MasterParseInfo() # defaults
+        master.update_from_dict(notebook_defaults.master)
+        nb_master = parse_master_section(obj.get('master', {}), section)
+        master.update_from_dict(nb_master)
 
-        extra_keys = set(master.keys()) - set(MASTER_PARSE_DEFAULTS.keys())
-        if len(extra_keys) > 0:
-            raise ConfigError(
-                ('Notebook "{0}": Unknown fields in "master" section: ' +
-                 '"{1}"').format(src, ', '.join(sorted(extra_keys)))
-            )
-
-        master_enabled = master and master.get('enabled')
         _, dest_ext = os.path.splitext(dest)
-        if master_enabled and bad_dest.match(dest):
+        if master.enabled and bad_dest.match(dest):
             raise ConfigError(
                 ('Notebook "{0}": Relative destinations ("{1}") are ' +
                  'disallowed.').format(src, dest)
             )
 
-        if master_enabled:
-            total_langs = len([k for k in MASTER_LANGUAGES if master.get(k, False)])
+        if master.enabled:
+            total_langs = len(master.enabled_langs())
             if (total_langs > 1):
                 pat = POST_MASTER_PARSE_VARIABLES[TARGET_LANG]
                 if not matches_variable_ref(pat, dest):
@@ -711,10 +916,6 @@ def load_build_yaml(yaml_file):
         instructor_dir=instructor_dir,
         misc_files=misc_files,
         keep_lab_dirs=bool_field(contents, 'keep_lab_dirs'),
-        notebook_heading=NotebookHeading(
-            path=notebook_heading.get('path'),
-            enabled=notebook_heading.get('enabled', True)
-        ),
         markdown_cfg=parse_markdown(contents.get('markdown')),
         notebook_type_map=parse_notebook_types(contents),
         variables=variables
@@ -760,20 +961,15 @@ def process_master_notebook(dest_root, notebook, src_path, build):
     :param src_path:              the pre-calculated path to the source notebook
     :param dest_path:             the path to the target directory, calculated
                                   from dest_root and notebook.dest
-    :param notebook_heading_path: path to notebook heading file, if any
-    :param add_heading:           whether or not to add the heading
-    :param notebook_type_map:     a dict of NotebookType to strings
+    :param build                  parsed build data
+
     :return: None
     """
     verbose("notebook={0}\ndest_root={1}".format(notebook, dest_root))
-    notebook_heading_path = build.notebook_heading_path
-    add_heading = build.add_heading
     notebook_type_map = build.notebook_type_map
     student_labs_subdir = joinpath(build.student_dir, STUDENT_LABS_SUBDIR)
-    student_labs_dbc = joinpath(build.student_dir, STUDENT_LABS_DBC)
     instructor_labs_subdir = joinpath(build.instructor_dir,
-                                       INSTRUCTOR_LABS_SUBDIR)
-    instructor_labs_dbc = joinpath(build.instructor_dir, INSTRUCTOR_LABS_DBC)
+                                      INSTRUCTOR_LABS_SUBDIR)
     student_dir = joinpath(dest_root, student_labs_subdir)
     instructor_dir = joinpath(dest_root, instructor_labs_subdir)
 
@@ -787,7 +983,7 @@ def process_master_notebook(dest_root, notebook, src_path, build):
         # See if we have to move the notebooks to other paths.
         for lang in set(EXT_LANG.values()):
             lc_lang = lang.lower()
-            if not master.get(lc_lang):
+            if not master.lang_is_enabled(lc_lang):
                 continue
 
             # This language is desired.
@@ -807,14 +1003,19 @@ def process_master_notebook(dest_root, notebook, src_path, build):
             # labs directory. Copy all instructor notebooks to the instructor
             # labs directory.
 
-            types_and_targets = [(NotebookType.EXERCISES, student_dir)]
+            types_and_targets = []
 
-            if master['instructor']:
+            if master.exercises:
+                types_and_targets.append(
+                    (NotebookType.EXERCISES, student_dir)
+                )
+
+            if master.instructor:
                 types_and_targets.append(
                   (NotebookType.INSTRUCTOR, instructor_dir)
                 )
 
-            if master['answers']:
+            if master.answers:
                 types_and_targets.append((NotebookType.ANSWERS, student_dir))
 
             base, _ = path.splitext(path.basename(notebook.src))
@@ -856,18 +1057,18 @@ def process_master_notebook(dest_root, notebook, src_path, build):
                 output_dir=tempdir,
                 databricks=True,
                 ipython=False,
-                scala=master['scala'],
-                python=master['python'],
-                r=master['r'],
-                sql=master['sql'],
+                scala=master.scala,
+                python=master.python,
+                r=master.r,
+                sql=master.sql,
                 instructor=True,
                 exercises=True,
-                answers=master['answers'],
-                notebook_heading_path=notebook_heading_path,
-                encoding_in=master['encoding_in'],
-                encoding_out=master['encoding_out'],
+                answers=master.answers,
+                notebook_heading_path=master.heading.path,
+                add_heading=master.heading.enabled,
+                encoding_in=master.encoding_in,
+                encoding_out=master.encoding_out,
                 enable_verbosity=verbosity_is_enabled(),
-                add_heading=add_heading
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)
@@ -956,12 +1157,11 @@ def make_dbc(gendbc, build, labs_dir, dbc_path):
         simple_labs_dir = path.basename(labs_dir)
         if verbosity_is_enabled():
             cmd = "{0} {1} {2} {3} {4} {5}".format(
-                gendbc, "-v", "-f", build.course_id,
-                simple_labs_dir, dbc_path
+                gendbc, "-v", "-f", build.name, simple_labs_dir, dbc_path
             )
         else:
             cmd = "{0} {1} {2} {3} {4}".format(
-                gendbc, "-f", build.course_id, simple_labs_dir, dbc_path
+                gendbc, "-f", build.name, simple_labs_dir, dbc_path
             )
 
         verbose("\nIn {0}:\n{1}\n".format(wd, cmd))
@@ -1320,6 +1520,7 @@ def main():
 
     try:
         build = load_build_yaml(course_config)
+
         if opts['--list-notebooks']:
             list_notebooks(build)
         elif opts['--upload']:

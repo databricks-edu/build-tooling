@@ -205,6 +205,22 @@ def merge_dicts(dict1, dict2):
     res.update(dict2)
     return res
 
+
+def bool_field(d, key, default=False):
+    '''
+    Get a boolean value from a dictionary, parsing it if it's a string.
+
+    :param d:       the dictionary
+    :param key:     the key
+    :param default: the default, if not found
+
+    :return: the value
+
+    :raise ValueError on error
+    '''
+    return bool_value(d.get(key, default))
+
+
 def bool_value(s):
     '''
     Convert a string to a boolean value. Raises ValueError if the string
@@ -430,6 +446,23 @@ def markdown_to_html(markdown, html_out, html_template=None, stylesheet=None):
                 )
             )
 
+
+def dict_get_and_del(d, key, default=None):
+    '''
+    Get the value of a key from a dictionary, and remove the key.
+
+    :param d:        the dictionary
+    :param key:      the key
+    :param default:  the default value, if the key isn't present
+
+    :return: The value, with d possibly modified
+    '''
+    if key in d:
+        res = d[key]
+        del d[key]
+        return res
+
+    return default
 
 # ---------------------------------------------------------------------------
 # Classes

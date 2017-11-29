@@ -16,7 +16,7 @@ Version 1.10.0
   variables for substitution. See the sample `build.yaml` for details.
 * `bdc` now automatically generates a top-level version notebook in the DBC
   files.
-* Added a `notebook-defaults` section to capture default notebook settings.
+* Added a `notebook_defaults` section to capture default notebook settings.
   You can specify default `dest` patterns and the defaults for `master` in
   this new section.
 * Added a `$target_extension` substitution, allowing you to substitute the
@@ -31,8 +31,13 @@ Version 1.10.0
   `build.yaml` for details.
 * Changed the substitution of `$extension` so that it does _not_ include
   the leading ".".  
-* Added a `master.instructor` setting, allowing you to control whether or not
-  instructor notebooks are generated. It's true, by default.
+* Added `master.instructor`, `master.answers` and `master.exercises` settings,
+  allowing control over whether or not to generate instructor, answer and
+  exercises notebooks for a given source notebook. All are true, by default.
+* Removed the top-level `notebook_heading` configuration item. The notebook
+  heading (both path and the enabled/disabled setting) can now be specified 
+  on a per-notebook basis. Defaults can be set in the new `notebook_defaults`
+  section. See the sample `build.yaml` for full details.
 * The target master parse language is _no longer_ automatically inserted.
   If you enable master parsing, and you specify more than one language, you
   _must_ use an explicit substitution of `$target_lang` in the notebook

@@ -66,17 +66,6 @@ notebook_type_name:
 variables:
   foo: bar
 
-# notebook_heading defines how the notebook heading is handled.
-#
-# path    - Path to a file containing Markdown and/or HTML, to be used as the
-#           first cell in all generated notebooks. If not specified, the
-#           default will be used.
-# enabled - false to disable the automatic addition of a notebook header to
-#           generated notebooks. true (the default) to add the header.
-notebook_heading:
-  #path: /path/to/somewhere
-  #enabled: true
-
 # By default, the directories containing the notebooks are deleted once the
 # corresponding DBC files are created. You can set this field to "true"
 # to override that behavior.
@@ -222,6 +211,14 @@ misc_files:
 #                      Defaults to UTF-8
 #   encoding_out     - the encoding to use when writing the output notebooks.
 #                      Defaults to UTF-8
+#   heading          - a subsection defining notebook heading settings for this
+#                      notebook.
+#     path           - the path to the notebook heading. Must be HTML or
+#                      Markdown and is inserted into a "%md-sandbox" cell.
+#                      Default: An internal default is used.
+#     enabled        - Whether or not to add a heading to the notebook. True
+#                      by default. One use case for setting it to false:
+#                      Notebooks that are only intended to be run via "%run"
 #
 # SUBSTITUTIONS:
 #
@@ -262,6 +259,8 @@ notebook_defaults:
     enabled: true
     scala: false
     sql: true
+    heading:
+      #path: /path/to/notebook/heading
   dest: $basename.$target_extension
 
 
@@ -316,25 +315,12 @@ notebooks:
       scala: true
 
   -
-    src: Overview-History/Welcome.py
-    dest: Python/01-${basename} ($lang).py
-    run_test: true
-  -
-    src: RDD-Fundamentals/lab01-Washington-Crime/Python/Lab.py
-    dest: Python/RDD-Fundamentals/01-${basename} ($lang).py
-    run_test: true
-  -
-    src: RDD-Fundamentals/lab01-Washington-Crime/Python/Solutions.py
-    dest: Python/RDD-Fundamentals/01-${basename} ($lang).py
-    run_test: true
-  -
-    src: RDD-Fundamentals/lab01-Washington-Crime/Scala/Lab.scala
-    dest: Scala/RDD-Fundamentals/01-${basename} ($lang).scala
-    run_test: true
-  -
-    src: RDD-Fundamentals/lab01-Washington-Crime/Scala/Solutions.scala
-    dest: Scala/RDD-Fundamentals/01-${basename} ($lang).scala
-    run_test: true
+    src: Module2/Includes/Shared.py
+    dest: $target_lang/Module2/Includes/$basename.$target_extension
+    master:
+      enabled: true
+      scala: false
+      add_heading: false
 
 # slides: PowerPoint slides to be included in the courseware. The slides are
 #         copied to the destination directory's "InstructorFiles" subdirectory.

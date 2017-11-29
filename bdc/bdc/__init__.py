@@ -22,7 +22,6 @@ from collections import namedtuple
 import os
 from os import path
 from string import Template
-import shutil
 import codecs
 import re
 from datetime import datetime
@@ -34,7 +33,7 @@ from bdcutil import (merge_dicts, bool_value, DefaultStrMixin,
                      working_directory, move, copy, mkdirp, markdown_to_html,
                      warning, info, emit_error, verbose, set_verbosity,
                      verbosity_is_enabled, ensure_parent_dir_exists,
-                     parse_version_string, find_in_path)
+                     parse_version_string, find_in_path, rm_rf)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -1015,7 +1014,7 @@ def build_course(opts, build):
             die(('Directory "{0}" already exists, and you did not ' +
                  'specify --overwrite.').format(dest_dir))
 
-        shutil.rmtree(dest_dir)
+        rm_rf(dest_dir)
 
     for d in [INSTRUCTOR_FILES_SUBDIR, STUDENT_FILES_SUBDIR]:
         os.makedirs(path.join(dest_dir, d))
@@ -1044,9 +1043,8 @@ def build_course(opts, build):
     # Finally, remove the instructor labs folder and the student labs
     # folder.
     if not build.keep_lab_dirs:
-        shutil.rmtree(labs_full_path)
-        if path.exists(instructor_labs):
-            shutil.rmtree(instructor_labs)
+        rm_rf(labs_full_path)
+        rm_rf(instructor_labs)
 
     if errors > 0:
         raise BuildError("{0} error(s).".format(errors))

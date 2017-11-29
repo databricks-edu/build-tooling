@@ -333,6 +333,27 @@ def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     os.unlink(src)
 
 
+def rm_rf(path):
+    '''
+    Equivalent of "rm -rf dir", this function is similar to
+    shutil.rmtree(dir), except that it doesn't abort if the directory does
+    not exist. It also silently handles regular files. This function throws
+    an OSError if the passed file is neither a regular file nor a directory. 
+
+    :param path: The directory or file to (recursively) remove, if it
+                        exists.
+    '''
+    if os.path.exists(path):
+        if os.path.isfile(path):
+            os.unlink(path)
+        elif os.path.isdir(path):
+            shutil.rmtree(path)
+        else:
+            raise OSError(
+                '"{0}" is neither a file nor a directory'.format(path)
+            )
+
+
 def mkdirp(dir):
     '''
     Equivalent of "mkdir -p".

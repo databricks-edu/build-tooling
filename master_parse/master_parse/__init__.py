@@ -25,7 +25,7 @@ from enum import Enum
 from collections import namedtuple
 from InlineToken import InlineToken, expand_inline_tokens
 
-VERSION = "1.7.2"
+VERSION = "1.9.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional

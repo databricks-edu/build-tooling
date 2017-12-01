@@ -188,6 +188,9 @@ DEFAULT_NOTEBOOK_HEADING = """<div style="text-align: center; line-height: 0; pa
   <img src="https://cdn2.hubspot.net/hubfs/438089/docs/training/dblearning-banner.png" alt="Databricks Learning" width="555" height="64">
 </div>"""
 
+DEFAULT_NOTEBOOK_FOOTING = """&copy; Databricks 2016, Databricks Inc.  All rights reserved.
+Apache, Apache Spark, Spark and the Spark logo are trademarks of the <a href="http://www.apache.org/">Apache Software Foundation</a>.<br><br><a href="https://databricks.com/privacy-policy">Privacy Policy</a> | <a href="https://databricks.com/terms-of-use">Terms of Use</a>"""
+
 CC_LICENSE = """<div>
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/4.0/">
   <img alt="Creative Commons License" style="border-width:0"
@@ -561,6 +564,10 @@ class NotebookGenerator(object):
                         is_first = self._write_command(
                             output, command_cell, new_cell + ['\n'], is_first
                         )
+
+                # writing footer
+                template = "# COMMAND ----------\n\n# MAGIC %md\n# MAGIC {}"
+                output.write(template.format(DEFAULT_NOTEBOOK_FOOTING.replace('\n', '\n# MAGIC ')))
 
             if is_IPython:
                 self.generate_ipynb(file_out)

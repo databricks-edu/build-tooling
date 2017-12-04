@@ -1,5 +1,17 @@
 # Change Log for BDC
 
+Version 1.11.0:
+
+* Added ability to enable or disable a footer that is automatically added to
+  each generated notebook. The feature is controlled by a per-notebook
+  `footer` option in the ". (See the sample `build.yaml`). The feature is on by
+  default, and the default footer is a Databricks copyright.
+* You can now set `master.heading.path` and `master.footer.path` to the
+  string "DEFAULT" to force the internal default to be used, which is useful
+  if overriding a non-default value in the `notebook_defaults` setting.
+* Added `course_info.copyright_year` configuration item, to set the copyright 
+  year. Defaults to current year. 
+
 Version 1.10.1:
 
 * Fixed `--upload` and `--download`, which broke due to all the changes in
@@ -32,7 +44,7 @@ Version 1.10.0
 * Added a `$notebook_type` substitution, allowing you to substitute the
   type of the notebook (answers, exercises or instructor) into the notebook
   destination, if master parsing is enabled.
-* Added an option `notebook_type_name` section that allows you to define
+* Added an optional `notebook_type_name` section that allows you to define
   alternate strings for the `$notebook_type` substitution. See the sample
   `build.yaml` for details.
 * Changed the substitution of `$extension` so that it does _not_ include

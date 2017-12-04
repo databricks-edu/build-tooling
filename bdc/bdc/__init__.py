@@ -50,7 +50,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.10.1"
+VERSION = "1.11.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -132,7 +132,7 @@ VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
 // MAGIC * Version ${version}
 // MAGIC * Built ${build_timestamp}
 // MAGIC
-// MAGIC Copyright \u00a9 2017 Databricks, Inc.
+// MAGIC Copyright \u00a9 ${year} Databricks, Inc.
 """
 
 # The version notebook file name. Use as a format string, with {0} as the
@@ -214,9 +214,10 @@ SlideData = namedtuple('SlideData', ('src', 'dest'))
 DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
 CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
                                        'schedule', 'instructor_prep',
-                                       'deprecated'))
+                                       'copyright_year', 'deprecated'))
 MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
+NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
 
 class NotebookDefaults(object, DefaultStrMixin):
     def __init__(self, dest=None, master=None):
@@ -243,11 +244,17 @@ class MasterParseInfo(object, DefaultStrMixin):
         'exercises': bool,
         'instructor': bool,
         'heading': NotebookHeading.__class__,
+        'footer': NotebookFooter.__class__,
         'encoding_in': str,
         'encoding_out': str
     }
 
     VALID_HEADING_FIELDS = {
+        'path': str,
+        'enabled': bool
+    }
+
+    VALID_FOOTER_FIELDS = {
         'path': str,
         'enabled': bool
     }
@@ -265,6 +272,7 @@ class MasterParseInfo(object, DefaultStrMixin):
                  exercises=True,
                  instructor=True,
                  heading=NotebookHeading(path=None, enabled=True),
+                 footer=NotebookFooter(path=None, enabled=True),
                  encoding_in='UTF-8',
                  encoding_out='UTF-8'):
         '''
@@ -279,6 +287,7 @@ class MasterParseInfo(object, DefaultStrMixin):
         :param exercises:    whether to generate exercises notebook
         :param instructor:   whether to generate instructor notebooks
         :param heading:      heading information (a NotebookHeading object)
+        :param footer:       footer information (a NotebookFooter object)
         :param encoding_in:  the encoding of the source notebooks
         :param encoding_out: the encoding to use when writing notebooks
         '''
@@ -291,6 +300,7 @@ class MasterParseInfo(object, DefaultStrMixin):
         self.exercises    = exercises
         self.instructor   = instructor
         self.heading      = heading
+        self.footer       = footer
         self.encoding_in  = encoding_in
         self.encoding_out = encoding_out
 
@@ -328,6 +338,13 @@ class MasterParseInfo(object, DefaultStrMixin):
                         self.heading = heading_data
                     else:
                         self.heading = self._parse_heading(d[k])
+                elif k == 'footer':
+                    footer_data = d[k]
+                    if isinstance(footer_data, NotebookFooter):
+                        self.footer = footer_data
+                    else:
+                        self.footer = self._parse_footer(d[k])
+
                 else:
                     self.__setattr__(k, d[k])
 
@@ -388,11 +405,25 @@ class MasterParseInfo(object, DefaultStrMixin):
         return res
 
     @classmethod
+    def _parse_footer(cls, footer_data):
+        if footer_data:
+            heading = NotebookFooter(
+                path=footer_data.get('path', DEFAULT_NOTEBOOK_FOOTER.path),
+                enabled=bool_field(footer_data, 'enabled',
+                                   DEFAULT_NOTEBOOK_FOOTER.enabled)
+            )
+        else:
+            heading = NotebookHeading(path=None, enabled=True)
+
+        return heading
+
+    @classmethod
     def _parse_heading(cls, heading_data):
         if heading_data:
             heading = NotebookHeading(
-                path=heading_data.get('path'),
-                enabled=bool_field(heading_data, 'enabled', True)
+                path=heading_data.get('path', DEFAULT_NOTEBOOK_HEADING.path),
+                enabled=bool_field(heading_data, 'enabled',
+                                   DEFAULT_NOTEBOOK_HEADING.enabled)
             )
         else:
             heading = NotebookHeading(path=None, enabled=True)
@@ -521,6 +552,9 @@ class BuildData(object, DefaultStrMixin):
 # Class-dependent Constants
 # ---------------------------------------------------------------------------
 
+DEFAULT_NOTEBOOK_FOOTER = NotebookFooter(path=None, enabled=True)
+DEFAULT_NOTEBOOK_HEADING = NotebookHeading(path=None, enabled=True)
+
 # Always generate Databricks notebooks.
 MASTER_PARSE_DEFAULTS = {
     'enabled':          False,
@@ -533,7 +567,8 @@ MASTER_PARSE_DEFAULTS = {
     'instructor':       True,
     'encoding_in':      'UTF-8',
     'encoding_out':     'UTF-8',
-    'heading':          NotebookHeading(path=None, enabled=True),
+    'heading':          DEFAULT_NOTEBOOK_HEADING,
+    'footer':           DEFAULT_NOTEBOOK_FOOTER,
 }
 
 # ---------------------------------------------------------------------------
@@ -654,12 +689,20 @@ def load_build_yaml(yaml_file):
         master = parse_dict(data, MasterParseInfo.VALID_FIELDS,
                             section_name, 'master')
         heading = master.get('heading')
-        if not heading:
-            heading = NotebookHeading(path=None, enabled=True)
-        else:
+        if heading:
             heading = parse_dict(heading, MasterParseInfo.VALID_HEADING_FIELDS,
                                  section_name, 'master.heading')
-        master['heading'] = heading
+            if heading.get('path') == 'DEFAULT':
+                heading['path'] = None
+            master['heading'] = heading
+
+        footer = master.get('footer')
+        if footer:
+            footer = parse_dict(footer, MasterParseInfo.VALID_FOOTER_FIELDS,
+                                section_name, 'master.footer')
+            if footer.get('path') == 'DEFAULT':
+                footer['path'] = None
+            master['footer'] = footer
 
         return master
 
@@ -861,7 +904,9 @@ def load_build_yaml(yaml_file):
         class_setup=course_info_cfg.get('class_setup'),
         schedule=course_info_cfg.get('schedule'),
         instructor_prep=course_info_cfg.get('prep'),
-        deprecated=course_info_cfg.get('deprecated', False)
+        deprecated=course_info_cfg.get('deprecated', False),
+        copyright_year=course_info_cfg.get('copyright_year',
+                                           str(datetime.now().year)),
     )
 
     src_base = required(contents, 'src_base', 'build')
@@ -1069,9 +1114,12 @@ def process_master_notebook(dest_root, notebook, src_path, build):
                 answers=master.answers,
                 notebook_heading_path=master.heading.path,
                 add_heading=master.heading.enabled,
+                notebook_footer_path=master.footer.path,
+                add_footer=master.footer.enabled,
                 encoding_in=master.encoding_in,
                 encoding_out=master.encoding_out,
                 enable_verbosity=verbosity_is_enabled(),
+                copyright_year=build.course_info.copyright_year,
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)
@@ -1257,7 +1305,8 @@ def build_course(opts, build):
     version_notebook = Template(VERSION_NOTEBOOK_TEMPLATE).substitute({
         'course_id':       build.course_info.name,
         'version':         version,
-        'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+        'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
+        'year':            build.course_info.copyright_year,
     })
 
     labs_full_path = joinpath(dest_dir, build.student_dir, STUDENT_LABS_SUBDIR)

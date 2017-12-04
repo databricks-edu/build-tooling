@@ -25,6 +25,7 @@ private[gendbc] case class Params(
   dbcFolder:       Option[String] = None,
   dumpStackTraces: Boolean = false,
   verbose:         Boolean = false,
+  showVersion:     Boolean = false,
   flatten:         Boolean = false
 )
 
@@ -89,19 +90,25 @@ object Main {
       CommandLineParser.parseParams(args, buildInfo)
     }
 
-    val msg = MessageHandler(params.verbose, Some(buildInfo))
+    if (params.showVersion) {
+      println(buildInfo.version)
+    }
 
-    handlePossibleError(msg, params.dumpStackTraces) {
-      for { dbc <- Notebooks.toDBC(dir       = params.sourceDirectory,
-                                   encoding  = params.encoding,
-                                   dbcFile   = params.dbcFile,
-                                   dbcFolder = params.dbcFolder,
-                                   msg       = msg,
-                                   buildInfo = buildInfo,
-                                   flatten   = params.flatten) }
-      yield {
-        msg.verbose(s"""Created "${dbc.getPath}"""")
-        dbc
+    else {
+      val msg = MessageHandler(params.verbose, Some(buildInfo))
+
+      handlePossibleError(msg, params.dumpStackTraces) {
+        for { dbc <- Notebooks.toDBC(dir       = params.sourceDirectory,
+                                     encoding  = params.encoding,
+                                     dbcFile   = params.dbcFile,
+                                     dbcFolder = params.dbcFolder,
+                                     msg       = msg,
+                                     buildInfo = buildInfo,
+                                     flatten   = params.flatten) }
+        yield {
+          msg.verbose(s"""Created "${dbc.getPath}"""")
+          dbc
+        }
       }
     }
 
@@ -170,7 +177,7 @@ private[gendbc] object CommandLineParser {
       override val showUsageOnError = true
       override def renderingMode = RenderingMode.OneColumn
 
-      head(s"\n${buildInfo.toString}\n")
+      head(buildInfo.name, buildInfo.version)
 
       opt[String]('e', "encoding")
         .optional
@@ -233,6 +240,8 @@ private[gendbc] object CommandLineParser {
         }
 
       help("help").text("This usage message.")
+
+      version("version")
 
       override def showUsage(): Unit = {
         import grizzled.string.WordWrapper

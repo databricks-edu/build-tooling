@@ -2,7 +2,7 @@ import grizzled.file.{util => fileutil}
 
 name := """gendbc"""
 
-version := "1.3.3"
+version := "1.4.0"
 
 scalaVersion := "2.11.8"
 
@@ -22,10 +22,10 @@ InstallDir := Option(System.getProperty("user.home")).map(fileutil.joinPath(_, "
 // ---------------------------------------------------------------------------
 
 libraryDependencies ++= Seq(
-  "com.github.scopt"   %% "scopt"            % "3.5.0",
-  "org.clapper"        %% "grizzled-scala"   % "4.0.0",
-  "io.spray"           %% "spray-json"       % "1.3.2",
-  "org.scalatest"      %% "scalatest"        % "3.0.0" % "test"
+  "com.github.scopt"   %% "scopt"            % "3.7.0",
+  "org.clapper"        %% "grizzled-scala"   % "4.4.2",
+  "io.spray"           %% "spray-json"       % "1.3.3",
+  "org.scalatest"      %% "scalatest"        % "3.0.4" % "test"
 )
 
 // ---------------------------------------------------------------------------

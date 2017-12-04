@@ -261,6 +261,11 @@ class Params(object):
         self.notebook_footer_path = notebook_footer_path
         self.copyright_year = copyright_year or datetime.now().year
 
+        for purpose, file in (('Notebook footer', notebook_footer_path),
+                              ('Notebook header', notebook_heading_path)):
+            if file is not None:
+                self._check_path(file, purpose)
+
     @property
     def notebook_footer(self):
         if self._notebook_footer is None:
@@ -270,7 +275,7 @@ class Params(object):
                 )
             else:
                 self._notebook_footer= ''.join(
-                    open(self.notebook_heading_path).readlines()
+                    open(self.notebook_footer_path).readlines()
                 )
         return self._notebook_footer
 
@@ -284,6 +289,13 @@ class Params(object):
                     open(self.notebook_heading_path).readlines()
                 )
         return self._notebook_heading
+
+    @classmethod
+    def _check_path(cls, file, purpose):
+        if not os.path.exists(file):
+            raise IOError('{0} "{1}" does not exist.'.format(purpose, file))
+        if not os.path.isfile(file):
+            raise IOError('{0} "{1}" is not a file.'.format(purpose, file))
 
     def __repr__(self):
         return self.__str__()

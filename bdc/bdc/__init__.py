@@ -50,7 +50,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.10.1"
+VERSION = "1.11.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -132,7 +132,7 @@ VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
 // MAGIC * Version ${version}
 // MAGIC * Built ${build_timestamp}
 // MAGIC
-// MAGIC Copyright \u00a9 2017 Databricks, Inc.
+// MAGIC Copyright \u00a9 ${year} Databricks, Inc.
 """
 
 # The version notebook file name. Use as a format string, with {0} as the
@@ -214,9 +214,10 @@ SlideData = namedtuple('SlideData', ('src', 'dest'))
 DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
 CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
                                        'schedule', 'instructor_prep',
-                                       'deprecated'))
+                                       'copyright_year', 'deprecated'))
 MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
+NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
 
 class NotebookDefaults(object, DefaultStrMixin):
     def __init__(self, dest=None, master=None):
@@ -243,11 +244,17 @@ class MasterParseInfo(object, DefaultStrMixin):
         'exercises': bool,
         'instructor': bool,
         'heading': NotebookHeading.__class__,
+        'footer': NotebookFooter.__class__,
         'encoding_in': str,
         'encoding_out': str
     }
 
     VALID_HEADING_FIELDS = {
+        'path': str,
+        'enabled': bool
+    }
+
+    VALID_FOOTER_FIELDS = {
         'path': str,
         'enabled': bool
     }
@@ -265,6 +272,7 @@ class MasterParseInfo(object, DefaultStrMixin):
                  exercises=True,
                  instructor=True,
                  heading=NotebookHeading(path=None, enabled=True),
+                 footer=NotebookFooter(path=None, enabled=True),
                  encoding_in='UTF-8',
                  encoding_out='UTF-8'):
         '''
@@ -279,6 +287,7 @@ class MasterParseInfo(object, DefaultStrMixin):
         :param exercises:    whether to generate exercises notebook
         :param instructor:   whether to generate instructor notebooks
         :param heading:      heading information (a NotebookHeading object)
+        :param footer:       footer information (a NotebookFooter object)
         :param encoding_in:  the encoding of the source notebooks
         :param encoding_out: the encoding to use when writing notebooks
         '''
@@ -291,6 +300,7 @@ class MasterParseInfo(object, DefaultStrMixin):
         self.exercises    = exercises
         self.instructor   = instructor
         self.heading      = heading
+        self.footer       = footer
         self.encoding_in  = encoding_in
         self.encoding_out = encoding_out
 
@@ -328,6 +338,13 @@ class MasterParseInfo(object, DefaultStrMixin):
                         self.heading = heading_data
                     else:
                         self.heading = self._parse_heading(d[k])
+                elif k == 'footer':
+                    footer_data = d[k]
+                    if isinstance(footer_data, NotebookFooter):
+                        self.footer = footer_data
+                    else:
+                        self.footer = self._parse_footer(d[k])
+
                 else:
                     self.__setattr__(k, d[k])
 
@@ -388,11 +405,25 @@ class MasterParseInfo(object, DefaultStrMixin):
         return res
 
     @classmethod
+    def _parse_footer(cls, footer_data):
+        if footer_data:
+            heading = NotebookFooter(
+                path=footer_data.get('path', DEFAULT_NOTEBOOK_FOOTER.path),
+                enabled=bool_field(footer_data, 'enabled',
+                                   DEFAULT_NOTEBOOK_FOOTER.enabled)
+            )
+        else:
+            heading = NotebookHeading(path=None, enabled=True)
+
+        return heading
+
+    @classmethod
     def _parse_heading(cls, heading_data):
         if heading_data:
             heading = NotebookHeading(
-                path=heading_data.get('path'),
-                enabled=bool_field(heading_data, 'enabled', True)
+                path=heading_data.get('path', DEFAULT_NOTEBOOK_HEADING.path),
+                enabled=bool_field(heading_data, 'enabled',
+                                   DEFAULT_NOTEBOOK_HEADING.enabled)
             )
         else:
             heading = NotebookHeading(path=None, enabled=True)
@@ -521,6 +552,9 @@ class BuildData(object, DefaultStrMixin):
 # Class-dependent Constants
 # ---------------------------------------------------------------------------
 
+DEFAULT_NOTEBOOK_FOOTER = NotebookFooter(path=None, enabled=True)
+DEFAULT_NOTEBOOK_HEADING = NotebookHeading(path=None, enabled=True)
+
 # Always generate Databricks notebooks.
 MASTER_PARSE_DEFAULTS = {
     'enabled':          False,
@@ -533,7 +567,8 @@ MASTER_PARSE_DEFAULTS = {
     'instructor':       True,
     'encoding_in':      'UTF-8',
     'encoding_out':     'UTF-8',
-    'heading':          NotebookHeading(path=None, enabled=True),
+    'heading':          DEFAULT_NOTEBOOK_HEADING,
+    'footer':           DEFAULT_NOTEBOOK_FOOTER,
 }
 
 # ---------------------------------------------------------------------------
@@ -568,12 +603,25 @@ def load_build_yaml(yaml_file):
     """
     import yaml
 
-    def required(d, key, where):
+    def required(d, key, where, error=None):
+        '''
+        Get a required key
+
+        :param d:      the dictionary
+        :param key:    the key
+        :param where:  where in the file the key should be (for errors)
+        :param error:  error message, or None for default
+        :return:
+        '''
         v = d.get(key)
         if v is None:
-            raise ConfigError(
-                'Missing required "{0}" value in "{1}".'.format(key, where)
-            )
+            if error:
+                msg = error
+            else:
+                msg = 'Missing required "{0}" in "{1}".'.format(key, where)
+
+            raise ConfigError(msg)
+
         return v
 
     def subst(dest, src, allow_lang=True, extra_vars=None):
@@ -654,12 +702,20 @@ def load_build_yaml(yaml_file):
         master = parse_dict(data, MasterParseInfo.VALID_FIELDS,
                             section_name, 'master')
         heading = master.get('heading')
-        if not heading:
-            heading = NotebookHeading(path=None, enabled=True)
-        else:
+        if heading:
             heading = parse_dict(heading, MasterParseInfo.VALID_HEADING_FIELDS,
                                  section_name, 'master.heading')
-        master['heading'] = heading
+            if heading.get('path') == 'DEFAULT':
+                heading['path'] = None
+            master['heading'] = heading
+
+        footer = master.get('footer')
+        if footer:
+            footer = parse_dict(footer, MasterParseInfo.VALID_FOOTER_FIELDS,
+                                section_name, 'master.footer')
+            if footer.get('path') == 'DEFAULT':
+                footer['path'] = None
+            master['footer'] = footer
 
         return master
 
@@ -816,36 +872,42 @@ def load_build_yaml(yaml_file):
                 ))
         return res
 
+    def parse_min_version(key, value):
+        res = contents.get(key)
+        if res is not None:
+            if isinstance(res, float):
+                raise ConfigError(
+                    '"{0}" of the form <major>.<minor> must be quoted.'.format(
+                        key
+                    )
+                )
+            try:
+                # Ignore the match version.
+                res = parse_version_string(res)[0:2]
+            except ValueError as e:
+                raise ConfigError(
+                    'Bad value of "{0}" for "{1}": {2}'.format(
+                        res, key, e.message
+                    )
+                )
+        return res
+
     # Main function logic
 
     verbose("Loading {0}...".format(yaml_file))
     with open(yaml_file, 'r') as y:
         contents = yaml.safe_load(y)
 
-    bdc_min_version = required(contents, 'bdc_min_version', 'build')
-    if isinstance(bdc_min_version, float):
-        raise ConfigError(
-            '"bdc_min_version" of the form <major>.<minor> must be in quotes.'
-        )
+    bdc_min_version = parse_min_version(
+       'bdc_min_version', required(contents, 'bdc_min_version', 'build')
+    )
 
-    try:
-        min_version = parse_version_string(bdc_min_version)
-    except ValueError as e:
-        raise ConfigError(
-            'Bad value of "{0}" for "bdc_min_version": {1}'.format(
-                bdc_min_version, e.message
-            )
-        )
-
-    # Ignore the patch level. A patch version (usually a bug fix) should NEVER
-    # break build parsing.
-    min_major_minor = min_version[0:2]
     cur_major_minor = parse_version_string(VERSION)[0:2]
-    if min_major_minor > cur_major_minor:
+    if bdc_min_version > cur_major_minor:
         raise ConfigError(
             ("This build requires bdc version {0}.x or greater, but " +
              "you're using bdc version {1}.").format(
-                '.'.join(map(str, min_major_minor)), VERSION
+                '.'.join(map(str, bdc_min_version)), VERSION
             )
         )
 
@@ -861,7 +923,9 @@ def load_build_yaml(yaml_file):
         class_setup=course_info_cfg.get('class_setup'),
         schedule=course_info_cfg.get('schedule'),
         instructor_prep=course_info_cfg.get('prep'),
-        deprecated=course_info_cfg.get('deprecated', False)
+        deprecated=course_info_cfg.get('deprecated', False),
+        copyright_year=course_info_cfg.get('copyright_year',
+                                           str(datetime.now().year)),
     )
 
     src_base = required(contents, 'src_base', 'build')
@@ -893,9 +957,24 @@ def load_build_yaml(yaml_file):
     else:
         notebooks = None
 
-    notebook_heading = contents.get('notebook_heading', None)
-    if notebook_heading is None:
-        notebook_heading = {}
+    need_master = any([n.master.enabled for n in notebooks])
+    if need_master:
+        required_master_min_version = parse_min_version(
+            'master_parse_min_version',
+            required(contents,'master_parse_min_version', 'build',
+                     error='"master_parse_min_version" is required if any ' +
+                           'notebooks use the master parser.')
+        )
+
+        master_version = parse_version_string(master_parse.VERSION)[0:2]
+        if required_master_min_version > master_version:
+            raise ConfigError(
+                ("This build requires master_parse version {0}.x or greater, " +
+                 "but you're using master_parse version {1}.").format(
+                     '.'.join(map(str, required_master_min_version)),
+                     master_parse.VERSION
+                )
+            )
 
     student_dir = contents.get('student_dir', DEFAULT_STUDENT_FILES_SUBDIR)
     instructor_dir = contents.get('instructor_dir',
@@ -1069,9 +1148,12 @@ def process_master_notebook(dest_root, notebook, src_path, build):
                 answers=master.answers,
                 notebook_heading_path=master.heading.path,
                 add_heading=master.heading.enabled,
+                notebook_footer_path=master.footer.path,
+                add_footer=master.footer.enabled,
                 encoding_in=master.encoding_in,
                 encoding_out=master.encoding_out,
                 enable_verbosity=verbosity_is_enabled(),
+                copyright_year=build.course_info.copyright_year,
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)
@@ -1257,7 +1339,8 @@ def build_course(opts, build):
     version_notebook = Template(VERSION_NOTEBOOK_TEMPLATE).substitute({
         'course_id':       build.course_info.name,
         'version':         version,
-        'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+        'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
+        'year':            build.course_info.copyright_year,
     })
 
     labs_full_path = joinpath(dest_dir, build.student_dir, STUDENT_LABS_SUBDIR)

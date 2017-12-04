@@ -1,13 +1,27 @@
 # Template for bdc build YAML file.
 
-# bdc_min_version: The minimum version of bdc necessary to parse the file.
-#                  REQUIRED, as of bdc version 1.10.0. Must be of the form:
-#                  <major.minor.patch> (e.g., 1.10.0) or <major.minor>
-#                  (e.g., 1.10). The patch number is NOT considered, as bdc
-#                  should never break build parsing with a patch release.
+# bdc_min_version:
+#
+#  The minimum version of bdc necessary to parse the build file. REQUIRED, as
+#  of bdc version 1.10.0. Must be of the form: <major.minor.patch> (e.g.,
+#  1.10.0) or <major.minor> (e.g., 1.10). The patch number is NOT considered,
+#  as bdc will never break build parsing with a patch release.
 #
 # WARNING: Be sure to quote this value, so it isn't interpreted as a float!
-bdc_min_version: "1.10"
+bdc_min_version: "1.11"
+
+# master_parse_min_version:
+
+#  The minimum version of the master parser necessary to  process any
+#  master-parse notebooks. REQUIRED if any notebooks have "master" enabled.
+#  Ignored otherwise.
+#
+#  Must be of the form: <major.minor.patch> (e.g., 1.10.0) or <major.minor>
+#  (e.g., 1.10). The patch number is NOT considered, as patch releases of
+#  master parse won't break parsing.
+#
+# WARNING: Be sure to quote this value, so it isn't interpreted as a float!
+master_parse_min_version: "1.11"
 
 # course_info: Basic information about the course being built.
 #
@@ -37,12 +51,15 @@ bdc_min_version: "1.10"
 #                   This file is copied to "InstructorFiles/Preparation.md" in
 #                   the destination directory, and it is converted to HTML and
 #                   copied to "InstructorFiles/Preparation.html". OPTIONAL.
+# copyright_year  - The year to be substituted into any internal copyright
+#                   notices. Default: The current year.
 # deprecated      - If present and true, this field marks the course as
 #                   deprecated (i.e., no longer used). Attempts to build the
 #                   course will fail.
 course_info:
   name: coursename
   version: version
+  #copyright_year: 2015
   deprecated: false
 
 notebook_type_name:
@@ -219,10 +236,20 @@ misc_files:
 #                      notebook.
 #     path           - the path to the notebook heading. Must be HTML or
 #                      Markdown and is inserted into a "%md-sandbox" cell.
-#                      Default: An internal default is used.
+#                      Default: An internal default is used. You can explicitly
+#                      force the default by setting the path to "DEFAULT".
 #     enabled        - Whether or not to add a heading to the notebook. True
 #                      by default. One use case for setting it to false:
 #                      Notebooks that are only intended to be run via "%run"
+#   footer           - a subsection defining footer settings for this notebook.
+#     path           - the path to the notebook footer. Must be HTML or Markdown
+#                      and is inserted into a "%md-sandbox" cell. Default: An
+#                      internal default copyright footer is used. The copyright
+#                      year is taken from the "course_info.copyright_year"
+#                      setting. You can explicitly force the default by setting
+#                      the path to "DEFAULT".
+#     enabled        - Whether or not to add a footer to the notebook. True by
+#                      default.
 #
 # SUBSTITUTIONS:
 #
@@ -255,16 +282,21 @@ misc_files:
 #   selected in the "master" section, you'll get an error.
 
 notebook_defaults:
-  # Here, you can set default values for the "master" section and the
-  # "dest" value. These defaults are applied to all notebooks that don't
-  # have explicit values for them. Expansions in "dest" are deferred until
-  # runtime (i.e., they're not expanded here).
+  # Here, you can set default values for the "master" section, the
+  # "heading" section, the "footer" section and the "dest" value. These defaults
+  # are applied to all notebooks that don't have explicit values for them.
+  # Expansions in "dest" are deferred until runtime (i.e., they're not expanded
+  # here).
   master:
     enabled: true
     scala: false
     sql: true
     heading:
-      #path: /path/to/notebook/heading
+      #path: /path/to/alternate/notebook/heading
+      #enabled: false
+    footer:
+      #path: /path/to/alternate/notebook/footer
+      #enabled: false
   dest: $basename.$target_extension
 
 

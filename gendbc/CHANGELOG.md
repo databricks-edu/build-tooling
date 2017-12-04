@@ -1,5 +1,10 @@
 # Change Log for gendbc
 
+Version 1.4.0
+
+- Added `--version` command line option.
+- Updated various dependencies.
+
 Version 1.3.3:
 
 - Emit tool name as prefix, where possible, on verbose and error messages.

@@ -1,13 +1,27 @@
 # Template for bdc build YAML file.
 
-# bdc_min_version: The minimum version of bdc necessary to parse the file.
-#                  REQUIRED, as of bdc version 1.10.0. Must be of the form:
-#                  <major.minor.patch> (e.g., 1.10.0) or <major.minor>
-#                  (e.g., 1.10). The patch number is NOT considered, as bdc
-#                  should never break build parsing with a patch release.
+# bdc_min_version:
+#
+#  The minimum version of bdc necessary to parse the build file. REQUIRED, as
+#  of bdc version 1.10.0. Must be of the form: <major.minor.patch> (e.g.,
+#  1.10.0) or <major.minor> (e.g., 1.10). The patch number is NOT considered,
+#  as bdc will never break build parsing with a patch release.
 #
 # WARNING: Be sure to quote this value, so it isn't interpreted as a float!
 bdc_min_version: "1.11"
+
+# master_parse_min_version:
+
+#  The minimum version of the master parser necessary to  process any
+#  master-parse notebooks. REQUIRED if any notebooks have "master" enabled.
+#  Ignored otherwise.
+#
+#  Must be of the form: <major.minor.patch> (e.g., 1.10.0) or <major.minor>
+#  (e.g., 1.10). The patch number is NOT considered, as patch releases of
+#  master parse won't break parsing.
+#
+# WARNING: Be sure to quote this value, so it isn't interpreted as a float!
+master_parse_min_version: "1.11"
 
 # course_info: Basic information about the course being built.
 #

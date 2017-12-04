@@ -10,7 +10,9 @@ Version 1.11.0:
   string "DEFAULT" to force the internal default to be used, which is useful
   if overriding a non-default value in the `notebook_defaults` setting.
 * Added `course_info.copyright_year` configuration item, to set the copyright 
-  year. Defaults to current year. 
+  year. Defaults to current year.
+* Added `master_parse_min_version`, which is required for any course that
+  uses the master parser.
 
 Version 1.10.1:
 

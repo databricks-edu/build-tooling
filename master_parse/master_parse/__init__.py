@@ -26,7 +26,7 @@ from collections import namedtuple
 from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 
-VERSION = "1.10.0"
+VERSION = "1.11.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -188,7 +188,7 @@ DEFAULT_NOTEBOOK_HEADING = """<div style="text-align: center; line-height: 0; pa
   <img src="https://cdn2.hubspot.net/hubfs/438089/docs/training/dblearning-banner.png" alt="Databricks Learning" width="555" height="64">
 </div>"""
 
-DEFAULT_NOTEBOOK_FOOTING = """&copy; Databricks 2017, Databricks Inc.  All rights reserved.
+DEFAULT_NOTEBOOK_FOOTER = """&copy; 2017 Databricks, Inc. All rights reserved.
 Apache, Apache Spark, Spark and the Spark logo are trademarks of the <a href="http://www.apache.org/">Apache Software Foundation</a>.<br><br><a href="https://databricks.com/privacy-policy">Privacy Policy</a> | <a href="https://databricks.com/terms-of-use">Terms of Use</a>"""
 
 CC_LICENSE = """<div>
@@ -226,6 +226,8 @@ class Params(object):
                  answers=False,
                  exercises=False,
                  creative_commons=False,
+                 add_footer=False,
+                 notebook_footer_path=None,
                  add_heading=False,
                  notebook_heading_path=None,
                  encoding_in=DEFAULT_ENCODING_IN,
@@ -245,12 +247,26 @@ class Params(object):
         self.exercises = exercises
         self.creative_commons = creative_commons
         self.add_heading = add_heading
+        self.add_footer = add_footer
         self.encoding_in = encoding_in or DEFAULT_ENCODING_IN
         self.encoding_out = encoding_out or DEFAULT_ENCODING_OUT
         self.enable_verbosity = enable_verbosity
         self.enable_debug = enable_debug
         self.notebook_heading_path = notebook_heading_path
         self._notebook_heading = None
+        self._notebook_footer = None
+        self.notebook_footer_path = notebook_footer_path
+
+    @property
+    def notebook_footer(self):
+        if self._notebook_footer is None:
+            if self.notebook_footer_path is None:
+                self._notebook_footer = DEFAULT_NOTEBOOK_FOOTER
+            else:
+                self._notebook_footer= ''.join(
+                    open(self.notebook_heading_path).readlines()
+                )
+        return self._notebook_footer
 
     @property
     def notebook_heading(self):
@@ -416,6 +432,8 @@ class NotebookGenerator(object):
             if is_IPython:
                 file_out = file_out.replace('.py', '.ipynb')
 
+            magic_prefix = '{0} MAGIC'.format(self.base_comment)
+
             with codecs.open(file_out, 'w', _file_encoding_out,
                              errors=_file_encoding_errors) as output:
 
@@ -428,17 +446,19 @@ class NotebookGenerator(object):
                     # use proper comment char
                     header_adj = re.sub(_comment, self.base_comment, header)
                     sep = ""
+
+                    # Optional heading.
                     if params.add_heading:
-                        header_adj += '\n{0} MAGIC %md-sandbox\n{0} MAGIC {1}'.format(
-                            self.base_comment, params.notebook_heading
+                        header_adj += '\n{0} %md-sandbox\n{0} {1}'.format(
+                            magic_prefix, params.notebook_heading
                         )
                         sep = _command_cell.format(self.base_comment)
                         is_first = False
 
                     if params.creative_commons:
                         header_adj += sep
-                        header_adj += '\n{0} MAGIC %md\n{0} MAGIC {1}'.format(
-                            self.base_comment, CC_LICENSE
+                        header_adj += '\n{0} %md\n{0} {1}'.format(
+                            magic_prefix, CC_LICENSE
                         )
                         is_first = False
 
@@ -565,9 +585,16 @@ class NotebookGenerator(object):
                             output, command_cell, new_cell + ['\n'], is_first
                         )
 
-                # writing footer
-                template = "# COMMAND ----------\n\n# MAGIC %md\n# MAGIC {}"
-                output.write(template.format(DEFAULT_NOTEBOOK_FOOTING.replace('\n', '\n# MAGIC ')))
+                # Optionally add the footer.
+                if params.add_footer:
+                    footer = params.notebook_footer.replace(
+                        '\n', '\n{0} '.format(magic_prefix)
+                    )
+                    template = '\n{0} %md-sandbox\n{0} {1}'.format(
+                        magic_prefix, footer
+                    )
+                    output.write(command_cell)
+                    output.write(template)
 
             if is_IPython:
                 self.generate_ipynb(file_out)
@@ -1311,6 +1338,20 @@ def main():
                             action='store',
                             default=DEFAULT_ENCODING_OUT,
                             metavar="ENCODING")
+    arg_parser.add_argument('-nf', '--notebook-footer',
+                            help='A file containing Markdown and/or HTML, to ' +
+                                 'be used as the bottom-of-notebook footer, ' +
+                                 'if headings are enabled. If not specified, ' +
+                                 'an internal default is used. See also ' +
+                                 '--footer.',
+                            default=None,
+                            metavar="<file>")
+    arg_parser.add_argument('--footer',
+                            help='By default, even if you specify -nf, this ' +
+                                 'tool does not add the notebook footer to ' +
+                                 'bottom of generated notebooks. If you ' +
+                                 'specify this option, it will do so.',
+                            action='store_true')
     arg_parser.add_argument('-nh', '--notebook-heading',
                             help='A file containing Markdown and/or HTML, ' +
                                  'to be used as the top-of-notebook heading, ' +
@@ -1371,6 +1412,8 @@ def main():
         creative_commons=args.creativecommons,
         notebook_heading_path=args.notebook_heading,
         add_heading=args.heading,
+        notebook_footer_path=args.notebook_footer,
+        add_footer=args.footer,
         encoding_in=args.encoding_in,
         encoding_out=args.encoding_out,
         enable_verbosity=args.verbose,

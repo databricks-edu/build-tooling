@@ -1,5 +1,17 @@
 # Change Log for Master Parse Tool
 
+Version 1.11.0:
+
+* Fixed footer logic to handle Scala (i.e., to use the proper language-specific)
+  comment syntax.
+* Added `--notebook-footer` and `--footer` arguments to control the generated
+  footer (both the content and whether the footer is added). Consistent with
+  `--notebook-heading` and `--heading`, the footer is off by default.
+
+Version 1.10.0:
+
+* Added automatic copyright footer to generated notebooks.
+
 Version 1.9.0:
 
 * Video tag is now `-- VIDEO id [title]`, where `id` is a video ID. Videos

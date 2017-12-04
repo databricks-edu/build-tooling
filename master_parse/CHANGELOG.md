@@ -7,6 +7,8 @@ Version 1.11.0:
 * Added `--notebook-footer` and `--footer` arguments to control the generated
   footer (both the content and whether the footer is added). Consistent with
   `--notebook-heading` and `--heading`, the footer is off by default.
+* Added `--copyright YEAR` option, to specify the copyright year that is
+  substituted into the default footer.
 
 Version 1.10.0:
 

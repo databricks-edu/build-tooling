@@ -25,6 +25,7 @@ from enum import Enum
 from collections import namedtuple
 from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
+from datetime import datetime
 
 VERSION = "1.11.0"
 
@@ -188,7 +189,8 @@ DEFAULT_NOTEBOOK_HEADING = """<div style="text-align: center; line-height: 0; pa
   <img src="https://cdn2.hubspot.net/hubfs/438089/docs/training/dblearning-banner.png" alt="Databricks Learning" width="555" height="64">
 </div>"""
 
-DEFAULT_NOTEBOOK_FOOTER = """&copy; 2017 Databricks, Inc. All rights reserved.
+# {0} is replaced with the copyright year.
+DEFAULT_NOTEBOOK_FOOTER = """&copy; {0} Databricks, Inc. All rights reserved.
 Apache, Apache Spark, Spark and the Spark logo are trademarks of the <a href="http://www.apache.org/">Apache Software Foundation</a>.<br><br><a href="https://databricks.com/privacy-policy">Privacy Policy</a> | <a href="https://databricks.com/terms-of-use">Terms of Use</a>"""
 
 CC_LICENSE = """<div>
@@ -233,7 +235,8 @@ class Params(object):
                  encoding_in=DEFAULT_ENCODING_IN,
                  encoding_out=DEFAULT_ENCODING_OUT,
                  enable_verbosity=False,
-                 enable_debug=False):
+                 enable_debug=False,
+                 copyright_year=None):
         self.path = path
         self.output_dir = output_dir or DEFAULT_OUTPUT_DIR
         self.databricks = databricks
@@ -256,12 +259,15 @@ class Params(object):
         self._notebook_heading = None
         self._notebook_footer = None
         self.notebook_footer_path = notebook_footer_path
+        self.copyright_year = copyright_year or datetime.now().year
 
     @property
     def notebook_footer(self):
         if self._notebook_footer is None:
             if self.notebook_footer_path is None:
-                self._notebook_footer = DEFAULT_NOTEBOOK_FOOTER
+                self._notebook_footer = DEFAULT_NOTEBOOK_FOOTER.format(
+                    self.copyright_year
+                )
             else:
                 self._notebook_footer= ''.join(
                     open(self.notebook_heading_path).readlines()
@@ -1338,12 +1344,18 @@ def main():
                             action='store',
                             default=DEFAULT_ENCODING_OUT,
                             metavar="ENCODING")
+    arg_parser.add_argument('--copyright',
+                            help='Set the copyright year for any generated ' +
+                                 'copyright notices. Default is current year.',
+                            default=datetime.now().year,
+                            action='store',
+                            metavar='YEAR')
     arg_parser.add_argument('-nf', '--notebook-footer',
                             help='A file containing Markdown and/or HTML, to ' +
                                  'be used as the bottom-of-notebook footer, ' +
                                  'if headings are enabled. If not specified, ' +
-                                 'an internal default is used. See also ' +
-                                 '--footer.',
+                                 'an internal default (a copyright footer) ' +
+                                 'is used. See also --footer and --copyright.',
                             default=None,
                             metavar="<file>")
     arg_parser.add_argument('--footer',
@@ -1417,7 +1429,8 @@ def main():
         encoding_in=args.encoding_in,
         encoding_out=args.encoding_out,
         enable_verbosity=args.verbose,
-        enable_debug=args.debug
+        enable_debug=args.debug,
+        copyright_year=args.copyright
     )
 
     try:

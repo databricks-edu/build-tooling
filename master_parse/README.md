@@ -340,17 +340,4 @@ We're talking about life here, people. This is some important stuff. Pay attenti
 
 Currently, these tokens render as follows, in a `%md-sandbox` cell:
 
-----
-
-We're talking about life here, people. This is some important stuff. Pay attention.
-
-<img alt="Hint" title="Hint" style="vertical-align: text-bottom; position: relative; height:1.75em; top:0.3em" src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-light-bulb.svg"/>&nbsp;**Hint:** Don't worry too much.
-
-<img alt="Caution" title="Caution" style="vertical-align: text-bottom; position: relative; height:1.3em; top:0.0em" src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-warning.svg"/> Stress'll kill ya, man.
-
-<img alt="Best Practice" title="Best Practice" style="vertical-align: text-bottom; position: relative; height:1.75em; top:0.3em" src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-blue-ribbon.svg"/> Eat right, and get plenty of rest.
-
-<img alt="Side Note" title="Side Note" style="vertical-align: text-bottom; position: relative; height:1.75em; top:0.05em; transform:rotate(15deg)" src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-note.webp"/> No one gets out alive.
-
-----
-
+![](https://raw.githubusercontent.com/bmc/build-tooling/master/master_parse/images/tokens-rendered.png)

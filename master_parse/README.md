@@ -102,7 +102,7 @@ details.
 The tool looks for various labels, as well as language-specific tokens, within
 notebook cells.
 
-### Handling of language tokens
+### Language tokens
 
 By default, the master parse tool processes `%scala`, `%python`, `%r` and
 `%sql` cells specially. How it handles those cells is best described by
@@ -131,7 +131,7 @@ and the notebook also contains some `%scala` and `%r` cells.
 
 You can modify this behavior somewhat, using the labels below.
 
-### Handling of master parse labels
+### Master parse labels
 
 Master parse labels are cells that are marked with special tokens that only
 the master parse tool recognizes. Some labels make sense only in code cells.
@@ -310,3 +310,47 @@ part starting with a cell labeled `NEW_PART`. Every time the tool encounters a `
 label, it creates a new notebook that starts with a cell that runs the _previous_
 part notebook (via `%run`), which enables students who are lagging behind to
 catch up.
+
+### Master parse inline tokens
+
+The master parser also supports special inline tokens in Markdown cells.
+These tokens are replaced with images and, sometimes, markup. The four
+currently supported tokens are:
+
+* `:HINT:` A hint for the student.
+* `:CAUTION:` A caution or warning
+* `:BESTPRACTICE:` Indicates a best practice
+* `:SIDENOTE:` Something of note that’s not necessarily 100% pertinent to 
+   the rest of the cell.
+
+Here's an example cell containing each token:
+
+```
+%md
+We're talking about life here, people. This is some important stuff. Pay attention.
+
+:HINT: Don't worry too much.
+
+:CAUTION: Stress'll kill ya, man.
+
+:BESTPRACTICE: Eat right, and get plenty of rest.
+
+:SIDENOTE: No one gets out alive.
+```
+
+Currently, these tokens render as follows, in a `%md-sandbox` cell:
+
+----
+
+We're talking about life here, people. This is some important stuff. Pay attention.
+
+<img alt="Hint" title="Hint" style="vertical-align: text-bottom; position: relative; height:1.75em; top:0.3em" src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-light-bulb.svg"/>&nbsp;**Hint:** Don't worry too much.
+
+<img alt="Caution" title="Caution" style="vertical-align: text-bottom; position: relative; height:1.3em; top:0.0em" src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-warning.svg"/> Stress'll kill ya, man.
+
+<img alt="Best Practice" title="Best Practice" style="vertical-align: text-bottom; position: relative; height:1.75em; top:0.3em" src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-blue-ribbon.svg"/> Eat right, and get plenty of rest.
+
+<img alt="Side Note" title="Side Note" style="vertical-align: text-bottom; position: relative; height:1.75em; top:0.05em; transform:rotate(15deg)" src="https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/icon-note.webp"/> No one gets out alive.
+
+----
+

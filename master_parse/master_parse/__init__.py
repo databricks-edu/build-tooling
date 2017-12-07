@@ -66,7 +66,7 @@ class CommandCode(Enum):
     def is_markdown(self):
         return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX']
 
-    def ensure_trailing_newline(self):
+    def on_separate_line(self):
         return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX', 'SQL', 'SCALA',
                              'PYTHON', 'R']
 
@@ -167,8 +167,6 @@ DEPRECATED_LABELS = {
     CommandLabel.IPYTHON_ONLY,
     CommandLabel.DATABRICKS_ONLY
 }
-
-NEWLINE_AFTER_CODE = {CommandCode.SCALA, CommandCode.R, CommandCode.PYTHON}
 
 DEFAULT_ENCODING_IN = 'utf-8'
 DEFAULT_ENCODING_OUT = 'utf-8'
@@ -653,7 +651,6 @@ class NotebookGenerator(object):
     def _write_command(self, output, cell_split, content, is_first):
         if not is_first:
             output.write(cell_split)
-
         output.write('\n'.join(content))
         return False
 
@@ -712,7 +709,7 @@ class NotebookGenerator(object):
             if self.notebook_kind == NotebookKind.DATABRICKS:
                 # add % command (e.g. %md)
                 s = Parser.code_to_magic[code]
-                if not code in NEWLINE_AFTER_CODE:
+                if not code.on_separate_line():
                     # Suppress the newline after the magic, and add the content
                     # here.
                     content = modified_content[skip_one]

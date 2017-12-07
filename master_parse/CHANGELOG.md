@@ -1,5 +1,17 @@
 # Change Log for Master Parse Tool
 
+Version 1.11.1:
+
+* Master parser now emits `%scala`, `%python`, `%r`, `%sql`, `%markdown` 
+  and `%markdown-sandbox` on their own lines (i.e., any cell content starts
+  on the second line of the cell). Previously, it only did so for `%scala`,
+  `%python` and `%r`. With other "magic" cells (`%run`, `%fs`, `%sh`), the
+  cell content starts on the same line as the magic token.
+* Changed insertion of Creative Commons license (`-cc` option) to ensure that
+  the license cell is `%md-markdown`, not `%md`.
+* Fixed incorrect formatting when both the Databricks training heading and the
+  Creative Commons license are both selected.
+
 Version 1.11.0:
 
 * Fixed footer logic to handle Scala (i.e., to use the proper language-specific)

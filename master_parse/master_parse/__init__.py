@@ -27,7 +27,7 @@ from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 
-VERSION = "1.11.0"
+VERSION = "1.11.1"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -65,6 +65,10 @@ class CommandCode(Enum):
 
     def is_markdown(self):
         return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX']
+
+    def on_separate_line(self):
+        return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX', 'SQL', 'SCALA',
+                             'PYTHON', 'R']
 
 class NotebookKind(Enum):
     DATABRICKS = 'Databricks'
@@ -163,8 +167,6 @@ DEPRECATED_LABELS = {
     CommandLabel.IPYTHON_ONLY,
     CommandLabel.DATABRICKS_ONLY
 }
-
-NEWLINE_AFTER_CODE = {CommandCode.SCALA, CommandCode.R, CommandCode.PYTHON}
 
 DEFAULT_ENCODING_IN = 'utf-8'
 DEFAULT_ENCODING_OUT = 'utf-8'
@@ -301,30 +303,10 @@ class Params(object):
         return self.__str__()
 
     def __str__(self):
-        fields = [
-            'path',
-            'output_dir',
-            'databricks',
-            'ipython',
-            'scala',
-            'python',
-            'r',
-            'sql',
-            'instructor',
-            'answers',
-            'exercises',
-            'creative_commons',
-            'add_heading',
-            'notebook_heading',
-            'encoding_in',
-            'encoding_out',
-            'enable_verbosity',
-            'enable_debug',
-        ]
         return 'Params({0})'.format(
             ','.join([
                 '{0}={1}'.format(f, self.__getattribute__(f))
-                for f in fields
+                for f in self.__dict__
             ])
         )
 
@@ -467,16 +449,18 @@ class NotebookGenerator(object):
 
                     # Optional heading.
                     if params.add_heading:
-                        header_adj += '\n{0} %md-sandbox\n{0} {1}'.format(
-                            magic_prefix, params.notebook_heading
+                        header_adj += '\n{0} %{1}\n{0} {2}'.format(
+                            magic_prefix, CommandCode.MARKDOWN_SANDBOX.value,
+                            params.notebook_heading
                         )
-                        sep = _command_cell.format(self.base_comment)
+                        sep = '\n' + _command_cell.format(self.base_comment)
                         is_first = False
 
                     if params.creative_commons:
                         header_adj += sep
-                        header_adj += '\n{0} %md\n{0} {1}'.format(
-                            magic_prefix, CC_LICENSE
+                        header_adj += '\n{0} %{1}\n{0} {2}'.format(
+                            magic_prefix, CommandCode.MARKDOWN_SANDBOX.value,
+                            CC_LICENSE
                         )
                         is_first = False
 
@@ -667,7 +651,6 @@ class NotebookGenerator(object):
     def _write_command(self, output, cell_split, content, is_first):
         if not is_first:
             output.write(cell_split)
-
         output.write('\n'.join(content))
         return False
 
@@ -726,7 +709,7 @@ class NotebookGenerator(object):
             if self.notebook_kind == NotebookKind.DATABRICKS:
                 # add % command (e.g. %md)
                 s = Parser.code_to_magic[code]
-                if not code in NEWLINE_AFTER_CODE:
+                if not code.on_separate_line():
                     # Suppress the newline after the magic, and add the content
                     # here.
                     content = modified_content[skip_one]

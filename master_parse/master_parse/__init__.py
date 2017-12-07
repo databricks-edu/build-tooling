@@ -66,6 +66,10 @@ class CommandCode(Enum):
     def is_markdown(self):
         return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX']
 
+    def ensure_trailing_newline(self):
+        return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX', 'SQL', 'SCALA',
+                             'PYTHON', 'R']
+
 class NotebookKind(Enum):
     DATABRICKS = 'Databricks'
     IPYTHON    = 'IPython'
@@ -301,30 +305,10 @@ class Params(object):
         return self.__str__()
 
     def __str__(self):
-        fields = [
-            'path',
-            'output_dir',
-            'databricks',
-            'ipython',
-            'scala',
-            'python',
-            'r',
-            'sql',
-            'instructor',
-            'answers',
-            'exercises',
-            'creative_commons',
-            'add_heading',
-            'notebook_heading',
-            'encoding_in',
-            'encoding_out',
-            'enable_verbosity',
-            'enable_debug',
-        ]
         return 'Params({0})'.format(
             ','.join([
                 '{0}={1}'.format(f, self.__getattribute__(f))
-                for f in fields
+                for f in self.__dict__
             ])
         )
 
@@ -467,16 +451,18 @@ class NotebookGenerator(object):
 
                     # Optional heading.
                     if params.add_heading:
-                        header_adj += '\n{0} %md-sandbox\n{0} {1}'.format(
-                            magic_prefix, params.notebook_heading
+                        header_adj += '\n{0} %{1}\n{0} {2}'.format(
+                            magic_prefix, CommandCode.MARKDOWN_SANDBOX.value,
+                            params.notebook_heading
                         )
-                        sep = _command_cell.format(self.base_comment)
+                        sep = '\n' + _command_cell.format(self.base_comment)
                         is_first = False
 
                     if params.creative_commons:
                         header_adj += sep
-                        header_adj += '\n{0} %md\n{0} {1}'.format(
-                            magic_prefix, CC_LICENSE
+                        header_adj += '\n{0} %{1}\n{0} {2}'.format(
+                            magic_prefix, CommandCode.MARKDOWN_SANDBOX.value,
+                            CC_LICENSE
                         )
                         is_first = False
 

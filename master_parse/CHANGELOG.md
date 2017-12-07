@@ -1,5 +1,12 @@
 # Change Log for Master Parse Tool
 
+Version 1.11.1:
+
+* Changed insertion of Creative Commons license (`-cc` option) to ensure that
+  the license cell is `%md-markdown`, not `%md`.
+* Fixed incorrect formatting when both the Databricks training heading and the
+  Creative Commons license are both selected.
+
 Version 1.11.0:
 
 * Fixed footer logic to handle Scala (i.e., to use the proper language-specific)

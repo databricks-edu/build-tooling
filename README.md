@@ -7,9 +7,28 @@ curriculum development within the Education department at Databricks.
 * `gendbc`: Create Databricks DBC files from the command line.
 * `master_parse`: The master notebook parse tool and module.
 
+Ensure that you have a Python 2 environment (preferably, a virtual environment)
+and a Java 8 JDK. Make sure `java` is in your PATH. Also, it helps to have
+`JAVA_HOME` set.
 
-If you're trying to put together a new build environment, start with the
-README in `bdc`.
+## Shortcut Install
+
+Run this command in a Python 2 environment:
+
+```
+pip install --upgrade git+https://github.com/databricks-edu/build-tooling
+```
+
+It'll take a few minutes, but it will download and install all three pieces.
+
+## Manual install 
+
+Clone this repo, `cd` into it, and type `python setup.py install`.
+
+## Manual install individually
+
+You can also install each tool individually. Consult the README in `bdc`.
+
 
 ## NOTICE
 

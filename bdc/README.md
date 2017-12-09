@@ -176,6 +176,9 @@ editing, you can use `bdc` to download the notebooks again. (See below.)
 `/Users/foo@example.com/Spark-ML-301`. The folder **must not exist** in the
 shard. If it already exists, the upload will abort.
 
+`shard-path` can be relative to your home directory. See
+[Relative Shard Paths](#relative-shard-path), below.
+
 `build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
 `build.yaml` in the current directory.
 
@@ -227,3 +230,31 @@ package. The shard to which the notebooks are uploaded is part of the
 `databricks-cli` configuration.
 
 See <https://docs.databricks.com/user-guide/databricks-cli.html> for details.
+
+### Relative Shard Paths
+
+`--upload` and `--download` can support relative shard paths, allowing you
+to specify `foo`, instead of `/Users/user@example.com/foo`, for instance.
+To enable relative shard paths, you must do one of the following:
+
+**Set `DB_SHARD_HOME`**
+
+You can set the `DB_SHARD_HOME` environment variable (e.g., in your
+`~/.bashrc`) to specify your home path on the shard. For example:
+
+```shell
+export DB_SHARD_HOME=/Users/user@example.com
+```
+
+**Add a `home` setting to `~/.databrickscfg`**
+
+You can also add a `home` variable to `~/.databrickscfg`, in the `DEFAULT`
+section. The Databricks CLI command will ignore it, but `bdc` will honor it.
+For example:
+
+```
+[DEFAULT]
+host = https://trainers.cloud.databricks.com
+token = lsakdjfaksjhasdfkjhaslku89iuyhasdkfhjasd
+home = /Users/user@example.net
+```

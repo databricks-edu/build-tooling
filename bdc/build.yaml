@@ -62,6 +62,25 @@ course_info:
   #copyright_year: 2015
   deprecated: false
 
+# Other variables that can be substituted. If you use any of the predefined
+# names, they will be silently ignored.
+variables:
+  foo: bar
+
+# top_dbc_folder_name: The top-level folder in the DBC. Defaults to
+#                      course_info.name
+#
+# The following variables can be substituted into this value:
+#
+# ${course_name}    - the course name, from the course_info.name config item
+# ${course_version} - the course version, from the course_info.version config
+#                     item
+# ${course_id}      - Convenience variable: Same as
+#                     "${course_name}-${course_version}"
+# <your variables>  - any variables in the "variables" config section
+
+#top_dbc_folder_name: ${course_name}
+
 notebook_type_name:
   # Specify the substitution names for ${notebook_type}. Only meaningful
   # with master-parsed output notebooks. There are three notebook types:
@@ -77,11 +96,6 @@ notebook_type_name:
   exercises: ""
   answers: Solutions
   #instructor: instructor
-
-# Other variables that can be substituted. If you use any of the predefined
-# names, they will be silently ignored.
-variables:
-  foo: bar
 
 # By default, the directories containing the notebooks are deleted once the
 # corresponding DBC files are created. You can set this field to "true"

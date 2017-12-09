@@ -50,7 +50,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.11.0"
+VERSION = "1.12.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -122,12 +122,12 @@ LANG_EXT = dict([(v.lower(), k) for k, v in EXT_LANG.items()])
 # Used to create a Scala version notebook in the top-level. This is a string
 # template, with the following variables:
 #
-# {course_id}       - the course ID
+# {course_name}     - the course name
 # {version}         - the version
 # {build_timestamp} - the build timestamp, in printable format
 VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
 
-// MAGIC %md # Course: ${course_id}
+// MAGIC %md # Course: ${course_name}
 // MAGIC <br/>
 // MAGIC * Version ${version}
 // MAGIC * Built ${build_timestamp}
@@ -489,6 +489,7 @@ class BuildData(object, DefaultStrMixin):
     '''
     def __init__(self,
                  build_file_path,
+                 top_dbc_folder_name,
                  source_base,
                  student_dir,
                  instructor_dir,
@@ -505,6 +506,7 @@ class BuildData(object, DefaultStrMixin):
         Create a new BuildData object.
 
         :param build_file_path:       path to the build file, for reference
+        :param top_dbc_folder_name:   top-level directory in DBC, or None
         :param source_base:           value of source base field
         :param course_info:           parsed CourseInfo object
         :param notebooks:             list of parsed Notebook objects
@@ -533,6 +535,20 @@ class BuildData(object, DefaultStrMixin):
         self.keep_lab_dirs = keep_lab_dirs
         self.notebook_type_map = notebook_type_map
         self.variables = variables or {}
+
+        if top_dbc_folder_name is None:
+            top_dbc_folder_name = '${course_name}'
+
+        folder_vars = dict(variables)
+        folder_vars.update({
+            'course_name':    course_info.name,
+            'course_version': course_info.version,
+            'course_id':      self.course_id,
+        })
+
+        self.top_dbc_folder_name = Template(top_dbc_folder_name).substitute(
+            folder_vars
+        )
 
     @property
     def name(self):
@@ -989,6 +1005,7 @@ def load_build_yaml(yaml_file):
 
     data = BuildData(
         build_file_path=build_yaml_full,
+        top_dbc_folder_name=contents.get('top_dbc_folder_name'),
         course_info=course_info,
         notebooks=notebooks,
         slides=slides,
@@ -1242,11 +1259,13 @@ def make_dbc(gendbc, build, labs_dir, dbc_path):
         simple_labs_dir = path.basename(labs_dir)
         if verbosity_is_enabled():
             cmd = "{0} {1} {2} {3} {4} {5}".format(
-                gendbc, "-v", "-f", build.name, simple_labs_dir, dbc_path
+                gendbc, "-v", "-f", build.top_dbc_folder_name, simple_labs_dir,
+                dbc_path
             )
         else:
             cmd = "{0} {1} {2} {3} {4}".format(
-                gendbc, "-f", build.name, simple_labs_dir, dbc_path
+                gendbc, "-f", build.top_dbc_folder_name, simple_labs_dir,
+                dbc_path
             )
 
         verbose("\nIn {0}:\n{1}\n".format(wd, cmd))
@@ -1337,7 +1356,7 @@ def build_course(opts, build):
 
     version = build.course_info.version
     version_notebook = Template(VERSION_NOTEBOOK_TEMPLATE).substitute({
-        'course_id':       build.course_info.name,
+        'course_name':     build.course_info.name,
         'version':         version,
         'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
         'year':            build.course_info.copyright_year,

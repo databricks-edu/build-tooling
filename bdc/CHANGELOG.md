@@ -1,5 +1,11 @@
 # Change Log for BDC
 
+Version 1.12.0:
+
+* Added `top_dbc_folder_name` to `build.yaml`, allowing specification of the
+  topmost folder in the generated DBC. Defaults to the course name. See
+  the sample `build.yaml` for full details.
+
 Version 1.11.0:
 
 * Added ability to enable or disable a footer that is automatically added to

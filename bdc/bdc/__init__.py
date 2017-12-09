@@ -28,6 +28,7 @@ from string import Template
 import codecs
 import re
 from datetime import datetime
+from ConfigParser import SafeConfigParser, NoOptionError
 from enum import Enum
 import master_parse
 from grizzled.file import eglob
@@ -50,10 +51,12 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.12.0"
+VERSION = "1.13.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
+
+DB_SHARD_HOME_VAR = 'DB_SHARD_HOME'
 
 USAGE = ("""
 {0}, version {1}
@@ -1420,7 +1423,8 @@ def dbw(subcommand, args, capture_stdout=True):
         p = subprocess.Popen(full_args,
                              stdout=stdout_loc, stderr=subprocess.STDOUT)
         if capture_stdout:
-            stdout = p.communicate()[0]
+            stdout, stderr = p.communicate()
+            stdout = stdout.decode('UTF-8')
         else:
             stdout = ''
             p.wait()
@@ -1440,7 +1444,7 @@ def dbw(subcommand, args, capture_stdout=True):
 
 def ensure_shard_path_exists(shard_path):
     rc, res = dbw('ls', [shard_path])
-    if rc == 0 and res.startswith('Usage:'):
+    if rc == 0 and res.startswith(u'Usage:'):
         die('(BUG) Error in "databricks" command:\n{0}'.format(res))
     elif rc == 0:
         # Path exists.
@@ -1470,6 +1474,37 @@ def ensure_shard_path_does_not_exist(shard_path):
         else:
             # Some other error
             die('Unexpected error with "databricks": {0}'.format(message))
+
+
+def expand_shard_path(shard_path):
+    if shard_path.startswith('/'):
+        return shard_path
+
+    # Relative path. Look for DB_SHARD_HOME environment variable.
+    home = os.getenv(DB_SHARD_HOME_VAR)
+    if home is None:
+        db_config = os.path.expanduser('~/.databrickscfg')
+        if os.path.exists(db_config):
+            cfg = SafeConfigParser()
+            cfg.read(db_config)
+            try:
+                home = cfg.get('DEFAULT', 'home')
+            except NoOptionError:
+                pass
+
+    if home is None:
+        die(('Shard path "{0}" is relative, but environment variable {1} ' +
+             'does not exist, and there is no "home" setting in {2}.').format(
+            shard_path, DB_SHARD_HOME_VAR, db_config
+        ))
+
+    if shard_path == '':
+        shard_path = home
+    else:
+        shard_path = '{0}/{1}'.format(home, shard_path)
+
+    return shard_path
+
 
 
 def notebook_is_transferrable(nb, build):
@@ -1543,6 +1578,7 @@ def get_sources_and_targets(build):
 
 
 def upload_notebooks(build, shard_path):
+    shard_path = expand_shard_path(shard_path)
     ensure_shard_path_does_not_exist(shard_path)
 
     notebooks = get_sources_and_targets(build)
@@ -1572,6 +1608,7 @@ def upload_notebooks(build, shard_path):
         die(e.message)
 
 def download_notebooks(build, shard_path):
+    shard_path = expand_shard_path(shard_path)
     ensure_shard_path_exists(shard_path)
 
     # get_sources_and_targets() returns a dict of

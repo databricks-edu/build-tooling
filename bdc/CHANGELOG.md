@@ -5,6 +5,9 @@ Version 1.12.0:
 * Added `top_dbc_folder_name` to `build.yaml`, allowing specification of the
   topmost folder in the generated DBC. Defaults to the course name. See
   the sample `build.yaml` for full details.
+* `--upload` and `--download` now support relative shard paths, but only if
+  either environment variable "DB_SHARD_HOME" is set or `~/.databrickscfg`
+  has a `home` setting in the `DEFAULT` section. See the README for details.
 
 Version 1.11.0:
 

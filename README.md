@@ -7,9 +7,14 @@ curriculum development within the Education department at Databricks.
 * `gendbc`: Create Databricks DBC files from the command line.
 * `master_parse`: The master notebook parse tool and module.
 
-Ensure that you have a Python 2 environment (preferably, a virtual environment)
-and a Java 8 JDK. Make sure `java` is in your PATH. Also, it helps to have
-`JAVA_HOME` set.
+**Prerequisites**
+
+* Ensure that you have a Python 2 environment (preferably, an activated virtual
+  environment).
+* Ensure that you have a Java 7 or Java 8 JDK and that `java` is in your path.
+  Java 9 is _not supported._ 
+* `gendbc` is installed in `$HOME/local/bin`. Make sure `$HOME/local/bin` is in
+  your path, or your builds will fail.
 
 ## Shortcut Install
 

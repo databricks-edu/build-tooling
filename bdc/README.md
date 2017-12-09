@@ -177,7 +177,7 @@ editing, you can use `bdc` to download the notebooks again. (See below.)
 shard. If it already exists, the upload will abort.
 
 `shard-path` can be relative to your home directory. See
-[Relative Shard Paths](#relative-shard-path), below.
+[Relative Shard Paths](#relative-shard-paths), below.
 
 `build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
 `build.yaml` in the current directory.
@@ -205,6 +205,10 @@ copies the downloaded file over top of the original source.
 `shard-path` is the path to the folder on the Databricks shard. For instance:
 `/Users/foo@example.com/Spark-ML-301`. The folder **must exist** in the
 shard. If it doesn't exist, the upload will abort.
+
+`shard-path` can be relative to your home directory. See
+[Relative Shard Paths](#relative-shard-paths), below.
+
 
 `build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
 `build.yaml` in the current directory.

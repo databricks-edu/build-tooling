@@ -8,7 +8,7 @@ import os
 import sys
 from contextlib import contextmanager
 
-VERSION = '1.0.1'
+VERSION = '1.1.0'
 
 @contextmanager
 def chdir(dir):
@@ -27,6 +27,12 @@ def cmd(command):
 top_dir = os.path.dirname(os.path.abspath(__file__))
 
 if len(sys.argv) > 1 and sys.argv[1] == 'install':
+    import pip
+    print('Installing/upgrading databricks-cli')
+    rc = pip.main(['install', '--upgrade', 'databricks-cli'])
+    if rc != 0:
+        raise OSError('pip install failed.')
+
     with chdir(os.path.join(top_dir, 'gendbc')):
         print('Installing gendbc...')
         cmd('bin/activator install')

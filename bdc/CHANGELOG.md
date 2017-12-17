@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+Version 1.12.1:
+
+* Fixed upload and download capabilities to handle new (nonexistent) notebooks
+  better.
+
 Version 1.12.0:
 
 * Added `top_dbc_folder_name` to `build.yaml`, allowing specification of the

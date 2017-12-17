@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.12.0"
+VERSION = "1.12.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1509,9 +1509,6 @@ def expand_shard_path(shard_path):
 
 def notebook_is_transferrable(nb, build):
     nb_full_path = path.abspath(joinpath(build.source_base, nb.src))
-    if not os.path.exists(nb_full_path):
-        warning('Notebook "{0}" does not exist.'.format(nb_full_path))
-        return False
 
     if not nb.upload_download:
         info('Skipping notebook "{0}": It has upload_download disabled.'.format(
@@ -1586,6 +1583,11 @@ def upload_notebooks(build, shard_path):
         with TemporaryDirectory() as tempdir:
             info("Copying notebooks to temporary directory.")
             for nb_full_path, partial_path in notebooks.items():
+                if not path.exists(nb_full_path):
+                    warning('Notebook "{}" does not exist. Skipping it.'.format(
+                        nb_full_path
+                    ))
+                    continue
                 temp_path = joinpath(tempdir, partial_path)
                 dir = path.dirname(temp_path)
                 mkdirp(dir)
@@ -1630,7 +1632,7 @@ def download_notebooks(build, shard_path):
                 die("Download failed: {0}".format(res.get('message', '?')))
 
             for remote, local in remote_to_local.items():
-                if not path.exists(local):
+                if not path.exists(remote):
                     warning(('Cannot find downloaded version of course ' +
                              'notebook "{0}".').format(local))
                 print('"{0}" -> {1}'.format(remote, local))
@@ -1644,7 +1646,7 @@ def download_notebooks(build, shard_path):
                     leftover_files.append(path.relpath(joinpath(root, f)))
             if len(leftover_files) > 0:
                 warning(("These files from {0} aren't in the build file and" +
-                        "were not copied").format(shard_path))
+                         " were not copied").format(shard_path))
                 for f in leftover_files:
                     print("    {0}".format(f))
 

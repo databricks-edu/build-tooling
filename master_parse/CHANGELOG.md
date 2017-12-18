@@ -1,5 +1,9 @@
 # Change Log for Master Parse Tool
 
+Version 1.11.2:
+
+* Default footer now includes a support link.
+
 Version 1.11.1:
 
 * Master parser now emits `%scala`, `%python`, `%r`, `%sql`, `%markdown` 

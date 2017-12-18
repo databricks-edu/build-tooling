@@ -24,7 +24,6 @@ import json
 from collections import namedtuple
 import os
 from os import path
-from string import Template
 import codecs
 import re
 from datetime import datetime
@@ -38,7 +37,8 @@ from bdc.bdcutil import (merge_dicts, bool_value, bool_field, DefaultStrMixin,
                          warning, info, emit_error, verbose, set_verbosity,
                          verbosity_is_enabled, ensure_parent_dir_exists,
                          parse_version_string, find_in_path, rm_rf, joinpath,
-                         dict_get_and_del)
+                         dict_get_and_del, VariableSubstituter,
+                         VariableSubstituterParseError)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.12.2"
+VERSION = "1.13.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -548,7 +548,9 @@ class BuildData(object, DefaultStrMixin):
             'course_id':      self.course_id,
         })
 
-        self.top_dbc_folder_name = Template(top_dbc_folder_name).substitute(
+        self.top_dbc_folder_name = VariableSubstituter(
+            top_dbc_folder_name
+        ).substitute(
             folder_vars
         )
 
@@ -665,10 +667,11 @@ def load_build_yaml(yaml_file):
             subbed = False
             for pats in POST_MASTER_PARSE_VARIABLES.values():
                 m = matches_variable_ref(pats, adj_dest)
-                if m:
+                while m:
                     var = '@{0}@'.format(m[1].replace(r'$', ''))
                     adj_dest = m[0] + var + m[2]
                     subbed = True
+                    m = matches_variable_ref(pats, adj_dest)
 
         fields = {
             'basename':        base_no_ext,
@@ -681,7 +684,7 @@ def load_build_yaml(yaml_file):
         fields.update(extra_vars)
 
         # Restore escaped variables.
-        adj_dest = Template(adj_dest).substitute(fields)
+        adj_dest = VariableSubstituter(adj_dest).substitute(fields)
         escaped = re.compile(r'^([^@]*)@([^@]+)@(.*)$')
         m = escaped.match(adj_dest)
         while m:
@@ -1131,7 +1134,9 @@ def process_master_notebook(dest_root, notebook, src_path, build):
                 glob_pattern = glob_template.format(suffix, lang_ext)
                 matches = eglob(glob_pattern, mp_notebook_dir)
                 ext = LANG_EXT[lc_lang]
-                dest_subst = Template(notebook.dest).safe_substitute({
+                dest_subst = VariableSubstituter(
+                    notebook.dest
+                ).safe_substitute({
                     TARGET_LANG: lang_dir,
                     TARGET_EXTENSION: ext[1:] if ext.startswith('') else ext,
                     NOTEBOOK_TYPE: notebook_type_map.get(notebook_type, '')
@@ -1357,7 +1362,9 @@ def build_course(opts, build):
         mkdirp(joinpath(dest_dir, d))
 
     version = build.course_info.version
-    version_notebook = Template(VERSION_NOTEBOOK_TEMPLATE).substitute({
+    version_notebook = VariableSubstituter(
+        VERSION_NOTEBOOK_TEMPLATE
+    ).substitute({
         'course_name':     build.course_info.name,
         'version':         version,
         'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
@@ -1541,7 +1548,7 @@ def get_sources_and_targets(build):
         template_data2[TARGET_EXTENSION] = ext
         return path.normpath(
             leading_slashes.sub(
-                '', Template(nb.dest).safe_substitute(template_data2)
+                '', VariableSubstituter(nb.dest).safe_substitute(template_data2)
             )
         )
 

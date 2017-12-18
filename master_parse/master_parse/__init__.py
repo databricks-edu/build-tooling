@@ -27,7 +27,7 @@ from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 
-VERSION = "1.11.1"
+VERSION = "1.11.2"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -191,9 +191,10 @@ DEFAULT_NOTEBOOK_HEADING = """<div style="text-align: center; line-height: 0; pa
   <img src="https://cdn2.hubspot.net/hubfs/438089/docs/training/dblearning-banner.png" alt="Databricks Learning" width="555" height="64">
 </div>"""
 
-# {0} is replaced with the copyright year.
-DEFAULT_NOTEBOOK_FOOTER = """&copy; {0} Databricks, Inc. All rights reserved.
-Apache, Apache Spark, Spark and the Spark logo are trademarks of the <a href="http://www.apache.org/">Apache Software Foundation</a>.<br><br><a href="https://databricks.com/privacy-policy">Privacy Policy</a> | <a href="https://databricks.com/terms-of-use">Terms of Use</a>"""
+DEFAULT_NOTEBOOK_FOOTER = """&copy; {copyright_year} Databricks, Inc. All rights reserved.<br/>
+Apache, Apache Spark, Spark and the Spark logo are trademarks of the <a href="http://www.apache.org/">Apache Software Foundation</a>.<br/>
+<br/>
+<a href="https://databricks.com/privacy-policy">Privacy Policy</a> | <a href="https://databricks.com/terms-of-use">Terms of Use</a> | <a href="http://help.databricks.com/">Support</a>"""
 
 CC_LICENSE = """<div>
 <a rel="license" href="http://creativecommons.org/licenses/by-nc-nd/4.0/">
@@ -273,7 +274,7 @@ class Params(object):
         if self._notebook_footer is None:
             if self.notebook_footer_path is None:
                 self._notebook_footer = DEFAULT_NOTEBOOK_FOOTER.format(
-                    self.copyright_year
+                    copyright_year=self.copyright_year
                 )
             else:
                 self._notebook_footer= ''.join(

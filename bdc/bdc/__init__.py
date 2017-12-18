@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.12.1"
+VERSION = "1.12.2"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -131,7 +131,6 @@ LANG_EXT = dict([(v.lower(), k) for k, v in EXT_LANG.items()])
 VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
 
 // MAGIC %md # Course: ${course_name}
-// MAGIC <br/>
 // MAGIC * Version ${version}
 // MAGIC * Built ${build_timestamp}
 // MAGIC

@@ -1,5 +1,9 @@
 # Change Log for BDC
 
+Version 1.12.2:
+
+* Revised default Version-x.x.x file, removing an excess new line.
+
 Version 1.12.1:
 
 * Fixed upload and download capabilities to handle new (nonexistent) notebooks

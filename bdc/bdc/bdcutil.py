@@ -327,63 +327,6 @@ def bool_value(s):
         raise ValueError('Bad boolean value: "{0}"'.format(s))
 
 
-def variable_ref_patterns(variable_name):
-    '''
-    Convert a variable name into a series of regular expressions that will will
-    match a reference to the variable. (Regular expression alternation syntax
-    is too complicated and error-prone for this purpose.)
-
-    Each regular expression matches one form of the variable syntax, and each
-    regular expression has three groups:
-
-    NOTE: This function is coupled to the `VariableSubstituter` class's
-    grammar.
-
-    Group 1 - The portion of the string that precedes the variable reference
-    Group 2 - The variable reference
-    Group 3 - The portion of the string those follows the variable reference
-
-    For convenience, use the result with matches_variable_ref().
-
-    :param variable_name: the variable name
-
-    :return: The compiled regular expressions, as an iterable tuple
-    '''
-    return (
-        re.compile(r'^(.*)(\$\{' + variable_name + r'\})(.*)$'),
-        re.compile(r'^(.*)(\$' + variable_name + r')([^a-zA-Z_]+.*)$'),
-        re.compile(r'^(.*)(\$' + variable_name + r')()$') # empty group 3
-    )
-
-
-def matches_variable_ref(patterns, string):
-    '''
-    Matches the string against the pattern, returning a 3-tuple on match and
-    None on no match.
-
-    :param patterns: A series of patterns returned from variable_ref_patterns().
-    :param string:   The string against which to match.
-
-    :return: None if no match. If match, a 3-tuple containing three elements:
-             the portion of the string preceding the variable reference,
-             the variable reference, and the portion of the string following
-             the variable reference
-
-    >>> pats = variable_ref_patterns
-    >>> matches_variable_ref(pats('foo'), '$foo')
-    ('', '$foo', '')
-    >>> matches_variable_ref(pats('hello'), 'This is ${hello} a')
-    ('This is ', '${hello}', ' a')
-    >>> matches_variable_ref(pats('foobar'), "abc $bar cdef.")
-    '''
-    for p in patterns:
-        m = p.match(string)
-        if m:
-            return m.groups()
-    else:
-        return None
-
-
 @contextlib.contextmanager
 def working_directory(path):
     """
@@ -579,6 +522,73 @@ def dict_get_and_del(d, key, default=None):
 
     return default
 
+
+def variable_ref_patterns(variable_name):
+    '''
+    Convert a variable name into a series of regular expressions that will will
+    match a reference to the variable. (Regular expression alternation syntax
+    is too complicated and error-prone for this purpose.)
+
+    Each regular expression matches one form of the variable syntax, and each
+    regular expression has three groups:
+
+    ---------------------------------------------------------------------------
+    NOTE: This function is coupled to the `VariableSubstituter` class's
+    grammar.
+    ---------------------------------------------------------------------------
+
+    Group 1 - The portion of the string that precedes the variable reference
+    Group 2 - The variable reference
+    Group 3 - The portion of the string those follows the variable reference
+
+    For convenience, use the result with matches_variable_ref().
+
+    :param variable_name: the variable name
+
+    :return: The compiled regular expressions, as an iterable tuple
+    '''
+    return (
+        re.compile(r'^(.*)(\$\{' + variable_name + r'\})(.*)$'),
+        re.compile(r'^(.*)(\$' + variable_name + r')([^a-zA-Z_]+.*)$'),
+        re.compile(r'^(.*)(\$' + variable_name + r')()$'), # empty group 3
+        # This next bit of ugliness matches the ternary IF syntax
+        re.compile(r'^(.*)(\${' + variable_name + r'\s*[=!]=\s*"[^}?:]*"\s*\?\s*"[^}?:]*"\s*:\s*"[^}?:]*"})(.*)$')
+    )
+
+
+def matches_variable_ref(patterns, string):
+    '''
+    Matches the string against the pattern, returning a 3-tuple on match and
+    None on no match.
+
+    :param patterns: A series of patterns returned from variable_ref_patterns().
+    :param string:   The string against which to match.
+
+    :return: None if no match. If match, a 3-tuple containing three elements:
+             the portion of the string preceding the variable reference,
+             the variable reference, and the portion of the string following
+             the variable reference
+
+    >>> pats = variable_ref_patterns
+    >>> matches_variable_ref(pats('foo'), '$foo')
+    ('', '$foo', '')
+    >>> matches_variable_ref(pats('hello'), 'This is ${hello} a')
+    ('This is ', '${hello}', ' a')
+    >>> matches_variable_ref(pats('foobar'), "abc $bar cdef.")
+    >>> matches_variable_ref(pats('nb'), '$foo bar ${nb == "abc" ? "one" : "two"}')
+    ('$foo bar ', '${nb == "abc" ? "one" : "two"}', '')
+    >>> matches_variable_ref(pats('nb'), '$foo bar ${nb=="abc"?"one":"two"}')
+    ('$foo bar ', '${nb=="abc"?"one":"two"}', '')
+    '''
+
+    for p in patterns:
+        m = p.match(string)
+        if m:
+            return m.groups()
+    else:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Classes
 # ---------------------------------------------------------------------------
@@ -628,6 +638,8 @@ _VAR_SUBST_OPS = {   # the supported ternary expression operators
     _VAR_SUBST_EQ_OP, _VAR_SUBST_NE_OP
 }
 
+# The grammar itself. @OPS@ is substituted with the operators, separator by "/"
+# (the PEG alternation syntax).
 _VAR_SUBST_GRAMMAR = """
 line           = text_or_var*
 text_or_var    = ternary / var / text
@@ -690,6 +702,8 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter('${foo} $bar')
     >>> v.substitute({'foo': 10, 'bar': 20})
     '10 20'
+    >>> v.substitute({'foo': '', 'bar': ''})
+    ' '
     '''
 
     def __init__(self, template):

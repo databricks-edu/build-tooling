@@ -114,7 +114,64 @@ file, conventionally called `build.yaml`, is a YAML file describing the files
 that comprise a particular class. Each class that is to be built will have its 
 own build file.
 
-See [build.yaml](build.yaml) in this directory for a fully-documented example.
+See [build.yaml][] in this directory for a fully-documented example.
+
+### A note about variable substitution in `build.yaml`
+
+Many (but not all) items in a `build.yaml` file support variable substitution. 
+(See the sample [build.yaml][] for full details.)
+
+The variable substitution syntax is Unix shell-like:
+
+- `$var` substitutes the value of a variable called "var"
+- `${var}` substitute the value of a variable called "var"
+
+The second form is useful when you need to ensure that a variable's name
+doesn't get mashed together with a subsequent non-white space string, e.g.:
+
+- `${var}foo` substitutes the value of "var" preceding the string "foo"
+- `$varfoo` attempts to substitute the value of "varfoo"
+
+#### Variable names
+
+Legal variable names consist of alphanumeric and underscore characters only.
+
+#### Inline ("ternary") IF
+
+The variable syntax supports a C-like "ternary IF" statement. The general
+form is:
+
+```
+${variable == SOMESTRING ? TRUESTRING : FALSESTRING}
+${variable != SOMESTRING ? TRUESTRING : FALSESTRING}
+```
+
+Rules:
+
+1. The braces are _not_ optional.
+2. The strings (`SOMESTRING`, `TRUESTRING` and `FALSESTRING`) _must_ be
+   surrounded by double quotes. Single quotes are _not_ supported.
+3. The white space is optional.
+4. When using a ternary IF substitution, your _must_ surround the entire string
+   in **single quotes**. The string has to be quoted to prevent the YAML
+   parser from getting confused by the embedded ":" character.
+
+
+**Examples**:
+
+Substitute the string "FOO" if "$foo" equals "foo". Otherwise, substitute
+the string "BAR".
+
+```
+${foo == "foo" ? "FOO" : "BAR"}
+```
+
+Substitute the string "-solution" if "notebook_type" is "answers".
+Otherwise, substitute nothing.
+
+```
+${notebook_type=="answers"?"-solution":""}
+```
 
 ## Usage
 
@@ -262,3 +319,5 @@ host = https://trainers.cloud.databricks.com
 token = lsakdjfaksjhasdfkjhaslku89iuyhasdkfhjasd
 home = /Users/user@example.net
 ```
+
+[build.yaml](build.yaml)

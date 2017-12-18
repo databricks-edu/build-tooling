@@ -1,5 +1,56 @@
 # Template for bdc build YAML file.
 
+# -----------------------------------------------------------------------------
+# ON VARIABLE SUBSTITUTION
+#
+# Many sections of a build.yaml support variable substitution. The syntax is
+# Unix shell-like:
+#
+# $var   - substitute the value of a variable called "var"
+# ${var} - substitute the value of a variable called "var"
+#
+# The second form is useful when you need to ensure that a variable's name
+# doesn't get mashed together with a subsequent non-white space string, e.g.:
+#
+# ${var}foo     Substitutes the value of "var" preceding the string "foo"
+# $varfoo       Attempts to substitute the value of "varfoo"
+#
+# VARIABLE NAMES
+# ---------------
+#
+# Legal variable names consist of alphanumeric and underscore characters only.
+#
+# INLINE ("TERNARY") IF
+# ---------------------
+#
+# The variable syntax supports a C-like "ternary IF" statement. The general
+# form is:
+#
+#     ${variable == SOMESTRING ? TRUESTRING : FALSESTRING}
+#     ${variable != SOMESTRING ? TRUESTRING : FALSESTRING}
+#
+# WARNING: When using a ternary IF, the string MUST be quoted in single quotes.
+# Otherwise, the YAML parser will barf (due to the embedded ":").
+#
+# White space is optional. Valid examples:
+#
+# 1. Substitute the string "FOO" if "$foo" equals "foo". Otherwise, substitute
+#    the string "BAR".
+#
+#    ${foo == "foo" ? "FOO" : "BAR"}
+#
+# 2. Substitute the string "-solution" if "notebook_type" is "answers".
+#    Otherwise, substitute nothing.
+#
+#    ${notebook_type=="answers"?"-solution":""}
+#
+# The strings (SOMESTRING, TRUESTRING, FALSESTRING) must use double quotes.
+# Single quotes are NOT supported.
+#
+# Braces are REQUIRED.
+# -----------------------------------------------------------------------------
+
+
 # bdc_min_version:
 #
 #  The minimum version of bdc necessary to parse the build file. REQUIRED, as

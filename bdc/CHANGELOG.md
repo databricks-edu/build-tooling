@@ -1,5 +1,13 @@
 # Change Log for BDC
 
+Version 1.13.0:
+
+* Variable substitution now supports a C-like ternary `if` syntax. For instance:
+
+```
+${variable == "foo" ? "Got foo" : "No foo"}
+```
+
 Version 1.12.2:
 
 * Revised default Version-x.x.x file, removing an excess new line.

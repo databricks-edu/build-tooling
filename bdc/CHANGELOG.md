@@ -8,6 +8,8 @@ Version 1.13.0:
 ${variable == "foo" ? "Got foo" : "No foo"}
 ```
 
+* Added doctests to `bdc/bdcutil.py`. Just run the module to run the tests.
+
 Version 1.12.2:
 
 * Revised default Version-x.x.x file, removing an excess new line.

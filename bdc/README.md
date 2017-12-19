@@ -241,6 +241,7 @@ basename: 01-Why-Spark
 * `${filename/\d/X/}` yields "X1-Why-Spark.py"
 * `${filename/\d/X/g}` yields "XX-Why-Spark.py"
 * `${basename/(\d+)(-.*)$/$1s$2/` yields "01s-Why-Spark"
+* `${filename/\.py//}` yields "01-Why-Spark"
 
 ## Usage
 

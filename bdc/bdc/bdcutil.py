@@ -615,6 +615,9 @@ class DefaultStrMixin:
     def __repr__(self):
         return self.__str__()
 
+# ---------------------------------------------------------------------------
+# Variable Substitution Code
+# ---------------------------------------------------------------------------
 
 # These constants define a Parsing Expression Grammar (PEG) for template
 # substitution, used by the VariableSubstituter class.
@@ -638,60 +641,100 @@ _VAR_SUBST_OPS = {   # the supported ternary expression operators
     _VAR_SUBST_EQ_OP, _VAR_SUBST_NE_OP
 }
 
-# The grammar itself. @OPS@ is substituted with the operators, separator by "/"
-# (the PEG alternation syntax).
-_VAR_SUBST_GRAMMAR = r"""
-line                 = text_or_var*
-text_or_var          = edit / ternary / var / text
-var                  = var1 / var2
-var1                 = '$' identifier
-var2                 = "${" identifier '}'
+_VAR_SUBST_EDIT_DELIM1          = '/'
+_VAR_SUBST_EDIT_DELIM2          = '|'
+_VAR_SUBST_EDIT_GROUPREF_PREFIX = '$'
+
+def _replace_tokens(s, tokens):
+    s2 = s
+    for token, replacement in tokens.items():
+        s2 = s2.replace(token, replacement)
+    return s2
+
+# The grammar itself. Some values are substituted, so they can be shared
+# with the code (the PEG alternation syntax).
+_VAR_SUBST_OPS_RULE = ' / '.join(['"{}"'.format(op) for op in _VAR_SUBST_OPS])
+_VAR_SUBST_GRAMMAR = _replace_tokens(r"""
+line                  = term*
+term                  = edit / ternary / var / text
+var                   = var1 / var2
+var1                  = '$' identifier
+var2                  = "${" identifier '}'
 backslash             = '\\'
 char                  = ~"."
-quote                = '"'
+quote                 = '"'
 optional_text         = (!quote char)*
 required_text         = (!quote char)+
 
-ternary_true_side    = quote optional_text quote
-ternary_false_side   = quote optional_text quote
-ternary_compare_term = quote optional_text quote
-ternary              = "${" 
-                       identifier OPT_WS 
-                       compare_op OPT_WS 
-                       ternary_compare_term OPT_WS 
-                       ternary_op OPT_WS 
-                       ternary_true_side OPT_WS 
-                       ternary_else OPT_WS 
-                       ternary_false_side 
-                       '}'
-ternary_op           = '?'
-ternary_else         = ':'
-compare_op           = @OPS@
+ternary_true_side     = quote optional_text quote
+ternary_false_side    = quote optional_text quote
+ternary_compare_term  = quote optional_text quote
+ternary               = "${"
+                        identifier OPT_WS
+                        compare_op OPT_WS
+                        ternary_compare_term OPT_WS
+                        ternary_op OPT_WS
+                        ternary_true_side OPT_WS
+                        ternary_else OPT_WS
+                        ternary_false_side
+                        '}'
+ternary_op            = '?'
+ternary_else          = ':'
+compare_op            = @OPS@
 
 edit                  = edit1 / edit2
-edit1                 = "${" identifier edit_delim1 pattern1 edit_delim1 
-                        pattern1 edit_delim1 flags '}'
-edit2                 = "${" identifier edit_delim2 pattern2 edit_delim2 
-                        pattern2 edit_delim2 flags '}'
+edit1                 = "${"
+                        identifier
+                        edit_delim1
+                        pattern1
+                        edit_delim1
+                        replacement1
+                        edit_delim1
+                        flags
+                        '}'
+edit2                 = "${"
+                        identifier
+                        edit_delim2
+                        pattern2
+                        edit_delim2
+                        replacement2
+                        edit_delim2
+                        flags
+                        '}'
 flags                 = (~"[a-z]"i)*
 
-edit_delim1           = '/'
-non_edit_delim1       = (backslash edit_delim1) / (!edit_delim1 char)
+edit_delim1           = @EDIT_DELIM_1@
+non_edit_delim1       = (backslash edit_delim1) /
+                        (backslash groupref_prefix) /
+                        (!edit_delim1 char)
 pattern1              = non_edit_delim1+
+replacement1          = (groupref / non_edit_delim1)+
 
-edit_delim2           = '|'
-non_edit_delim2       = (backslash edit_delim2) / (!edit_delim2 char)
+edit_delim2           = @EDIT_DELIM_2@
+non_edit_delim2       = (backslash edit_delim2) /
+                        (backslash groupref_prefix) /
+                        (!edit_delim2 char)
 pattern2              = non_edit_delim2+
+replacement2          = (groupref / non_edit_delim2)+
 
-identifier           = ~"[A-Z0-9_]+"i
-nonvar1              = ~"[^$]+"
-nonvar2              = ~"[^$]*\$\$[^$]*"
-nonvar               = nonvar1 / nonvar2
-text                 = nonvar*
-OPT_WS               = ~"\s*"
-""".replace(
-    "@OPS@", ' / '.join(['"{}"'.format(op) for op in _VAR_SUBST_OPS])
-)
+groupref_prefix       = @EDIT_GROUPREF_PREFIX@
+groupref              = (!backslash groupref_prefix digit)
+
+digit                 = ~"\d"
+identifier            = ~"[A-Z0-9_]+"i
+nonvar1               = ~"[^$]+"
+nonvar2               = ~"[^$]*\$\$[^$]*"
+nonvar                = nonvar1 / nonvar2
+text                  = nonvar*
+OPT_WS                = ~"\s*"
+""", {
+    "@OPS@":                  _VAR_SUBST_OPS_RULE,
+    "@EDIT_DELIM_1@":         "'" + _VAR_SUBST_EDIT_DELIM1 + "'",
+    "@EDIT_DELIM_2@":         "'" + _VAR_SUBST_EDIT_DELIM2 + "'",
+    "@EDIT_GROUPREF_PREFIX@": "'" + _VAR_SUBST_EDIT_GROUPREF_PREFIX + "'",
+})
+
+#print(_VAR_SUBST_GRAMMAR);import sys;sys.exit(1)
 
 class VariableSubstituterParseError(Exception):
     pass
@@ -763,6 +806,12 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter('${file|^(\d+)|$1s|g}')
     >>> v.substitute({'file': '01-Why-Spark.py'})
     '01s-Why-Spark.py'
+    >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2|g}')
+    >>> v.substitute({'file': '01-Why-Spark.py'})
+    '01s-Why-Spark.py'
+    >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2\$4\$2|}')
+    >>> v.substitute({'file': '01-Why-Spark.py'})
+    '01s-Why-Spark.py$4$2'
     '''
 
     def __init__(self, template):
@@ -777,9 +826,6 @@ class VariableSubstituter(object):
             parsimonious_ast = self._grammar.parse(template)
             visitor = _VarSubstASTVisitor()
             self._ast = self._flatten(visitor.visit(parsimonious_ast))
-
-        except VariableSubstituterParseError as e:
-            raise e
 
         except ParseError as e:
             if e.message:
@@ -876,8 +922,45 @@ class VariableSubstituter(object):
         return result
 
 
-_Var  = namedtuple('_Var', ('name'))   # AST: captures a variable name
-_Text = namedtuple('_Text', ('text'))  # AST: captures arbitrary text
+class _Var(DefaultStrMixin):
+    '''
+    Captures a variable name in the modified (i.e., non-Parsimonious) AST.
+    '''
+    def __init__(self, name):
+        '''
+        Create a new variable reference.
+
+        :param name: the variable name
+        '''
+        self.name = name
+
+
+class _Text(DefaultStrMixin):
+    '''
+    Captures arbitrary text in the modified (i.e., non-Parsimonious) AST.
+    '''
+    def __init__(self, text):
+        '''
+        Create a new text container.
+
+        :param text: the contents of the text
+        '''
+        self.text = text
+
+
+class _ReplGroupRef(DefaultStrMixin):
+    '''
+    Captures a replacement regular expression group reference in the modified
+    (i.e., non-Parsimonious) AST.
+    '''
+    def __init__(self, group_number):
+        '''
+        Create a new object.
+
+        :param group_number: The group number (an int).
+        '''
+        self.group_number = group_number
+
 
 class _Ternary(DefaultStrMixin):
     '''
@@ -934,10 +1017,12 @@ class _Edit(DefaultStrMixin):
     def evaluate(self, variable_value):
         value = str(variable_value)
         count = 0 if self.replace_all else 1
-        # TODO: Support groups (grammar does; need to handle it here)
         return self.pattern.sub(self.repl, value, count=count)
 
 class _VarSubstASTVisitor(grammar.NodeVisitor):
+    GROUPREF_RE  = re.compile(r'^groupref$')
+    NON_DELIM_RE = re.compile(r'^non_edit_delim\d$')
+
     '''
     This visitor translates the parsed Parsimonious AST into something more
     useful to the template substituter.
@@ -1047,27 +1132,30 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                        if_true=if_true, if_false=if_false)
 
     def visit_edit1(self, node, children):
-        return self._handle_sub(node, children, 'pattern1', '/')
+        return self._handle_sub(node, children, _VAR_SUBST_EDIT_DELIM1)
 
     def visit_edit2(self, node, children):
-        return self._handle_sub(node, children, 'pattern2', '|')
+        return self._handle_sub(node, children, _VAR_SUBST_EDIT_DELIM2)
 
-    def _handle_sub(selfself, node, children, pattern_token_name, delim):
+    def _handle_sub(self, node, children, delim):
         '''
         Workhorse function for handling edits.
 
-        :param node:               the node
-        :param children:           the node's children
-        :param pattern_token_name: the grammar token name
-        :param delim:              the delimiter
+        :param node:      the node
+        :param children:  the node's children
+        :param delim:     the delimiter
 
         :return: an _Edit object
         '''
         var = None
         pattern = None
-        substitution = None
+        repl = None
+        repl_string = None   # original repl string, for errors
         replace_all = False
         flags = 0
+        backslash_delim = '\\' + delim
+        escaped_group_ref = '\\$'
+        referenced_groups = []
 
         for child in node:
             try:
@@ -1078,21 +1166,45 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
             if expr.name == 'identifier':
                 var = child.text
 
-            elif expr.name == pattern_token_name:
-                backslash_delim = '\\' + delim
+            elif expr.name.startswith('pattern'):
                 s = child.text.replace(backslash_delim, delim)
-                if pattern is None:
-                    try:
-                        pattern = s
-                        re.compile(pattern)
-                    except:
-                        raise VariableSubstituterParseError(
-                            ('Bad regular expression "{0}" in "{1}".'.format(
-                                child.text, node.text
-                            ))
+                try:
+                    pattern = s
+                    re.compile(pattern)
+                except:
+                    raise VariableSubstituterParseError(
+                        ('Bad regular expression "{0}" in "{1}".'.format(
+                            child.text, node.text
+                        ))
+                    )
+
+            elif expr.name.startswith('replacement'):
+                # The replacement node is an AST consisting of groupref
+                # and non_delim tokens. Reassemble them as a Python
+                # re.sub()-compliant string, where group references are
+                # introduced by backslashes.
+
+                repl_string = child.text
+                tokens = []
+                for i in child:
+                    n = self._find_recursively(i, self.GROUPREF_RE)
+                    if n:
+                        group = n.text[1:]
+                        tokens.append('\\' + group)
+                        referenced_groups.append(int(group))
+                        continue
+
+                    n = self._find_recursively(i, self.NON_DELIM_RE)
+                    if n:
+                        s = (
+                            n.text
+                             .replace(backslash_delim, delim)
+                             .replace(escaped_group_ref, '$')
                         )
-                else:
-                    substitution = s
+                        tokens.append(s)
+                        continue
+
+                repl = ''.join(tokens)
 
             elif expr.name == 'flags':
                 flag_set = set(child.text)
@@ -1110,31 +1222,54 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                         )
                     )
 
-        if not all([var, pattern, substitution]):
+        # Make sure we have all the pieces.
+        if not all([var, pattern, repl]):
             raise VariableSubstituterParseError(
                 ('(BUG) Unable to find all expected pieces of parsed ' +
-                 'substitution expression: "{}"').format(node.text)
+                 'substitution expression: "{}". variable={}, pattern={}, ' +
+                 'repl={}').format(node.text, var, pattern, repl)
             )
 
+        # Compile the regular expression.
         pattern = re.compile(pattern, flags=flags)
 
-        return _Edit(variable=var, pattern=pattern, repl=substitution,
+        # Validate the group references.
+        total_groups = pattern.groups
+        max_group_num = max(referenced_groups) if referenced_groups else 0
+        if max_group_num > total_groups:
+            raise VariableSubstituterParseError(
+                ('Replacement pattern "{0}" refers to non-existent group(s) ' +
+                 'in "{1}"').format(repl_string, pattern.pattern)
+            )
+
+        return _Edit(variable=var, pattern=pattern, repl=repl,
                      flags=flags, replace_all=replace_all)
 
     def _find_child(self, node, expr_name):
-        if not node.children:
-            return None
-
-        for i in node.children:
+        for child in node:
             try:
-                if i.expr_name == expr_name:
-                    return i
+                if child.expr_name == expr_name:
+                    return child
             except AttributeError:
                 continue
 
         raise VariableSubstituterParseError(
             '(BUG) Unable to find {}'.format(expr_name)
         )
+
+    def _find_recursively(self, node, expr_re):
+        for child in node:
+            try:
+                if expr_re.search(child.expr_name):
+                    return child
+            except AttributeError:
+                continue
+
+            n = self._find_recursively(child, expr_re)
+            if n:
+                return n
+
+        return None
 
 # ---------------------------------------------------------------------------
 # Module-private functions

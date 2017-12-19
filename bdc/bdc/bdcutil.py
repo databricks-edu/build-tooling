@@ -872,6 +872,10 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2|g}')
     >>> v.substitute({'file': '01-Why-Spark.py'})
     '01s-Why-Spark.py'
+    >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2$3|g}')
+    Traceback (most recent call last):
+    ...
+    VariableSubstituterParseError: Failed to parse ...non-existent group...
     >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2\$4\$2|}')
     >>> v.substitute({'file': '01-Why-Spark.py'})
     '01s-Why-Spark.py$4$2'
@@ -932,7 +936,7 @@ class VariableSubstituter(object):
             #
             # Since we can't actually test the nested exception, we have to
             # check the text of the message.
-            pat = re.compile(r'^.*VariableSubstituterParseError: (.*)\.\s*Parse tree:')
+            pat = re.compile(r'^.*VariableSubstituterParseError: (.*)\s*Parse tree:')
             msg = e.message.replace('\n', ' ')
             m = pat.search(msg)
             if m:

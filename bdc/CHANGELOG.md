@@ -7,7 +7,8 @@ Version 1.14.0:
   regular expression, `replacement` is a replacement string, and `flags`
   can be `i` (case-insensitive), `g` (substitute all occurrences, not just
   the first), or `ig` (both). The delimiter can be either "/" or "|", and
-  the delimiter can be escaped, if necessary. Examples:
+  the delimiter can be escaped with a backslash, if necessary. Examples:
+  Regular expression groups can be substituted using `$1`, `$2`, etc.
   
 ```
 # Replace all occurrences of "letters/numbers" with "FOOBAR"

@@ -839,11 +839,29 @@ class VariableSubstituter(object):
                     'Failed to parse "{0}".'.format(self.template)
             )
         except VisitationError as e:
-            raise VariableSubstituterParseError(
-                'Failed to parse "{0}: {1}'.format(
-                    self.template, e.message
+            # This is ugly and would not be necessary if VisitationError
+            # contained the original thrown exception. The visitor in this
+            # package can throw validation exceptions, which the caller
+            # should see as is, without all the Parsimonious parse tree data
+            # (which isn't helpful to the caller, since we're hiding it in
+            # here).
+            #
+            # Since we can't actually test the nested exception, we have to
+            # check the text of the message.
+            print(e.message)
+            pat = re.compile(r'^.*VariableSubstituterParseError: (.*)\.\s*Parse tree:')
+            msg = e.message.replace('\n', ' ')
+            print("--- {}...".format(msg[0:80]))
+            m = pat.search(msg)
+            print("--- m={}".format(m))
+            if m:
+                raise VariableSubstituterParseError(
+                   'Failed to parse "{0}: {1}'.format(self.template, m.group(1))
                 )
-            )
+            else:
+                raise VariableSubstituterParseError(
+                    'Failed to parse "{0}"'.format(self.template)
+                )
 
     @property
     def template(self):

@@ -156,7 +156,6 @@ Rules:
    in **single quotes**. The string has to be quoted to prevent the YAML
    parser from getting confused by the embedded ":" character.
 
-
 **Examples**:
 
 Substitute the string "FOO" if "$foo" equals "foo". Otherwise, substitute
@@ -172,6 +171,76 @@ Otherwise, substitute nothing.
 ```
 ${notebook_type=="answers"?"-solution":""}
 ```
+
+#### Inline editing
+
+`bdc` supports basic sed-like editing on a variable's value, using a syntax
+that's vaguely reminiscent (but somewhat more readable) than the Bash
+variable-editing syntax.
+
+`bdc` supports a simple inline editing capability in variable substitution,
+reminiscent of the `bash` syntax (but a little easier to read). The basic
+syntax is:
+
+```
+${var/regex/replacement/flags}
+${var|regex|replacement|flags}
+```
+
+Note that only two delimiters are supported, "|" and "/", and they _must_
+match. 
+
+By default, the first instance of the regular expression in the variable's
+value is replaced with the replacement. (You can specify a global replacement
+with a flag. See `flags`, below.)
+
+**`regex`**
+
+`regex` is a [standard Python regular expression](https://docs.python.org/2/library/re.html#regular-expression-syntax).
+Within the pattern, you can escape the delimiter with a backslash. For instance:
+
+```
+${foo/abc\/def/abc.def/}
+```
+
+However, it's usually easier and more readable just to use the alternate
+delimiter:
+
+```
+${foo|abc/def|abc.def|}
+```
+
+**`replacement`**
+
+`replacement` is the replacement string. Within this string:
+
+* You can escape the delimiter with a leading backslash (though, as with
+  `regex`, it's usually more readable to use the alternate delimiter).
+* You can refer to regular expression groups as "$1", "$2", etc.
+* You can escape a literal dollar sign with a backslash.
+
+**`flags`**  
+
+Two optional flags are supported:
+
+* `i` - do case-blind matching
+* `g` - substitute all matches, not just the first one
+
+To specify both, just use `gi` or `ig`.
+
+**Examples**
+
+Assume the following variables:
+
+```
+foo: Hello
+filename: 01-Why-Spark.py
+basename: 01-Why-Spark
+```
+
+* `${filename/\d/X/}` yields "X1-Why-Spark.py"
+* `${filename/\d/X/g}` yields "XX-Why-Spark.py"
+* `${basename/(\d+)(-.*)$/$1s$2/` yields "01s-Why-Spark"
 
 ## Usage
 

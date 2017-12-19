@@ -48,6 +48,37 @@
 # Single quotes are NOT supported.
 #
 # Braces are REQUIRED.
+#
+# INLINE EDIT DURING VARIABLE SUBSTITUTION
+# ----------------------------------------
+#
+# You can do some basic sed-like editing on a variable's value, using a
+# syntax that's vaguely reminiscent (but somewhat more readable) than
+# Bash's variable-editing syntax.
+#
+# Format:
+#
+#    ${var/regex/repl/flags}
+#    ${var|regex|repl|flags}
+#
+# In the regex and the replacement string, delimiters ("|" and "/") can be
+# escaped with a preceding "\". It's usually more readable to use the
+# alternate delimiter, though.
+#
+# In the replacement string, regex capture groups can be referenced with a "$"
+# syntax (e.g., "$1"). A literal "$" can be espressed as "\$".
+#
+# Flags (optional):
+#   i - case-independent matching
+#   g - replace all matches, not just the first
+#
+# Examples:
+#
+#    ${foo/^[a-z]/X/g}                    replace all lower case letters with X
+#    ${file|(\d+)(-.*)$|$1a-$2|}   Insert an "a" after any leading digits,
+#                                  and before the "-". e.g.: "01-Foobar"
+#                                  becomes "01a-Foobar".
+
 # -----------------------------------------------------------------------------
 
 

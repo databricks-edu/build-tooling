@@ -174,6 +174,10 @@ ${notebook_type=="answers"?"-solution":""}
 
 #### Inline editing
 
+`bdc` supports basic sed-like editing on a variable's value, using a syntax
+that's vaguely reminiscent (but somewhat more readable) than the Bash
+variable-editing syntax.
+
 `bdc` supports a simple inline editing capability in variable substitution,
 reminiscent of the `bash` syntax (but a little easier to read). The basic
 syntax is:

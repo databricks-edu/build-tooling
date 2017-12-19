@@ -655,20 +655,37 @@ def _replace_tokens(s, tokens):
 # with the code (the PEG alternation syntax).
 _VAR_SUBST_OPS_RULE = ' / '.join(['"{}"'.format(op) for op in _VAR_SUBST_OPS])
 _VAR_SUBST_GRAMMAR = _replace_tokens(r"""
+# A line consists of zero or more terms. 
 line                  = term*
+
+# A term consists of an edit or a ternary expression or a variable substitution
+# or text. Order is important here, since first match wins.
 term                  = edit / ternary / var / text
+
+# Two forms of variable references are permitted: $var and ${var}
 var                   = var1 / var2
 var1                  = '$' identifier
 var2                  = "${" identifier '}'
+
 backslash             = '\\'
 char                  = ~"."
+
+# Only double quotes are permitted in quoted strings.
 quote                 = '"'
+
+# NOTE: "!" is a negative lookahead assertion: It asserts that the token isn't
+# present, but doesn't consume anything. Thus, "!quote" asserts that the first
+# character isn't a quote, but doesn't consume it, so it'll get picked up
+# by "char".  
+
 optional_text         = (!quote char)*
 required_text         = (!quote char)+
 
-ternary_true_side     = quote optional_text quote
-ternary_false_side    = quote optional_text quote
-ternary_compare_term  = quote optional_text quote
+# Ternary IF. Format:
+# 
+#    ${var == "SOMESTRING" ? "TRUESUB" : "FALSESUB"}
+#    ${var != "SOMESTRING" ? "TRUESUB" : "FALSESUB"}
+
 ternary               = "${"
                         identifier OPT_WS
                         compare_op OPT_WS
@@ -678,9 +695,37 @@ ternary               = "${"
                         ternary_else OPT_WS
                         ternary_false_side
                         '}'
+ternary_true_side     = quote optional_text quote
+ternary_false_side    = quote optional_text quote
+ternary_compare_term  = quote optional_text quote
 ternary_op            = '?'
 ternary_else          = ':'
+
+# @OPS@ is substituted from Python vars, allowing sharing with the code. 
 compare_op            = @OPS@
+
+# Inline edit during variable substitution. Format:
+#
+#    ${var/regex/repl/flags}
+#    ${var|regex|repl|flags}
+#
+# In the regex and the replacement string, delimiters ("|" and "/") can be
+# escaped with a preceding "\". It's usually more readable to use the
+# alternate delimiter, though.
+#
+# In the replacement string, regex capture groups can be referenced with a "$"
+# syntax (e.g., "$1"). A literal "$" can be espressed as "\$".
+#
+# Flags (optional):
+#   i - case-independent matching
+#   g - replace all matches, not just the first
+#
+# Examples:
+#
+#    ${foo/^[a-z]/X/g}                    replace all lower case letters with X
+#    ${file|(\d+)(-.*)$|$1a-$2|}   Insert an "a" after any leading digits,
+#                                  and before the "-". e.g.: "01-Foobar"
+#                                  becomes "01a-Foobar".
 
 edit                  = edit1 / edit2
 edit1                 = "${"

@@ -106,6 +106,24 @@ _info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
 # Public functions
 # ---------------------------------------------------------------------------
 
+def all_pred(func, iterable):
+    '''
+    Similar to the built-in `all()` function, this function ensures that
+    `func()` returns `True` for every element of the supplied iterable.
+    It short-circuits on the first failure.
+
+    :param func:     function or lambda to call with each element
+    :param iterable: the iterable
+
+    :return: `True` if all elements pass, `False` otherwise
+    '''
+    for i in iterable:
+        if not func(i):
+            return False
+
+    return True
+
+
 def set_verbosity(verbose, verbose_prefix):
     '''
     Set or clear verbose messages.
@@ -753,14 +771,14 @@ non_edit_delim1       = (backslash edit_delim1) /
                         (backslash groupref_prefix) /
                         (!edit_delim1 char)
 pattern1              = non_edit_delim1+
-replacement1          = (groupref / non_edit_delim1)+
+replacement1          = (groupref / non_edit_delim1)*
 
 edit_delim2           = @EDIT_DELIM_2@
 non_edit_delim2       = (backslash edit_delim2) /
                         (backslash groupref_prefix) /
                         (!edit_delim2 char)
 pattern2              = non_edit_delim2+
-replacement2          = (groupref / non_edit_delim2)+
+replacement2          = (groupref / non_edit_delim2)*
 
 groupref_prefix       = @EDIT_GROUPREF_PREFIX@
 groupref              = (!backslash groupref_prefix digit)
@@ -857,6 +875,27 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2\$4\$2|}')
     >>> v.substitute({'file': '01-Why-Spark.py'})
     '01s-Why-Spark.py$4$2'
+    >>> v = VariableSubstituter('${file|abcdef|ZYXWVU|}')
+    >>> v.substitute({'file': 'abcdef abcdef'})
+    'ZYXWVU abcdef'
+    >>> v.substitute({'file': 'foobar'})
+    'foobar'
+    >>> v = VariableSubstituter('${file|^[.*$|x|}')
+    Traceback (most recent call last):
+    ...
+    VariableSubstituterParseError: Failed to parse ...Bad regular expression ...
+    >>> v = VariableSubstituter('${file/abc//}')
+    >>> v.substitute({'file': 'abc123abc'})
+    '123abc'
+    >>> v = VariableSubstituter('${file/abc//g}')
+    >>> v.substitute({'file': 'abc123abc'})
+    '123'
+    >>> v = VariableSubstituter('${file/\d//g}')
+    >>> v.substitute({'file': 'abc123abc2'})
+    'abcabc'
+    >>> v = VariableSubstituter('${file/\d//}')
+    >>> v.substitute({'file': 'abc123abc2'})
+    'abc23abc2'
     '''
 
     def __init__(self, template):
@@ -893,12 +932,9 @@ class VariableSubstituter(object):
             #
             # Since we can't actually test the nested exception, we have to
             # check the text of the message.
-            print(e.message)
             pat = re.compile(r'^.*VariableSubstituterParseError: (.*)\.\s*Parse tree:')
             msg = e.message.replace('\n', ' ')
-            print("--- {}...".format(msg[0:80]))
             m = pat.search(msg)
-            print("--- m={}".format(m))
             if m:
                 raise VariableSubstituterParseError(
                    'Failed to parse "{0}: {1}'.format(self.template, m.group(1))
@@ -1009,20 +1045,6 @@ class _Text(DefaultStrMixin):
         :param text: the contents of the text
         '''
         self.text = text
-
-
-class _ReplGroupRef(DefaultStrMixin):
-    '''
-    Captures a replacement regular expression group reference in the modified
-    (i.e., non-Parsimonious) AST.
-    '''
-    def __init__(self, group_number):
-        '''
-        Create a new object.
-
-        :param group_number: The group number (an int).
-        '''
-        self.group_number = group_number
 
 
 class _Ternary(DefaultStrMixin):
@@ -1183,7 +1205,8 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
             elif expr.name == 'ternary_false_side':
                 if_false = self._find_child(child, 'optional_text').text
 
-        if not all([var, op, to_compare, if_true, if_false]):
+        if not all_pred(lambda i: i is not None,
+                        [var, op, to_compare, if_true, if_false]):
             raise VariableSubstituterParseError(
                 ('(BUG) Unable to find all expected pieces of parsed ternary ' +
                  'expression: "{}". var={}, op={}, to_compare={}, if_true={} ' +
@@ -1212,7 +1235,7 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         '''
         var = None
         pattern = None
-        repl = None
+        repl = ''
         repl_string = None   # original repl string, for errors
         replace_all = False
         flags = 0
@@ -1285,8 +1308,9 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                         )
                     )
 
-        # Make sure we have all the pieces.
-        if not all([var, pattern, repl]):
+        # Make sure we have all the pieces. Note that "repl" is allowed to
+        # be empty.
+        if not all_pred(lambda i: i is not None, [var, pattern, repl]):
             raise VariableSubstituterParseError(
                 ('(BUG) Unable to find all expected pieces of parsed ' +
                  'substitution expression: "{}". variable={}, pattern={}, ' +

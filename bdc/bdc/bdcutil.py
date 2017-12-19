@@ -900,6 +900,9 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter('${file/\d//}')
     >>> v.substitute({'file': 'abc123abc2'})
     'abc23abc2'
+    >>> v = VariableSubstituter(r'${file/\.py$//}')
+    >>> v.substitute({'file': 'Foobar.py'})
+    'Foobar'
     '''
 
     def __init__(self, template):
@@ -1323,7 +1326,6 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
         # Compile the regular expression.
         pattern = re.compile(pattern, flags=flags)
-
         # Validate the group references.
         total_groups = pattern.groups
         max_group_num = max(referenced_groups) if referenced_groups else 0

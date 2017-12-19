@@ -16,7 +16,7 @@ import codecs
 from collections import namedtuple
 import parsimonious
 from parsimonious.grammar import Grammar
-from parsimonious import grammar
+from parsimonious import grammar, expressions
 from parsimonious.exceptions import ParseError, VisitationError
 from textwrap import TextWrapper
 
@@ -195,7 +195,7 @@ def parse_version_string(version):
     >>> parse_version_string("2")
     Traceback (most recent call last):
     ...
-    ValueError: "2" is a malformed version string
+    ValueError: ...
     >>> parse_version_string("2.4.3.1")
     Traceback (most recent call last):
     ...
@@ -207,7 +207,7 @@ def parse_version_string(version):
     >>> parse_version_string("a.b.c")
     Traceback (most recent call last):
     ...
-    ValueError: "a.b.c" is a malformed version string: invalid literal for int() with base 10: 'a'
+    ValueError: "a.b.c" is a malformed version string...
     '''
     nums = version.split('.')
     if len(nums) not in (2, 3):
@@ -640,26 +640,55 @@ _VAR_SUBST_OPS = {   # the supported ternary expression operators
 
 # The grammar itself. @OPS@ is substituted with the operators, separator by "/"
 # (the PEG alternation syntax).
-_VAR_SUBST_GRAMMAR = """
-line           = text_or_var*
-text_or_var    = ternary / var / text
-var            = var1 / var2
-var1           = '$' ident
-var2           = "${" ident '}'
-quote          = '"'
-simple_text    = ~'[^"]*'
-quoted_text    = quote simple_text quote
-ternary        = "${" ident opt_ws op opt_ws quoted_text opt_ws ternary_op 
-                 opt_ws quoted_text opt_ws ternary_else opt_ws quoted_text '}'
-ternary_op     = '?'
-ternary_else   = ':'
-op             = @OPS@
-ident          = ~"[A-Z0-9_]+"i
-nonvar1        = ~"[^$]+"
-nonvar2        = ~"[^$]*\$\$[^$]*"
-nonvar         = nonvar1 / nonvar2
-text           = nonvar*
-opt_ws         = ~"\s*"
+_VAR_SUBST_GRAMMAR = r"""
+line                 = text_or_var*
+text_or_var          = edit / ternary / var / text
+var                  = var1 / var2
+var1                 = '$' identifier
+var2                 = "${" identifier '}'
+backslash             = '\\'
+char                  = ~"."
+quote                = '"'
+optional_text         = (!quote char)*
+required_text         = (!quote char)+
+
+ternary_true_side    = quote optional_text quote
+ternary_false_side   = quote optional_text quote
+ternary_compare_term = quote optional_text quote
+ternary              = "${" 
+                       identifier OPT_WS 
+                       compare_op OPT_WS 
+                       ternary_compare_term OPT_WS 
+                       ternary_op OPT_WS 
+                       ternary_true_side OPT_WS 
+                       ternary_else OPT_WS 
+                       ternary_false_side 
+                       '}'
+ternary_op           = '?'
+ternary_else         = ':'
+compare_op           = @OPS@
+
+edit                  = edit1 / edit2
+edit1                 = "${" identifier edit_delim1 pattern1 edit_delim1 
+                        pattern1 edit_delim1 flags '}'
+edit2                 = "${" identifier edit_delim2 pattern2 edit_delim2 
+                        pattern2 edit_delim2 flags '}'
+flags                 = (~"[a-z]"i)*
+
+edit_delim1           = '/'
+non_edit_delim1       = (backslash edit_delim1) / (!edit_delim1 char)
+pattern1              = non_edit_delim1+
+
+edit_delim2           = '|'
+non_edit_delim2       = (backslash edit_delim2) / (!edit_delim2 char)
+pattern2              = non_edit_delim2+
+
+identifier           = ~"[A-Z0-9_]+"i
+nonvar1              = ~"[^$]+"
+nonvar2              = ~"[^$]*\$\$[^$]*"
+nonvar               = nonvar1 / nonvar2
+text                 = nonvar*
+OPT_WS               = ~"\s*"
 """.replace(
     "@OPS@", ' / '.join(['"{}"'.format(op) for op in _VAR_SUBST_OPS])
 )
@@ -698,12 +727,42 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter('${foo $bar')
     Traceback (most recent call last):
     ...
-    VariableSubstituterParseError: Failed to parse "${foo $bar".
+    VariableSubstituterParseError: Failed to parse ...
     >>> v = VariableSubstituter('${foo} $bar')
     >>> v.substitute({'foo': 10, 'bar': 20})
     '10 20'
     >>> v.substitute({'foo': '', 'bar': ''})
     ' '
+    >>> v = VariableSubstituter('$foo bar ${baz/[a-z]/x/gi}')
+    >>> v.substitute({'foo': 'Jimmy', 'baz': 'John'})
+    'Jimmy bar xxxx'
+    >>> v = VariableSubstituter('$foo bar ${baz/[a-z]\/[a-z]/x\/y/i}')
+    >>> v.substitute({'foo': 'Jimmy', 'baz': 'b/d/c/e'})
+    'Jimmy bar x/y/c/e'
+    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y|i}')
+    >>> v.substitute({'foo': 'Jimmy', 'baz': 'b/d/c/e'})
+    'Jimmy bar x/y/c/e'
+    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y|igx}')
+    Traceback (most recent call last):
+    ...
+    VariableSubstituterParseError: Failed to parse ...
+    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y') # missing last |
+    Traceback (most recent call last):
+    ...
+    VariableSubstituterParseError: Failed to parse ...
+    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y|') # no }
+    Traceback (most recent call last):
+    ...
+    VariableSubstituterParseError: Failed to parse ...
+    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y|}') # no flags
+    >>> v.substitute({'foo': 'Jimmy', 'baz': 'B/d/c/e'})
+    'Jimmy bar B/x/y/e'
+    >>> v = VariableSubstituter('${foo|[a-z]+/\d+|FOOBAR|g}')
+    >>> v.substitute({'foo': 'abcdef/123/999-/vbn/789'})
+    'FOOBAR/999-/FOOBAR'
+    >>> v = VariableSubstituter('${file|^(\d+)|$1s|g}')
+    >>> v.substitute({'file': '01-Why-Spark.py'})
+    '01s-Why-Spark.py'
     '''
 
     def __init__(self, template):
@@ -718,6 +777,10 @@ class VariableSubstituter(object):
             parsimonious_ast = self._grammar.parse(template)
             visitor = _VarSubstASTVisitor()
             self._ast = self._flatten(visitor.visit(parsimonious_ast))
+
+        except VariableSubstituterParseError as e:
+            raise e
+
         except ParseError as e:
             if e.message:
                 raise VariableSubstituterParseError(
@@ -731,7 +794,7 @@ class VariableSubstituter(object):
             )
         except VisitationError as e:
             raise VariableSubstituterParseError(
-                '(BUG) Failed to transform AST "{0}: {1}'.format(
+                'Failed to parse "{0}: {1}'.format(
                     self.template, e.message
                 )
             )
@@ -805,6 +868,8 @@ class VariableSubstituter(object):
                 result += token.text
             elif type(token) == _Ternary:
                 result += token.evaluate(get_var(token.variable))
+            elif type(token) == _Edit:
+                result += token.evaluate(get_var(token.variable))
             else:
                 raise KeyError('(BUG) Unknown token: {0}'.format(token))
 
@@ -814,7 +879,7 @@ class VariableSubstituter(object):
 _Var  = namedtuple('_Var', ('name'))   # AST: captures a variable name
 _Text = namedtuple('_Text', ('text'))  # AST: captures arbitrary text
 
-class _Ternary(object):
+class _Ternary(DefaultStrMixin):
     '''
     Captures the pieces of a ternary IF.
     '''
@@ -855,26 +920,42 @@ class _Ternary(object):
         else:
             return self.if_false
 
-    def __str__(self):
-        return '${} {} {} ? {} : {}'.format(
-            self.variable, self.op, self.to_compare, self.if_true, self.if_false
-        )
+class _Edit(DefaultStrMixin):
+    '''
+    Stores the pieces of an inline variable value edit.
+    '''
+    def __init__(self, variable, pattern, repl, flags, replace_all=False):
+        self.variable = variable
+        self.pattern = pattern
+        self.repl = repl
+        self.flags = flags
+        self.replace_all = replace_all
 
-    def __repr__(self):
-        return (
-            ("_Ternary(" +
-             "variable='{}', op='{}', to_compare='{}', if_true='{}', " +
-             "if_false='{}'" + ")").format(
-                self.variable, self.op, self.to_compare,
-                self.if_true, self.if_false
-            )
-        )
+    def evaluate(self, variable_value):
+        value = str(variable_value)
+        count = 0 if self.replace_all else 1
+        # TODO: Support groups (grammar does; need to handle it here)
+        return self.pattern.sub(self.repl, value, count=count)
 
 class _VarSubstASTVisitor(grammar.NodeVisitor):
     '''
     This visitor translates the parsed Parsimonious AST into something more
     useful to the template substituter.
     '''
+    def generic_visit(self, node, visited_children):
+        '''
+        Called to visit any other node. This method must be here, or the
+        visit logic will bail. This code is adapted from code within
+        Parsimonious. Basically, if the node has children, we replace the
+        node with its children. Otherwise, we return the node.
+
+        :param node:              the node
+        :param visited_children:  its children
+
+        :return: the node or its children
+        '''
+        return visited_children or node
+
     def visit_var1(self, node, children):
         '''
         Called to visit "var1" nodes
@@ -920,6 +1001,10 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         # This is somewhat complicated, as it needs to handle multiple tokens.
         # Looping over the children is safer than direct indexing, and it's
         # less likely to break when the grammar is slightly modified.
+        # Here, we simply loop through the node itself, which will give us
+        # children the next level down (i.e., directly under the "ternary"
+        # node). We match against those nodes, and find *their* children as
+        # necessary.
         #
         # THIS CODE IS COUPLED TIGHTLY TO THE GRAMMAR.
         var = None
@@ -927,64 +1012,129 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         if_true = None
         if_false = None
         op = None
-        before_qmark = True
-        before_else = True
-        for child in self._drill_through_children(children):
-            if child.expr.name == 'ident':
+        for child in node:
+            try:
+                expr = child.expr
+            except AttributeError:
+                continue
+
+            if expr.name == 'identifier':
                 # The only identifier token here is the variable.
                 var = child.text
+
             elif child.text in _VAR_SUBST_OPS:
                 # Capture the comparison operation.
                 op = child.text
-            elif child.expr.name == 'simple_text':
-                # There are three text tokens in the pattern. Which is which
-                # depends on whether we've seen the "?" or the ":" yet.
-                if before_qmark:
-                    to_compare = child.text
-                elif before_else:
-                    if_true = child.text
-                else:
-                    if_false = child.text
-            elif child.expr.name == 'ternary_op':
-                before_qmark = False
-            elif child.expr.name == 'ternary_else':
-                before_else = False
 
+            elif expr.name == 'ternary_compare_term':
+                to_compare = self._find_child(child, 'optional_text').text
+
+            elif expr.name == 'ternary_true_side':
+                if_true = self._find_child(child, 'optional_text').text
+
+            elif expr.name == 'ternary_false_side':
+                if_false = self._find_child(child, 'optional_text').text
+
+        if not all([var, op, to_compare, if_true, if_false]):
+            raise VariableSubstituterParseError(
+                ('(BUG) Unable to find all expected pieces of parsed ternary ' +
+                 'expression: "{}". var={}, op={}, to_compare={}, if_true={} ' +
+                 'if_false={}').format(
+                    node.text, var, op, to_compare, if_true, if_false
+                )
+            )
         return _Ternary(variable=var, op=op, to_compare=to_compare,
                        if_true=if_true, if_false=if_false)
 
-    def generic_visit(self, node, visited_children):
+    def visit_edit1(self, node, children):
+        return self._handle_sub(node, children, 'pattern1', '/')
+
+    def visit_edit2(self, node, children):
+        return self._handle_sub(node, children, 'pattern2', '|')
+
+    def _handle_sub(selfself, node, children, pattern_token_name, delim):
         '''
-        Called to visit any other node. This method must be here, or the
-        visit logic will bail. This code is adapted from code within
-        Parsimonious. Basically, if the node has children, we replace the
-        node with its children. Otherwise, we return the node.
+        Workhorse function for handling edits.
 
-        :param node:              the node
-        :param visited_children:  its children
+        :param node:               the node
+        :param children:           the node's children
+        :param pattern_token_name: the grammar token name
+        :param delim:              the delimiter
 
-        :return: the node or its children
+        :return: an _Edit object
         '''
-        return visited_children or node
+        var = None
+        pattern = None
+        substitution = None
+        replace_all = False
+        flags = 0
 
-    def _drill_through_children(self, children):
-        '''
-        Flatten out all the children of a node, allowing easy traversal.
+        for child in node:
+            try:
+                expr = child.expr
+            except AttributeError:
+                continue
 
-        :param children: the children, which may be nested
+            if expr.name == 'identifier':
+                var = child.text
 
-        :return: The flattened-out children, as a generator
-        '''
-        for child in children:
-            if type(child) is list:
-                for i in child:
-                    yield i
-            elif isinstance(child, parsimonious.nodes.Node):
-                yield child
-                for i in child.children:
-                    yield i
-            else:
-                yield child
+            elif expr.name == pattern_token_name:
+                backslash_delim = '\\' + delim
+                s = child.text.replace(backslash_delim, delim)
+                if pattern is None:
+                    try:
+                        pattern = s
+                        re.compile(pattern)
+                    except:
+                        raise VariableSubstituterParseError(
+                            ('Bad regular expression "{0}" in "{1}".'.format(
+                                child.text, node.text
+                            ))
+                        )
+                else:
+                    substitution = s
+
+            elif expr.name == 'flags':
+                flag_set = set(child.text)
+                if 'i' in flag_set:
+                    flags |= re.I
+                if 'g' in flag_set:
+                    replace_all = True
+
+                leftover = flag_set - {'i', 'g'}
+                if len(leftover) > 0:
+                    raise VariableSubstituterParseError(
+                        'Unknown flag(s) {0} in "{1}"'.format(
+                            ', '.join(["'" + c + "'" for c in leftover]),
+                            node.text
+                        )
+                    )
+
+        if not all([var, pattern, substitution]):
+            raise VariableSubstituterParseError(
+                ('(BUG) Unable to find all expected pieces of parsed ' +
+                 'substitution expression: "{}"').format(node.text)
+            )
+
+        pattern = re.compile(pattern, flags=flags)
+
+        return _Edit(variable=var, pattern=pattern, repl=substitution,
+                     flags=flags, replace_all=replace_all)
+
+    def _find_child(self, node, expr_name):
+        if not node.children:
+            return None
+
+        for i in node.children:
+            try:
+                if i.expr_name == expr_name:
+                    return i
+            except AttributeError:
+                continue
+
+        raise VariableSubstituterParseError(
+            '(BUG) Unable to find {}'.format(expr_name)
+        )
 
 # ---------------------------------------------------------------------------
 # Module-private functions
@@ -1017,5 +1167,5 @@ def _do_copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
 # ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
-    from doctest import testmod
-    testmod()
+    from doctest import testmod, ELLIPSIS
+    testmod(optionflags=ELLIPSIS)

@@ -1,5 +1,19 @@
 # Change Log for BDC
 
+Version 1.14.0:
+
+* Variable substitution now supports a simple inline variable edit capability.
+  General format: `${var/regex/replacement/flags}` where `regex` is a
+  regular expression, `replacement` is a replacement string, and `flags`
+  can be `i` (case-insensitive), `g` (substitute all occurrences, not just
+  the first), or `ig` (both). The delimiter can be either "/" or "|", and
+  the delimiter can be escaped, if necessary. Examples:
+  
+```
+# Replace all occurrences of "letters/numbers" with "FOOBAR"
+${foo|[a-z]+/\d+|FOOBAR|g}
+```
+
 Version 1.13.0:
 
 * Variable substitution now supports a C-like ternary `if` syntax. For instance:

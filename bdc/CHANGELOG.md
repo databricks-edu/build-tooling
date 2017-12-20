@@ -1,6 +1,28 @@
 # Change Log for BDC
 
-Version 1.14.0:
+### Version 1.15.0
+
+* The ternary IF variable substitution syntax now supports simple variable
+  substitutions within the comparison string, the "true" string, and the
+  "false" string. Double quotes are still required, and only simple 
+  substitutions are permitted (i.e., ternary IFs and replacements are not).
+  Examples:
+* Character escaping changes:
+    - To escape a `$`, use `\$` _or_ `$$`.
+    - To escape a double quote, use `\"`.
+
+```
+${foo == "$bar" ? "It matches $$bar." : "It's $foo, not $bar"}
+         ^    ^   ^                 ^   ^                   ^
+         Note that the double quotes are REQUIRED
+
+${x == "abc${foo}def" ? "YES" : "NO."}
+```  
+
+* Fixed a bug: Escaped "$" (i.e., "$$") sequences weren't properly being
+  unescaped.
+
+### Version 1.14.0
 
 * Variable substitution now supports a simple inline variable edit capability.
   General format: `${var/regex/replacement/flags}` where `regex` is a
@@ -9,13 +31,13 @@ Version 1.14.0:
   the first), or `ig` (both). The delimiter can be either "/" or "|", and
   the delimiter can be escaped with a backslash, if necessary. Examples:
   Regular expression groups can be substituted using `$1`, `$2`, etc.
-  
+
 ```
 # Replace all occurrences of "letters/numbers" with "FOOBAR"
 ${foo|[a-z]+/\d+|FOOBAR|g}
 ```
 
-Version 1.13.0:
+### Version 1.13.0
 
 * Variable substitution now supports a C-like ternary `if` syntax. For instance:
 
@@ -25,16 +47,16 @@ ${variable == "foo" ? "Got foo" : "No foo"}
 
 * Added doctests to `bdc/bdcutil.py`. Just run the module to run the tests.
 
-Version 1.12.2:
+### Version 1.12.2
 
 * Revised default Version-x.x.x file, removing an excess new line.
 
-Version 1.12.1:
+### Version 1.12.1
 
 * Fixed upload and download capabilities to handle new (nonexistent) notebooks
   better.
 
-Version 1.12.0:
+### Version 1.12.0
 
 * Added `top_dbc_folder_name` to `build.yaml`, allowing specification of the
   topmost folder in the generated DBC. Defaults to the course name. See
@@ -43,7 +65,7 @@ Version 1.12.0:
   either environment variable "DB_SHARD_HOME" is set or `~/.databrickscfg`
   has a `home` setting in the `DEFAULT` section. See the README for details.
 
-Version 1.11.0:
+### Version 1.11.0
 
 * Added ability to enable or disable a footer that is automatically added to
   each generated notebook. The feature is controlled by a per-notebook
@@ -57,13 +79,13 @@ Version 1.11.0:
 * Added `master_parse_min_version`, which is required for any course that
   uses the master parser.
 
-Version 1.10.1:
+### Version 1.10.1
 
 * Fixed `--upload` and `--download`, which broke due to all the changes in
   1.10.0.
 * Added Python 2 check. (Python 3 is no longer supported.)
 
-Version 1.10.0
+### Version 1.10.0
 
 * `bdc` now generates a version-stamped notebook, with version information,
   at the top level of the generated build, providing an easy way for students
@@ -110,14 +132,14 @@ Version 1.10.0
   suppress the automatic insertion of the target language.
 * Moved some general-purpose functions into separate `bdcutil` module.
 
-Version 1.9.0:
+### Version 1.9.0
 
 * The master configuration file (`bdc.cfg`) is no longer used. `bdc` locates
   `gendbc` via the path, and it allows specification of the output directory
   via a new `-d` (or `--dest`) option.
 * Updated documentation in the README.
 
-Version 1.8.0:
+### Version 1.8.0
 
 * Added ability to upload and download entire course via `databricks`
   CLI.
@@ -128,19 +150,19 @@ Version 1.8.0:
   `dest: '..'`) are no longer supported. If you want to suppress the
   insertion of a target language, use a destination path that starts with
   "/".
-  
-Version 1.7.0:
+
+### Version 1.7.0
 
 * Added `--list-notebooks` option, providing a quick way to get a listing
   of all the notebooks in a course.
 
-Version 1.6.0:
+### Version 1.6.0
 
 * Changed to support notebook heading changes in master parser.
   Notebook heading is automatically added by the build tool, unless
   the `notebook_heading.enabled` parameter is set to `false`.
 
-Version 1.5.0:
+### Version 1.5.0
 
 * Updated to support `notebook_heading` override parameter in the
   `master` section for a notebook. This parameter, if defined, must
@@ -149,12 +171,12 @@ Version 1.5.0:
   the `--notebook-heading` master parse command-line parameter, and it's
   optional.
 
-Version 1.4.1:
+### Version 1.4.1
 
 * Emit tool name (bdc) as prefix on verbose messages. 
 * When -v is specified, invoke master parser with new _verbose_ argument.
 
-Version 1.4.0:
+### Version 1.4.0
 
 * Updated to work with newest version of master parser, which produces
   three kinds of notebooks (instructor, exercises, answers).

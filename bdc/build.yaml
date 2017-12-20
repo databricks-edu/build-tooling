@@ -15,6 +15,8 @@
 # ${var}foo     Substitutes the value of "var" preceding the string "foo"
 # $varfoo       Attempts to substitute the value of "varfoo"
 #
+# To escape a $, use $$ or \$.  To escape a backslash, use \\.
+#
 # VARIABLE NAMES
 # ---------------
 #
@@ -26,28 +28,51 @@
 # The variable syntax supports a C-like "ternary IF" statement. The general
 # form is:
 #
-#     ${variable == SOMESTRING ? TRUESTRING : FALSESTRING}
-#     ${variable != SOMESTRING ? TRUESTRING : FALSESTRING}
+#     ${variable == "SOMESTRING" ? "TRUESTRING" : "FALSESTRING"}
+#     ${variable != "SOMESTRING" ? "TRUESTRING" : "FALSESTRING"}
 #
 # WARNING: When using a ternary IF, the string MUST be quoted in single quotes.
 # Otherwise, the YAML parser will barf (due to the embedded ":").
+#
+#
+# Rules:
+#
+# 1. The braces are _not_ optional.
+# 2. The strings (SOMESTRING, TRUESTRING and FALSESTRING) must be surrounded
+#    by double quotes. Single quotes are not supported.
+# 3. Simple variable substitutions ($var and ${var}) are permitted within the
+#    quoted strings, but the quotes are still required. Ternary IFs and inline
+#    editing are not supported within a ternary IF.
+# 4. The white space is optional.
+# 5. When using a ternary IF substitution, your MUST surround the entire string
+#    in single quotes. The string has to be quoted to prevent the YAML
+#    parser from getting confused by the embedded ":" character.
+# 6. To use a literal double quote within one of the ternary expressions,
+#    escape it with \".
 #
 # White space is optional. Valid examples:
 #
 # 1. Substitute the string "FOO" if "$foo" equals "foo". Otherwise, substitute
 #    the string "BAR".
 #
-#    ${foo == "foo" ? "FOO" : "BAR"}
+#      ${foo == "foo" ? "FOO" : "BAR"}
 #
 # 2. Substitute the string "-solution" if "notebook_type" is "answers".
 #    Otherwise, substitute nothing.
 #
-#    ${notebook_type=="answers"?"-solution":""}
+#      ${notebook_type=="answers"?"-solution":""}
 #
-# The strings (SOMESTRING, TRUESTRING, FALSESTRING) must use double quotes.
-# Single quotes are NOT supported.
+# 3. Variables within the ternary expressions:
 #
-# Braces are REQUIRED.
+#      ${foo == "$bar" ? "It matches $$bar." : "It's $foo, not $bar"}
+#               ^    ^   ^                 ^   ^                   ^
+#               Note that the double quotes are REQUIRED
+#
+#      ${x == "abc${foo}def" ? "YES" : "NO."}
+#
+# 4. Double quote (") as part of a value being tested:
+#
+#      ${foo == "\"" ? "QUOTE" : "NOT QUOTE"}
 #
 # INLINE EDIT DURING VARIABLE SUBSTITUTION
 # ----------------------------------------

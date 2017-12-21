@@ -187,20 +187,20 @@ class NotebookType(Enum):
         }
 
     def suffix_for(self):
-        '''
+        """
         Get the filename suffix for the notebook type (e.g., '_exercises').
 
         :return: the suffix
-        '''
+        """
         return NotebookType.suffixes()[self]
 
     @classmethod
     def suffixes(cls):
-        '''
+        """
         Get a dict of NotebookType -> suffix mappings
 
         :return: the mappings
-        '''
+        """
         return {
             NotebookType.EXERCISES:  '_exercises',
             NotebookType.INSTRUCTOR: '_instructor',
@@ -221,19 +221,23 @@ MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
 
-class NotebookDefaults(object, DefaultStrMixin):
+
+class NotebookDefaults(DefaultStrMixin):
     def __init__(self, dest=None, master=None):
-        '''
+        """
         Create a new NotebookDefaults object.
 
         :param dest:    The destination value (str)
         :param master:  The master parse section (dict, not MasterParseInfo)
-        '''
+        """
         self.dest = dest
         self.master = master or {}
 
 
-class MasterParseInfo(object, DefaultStrMixin):
+class MasterParseInfo(DefaultStrMixin):
+    """
+    Parsed master parser data for a notebook.
+    """
     LANGUAGES = ('python', 'scala', 'r', 'sql')
 
     VALID_FIELDS = {
@@ -261,9 +265,6 @@ class MasterParseInfo(object, DefaultStrMixin):
         'enabled': bool
     }
 
-    '''
-    Parsed master parser data for a notebook.
-    '''
     def __init__(self,
                  enabled=False,
                  python=True,
@@ -277,7 +278,7 @@ class MasterParseInfo(object, DefaultStrMixin):
                  footer=NotebookFooter(path=None, enabled=True),
                  encoding_in='UTF-8',
                  encoding_out='UTF-8'):
-        '''
+        """
         Create a new parsed master parse data object
 
         :param enabled:      whether master parsing is enabled for the notebook
@@ -292,7 +293,7 @@ class MasterParseInfo(object, DefaultStrMixin):
         :param footer:       footer information (a NotebookFooter object)
         :param encoding_in:  the encoding of the source notebooks
         :param encoding_out: the encoding to use when writing notebooks
-        '''
+        """
         self.enabled      = enabled
         self.python       = python
         self.scala        = scala
@@ -307,31 +308,31 @@ class MasterParseInfo(object, DefaultStrMixin):
         self.encoding_out = encoding_out
 
     def lang_is_enabled(self, lang):
-        '''
+        """
         Determine if a specific language is enabled.
 
         :param lang:  the name (string) for the language, in lower case
 
         :return: True if it's enable, False if not
-        '''
+        """
         return self.__getattribute__(lang)
 
     def enabled_langs(self):
-        '''
+        """
         Return a list of the enabled languages. e.g., ['scala', 'python']
 
         :return: the list of enabled languages, which could be empty
-        '''
+        """
         return [i for i in self.LANGUAGES if self.__getattribute__(i)]
 
     def update_from_dict(self, d):
-        '''
+        """
         Update the fields in this master parse record from a dictionary.
         The dictionary should represent a master parse dictionary (e.g., as
         parsed from YAML). Keys can be missing. Extra keys are ignored.
 
         :param d: the dictionary
-        '''
+        """
         for k in self.VALID_FIELDS.keys():
             if k in d:
                 if k == 'heading':
@@ -352,13 +353,13 @@ class MasterParseInfo(object, DefaultStrMixin):
 
     @classmethod
     def extra_keys(cls, d):
-        '''
+        """
         Check a dictionary of master parse value for extra (unknown) keys.
 
         :param d: the dictionary to check
 
         :return: any unknown keys, or None if there aren't any.
-        '''
+        """
         extra = set(d.keys()) - set(cls.VALID_FIELDS.keys())
         heading = d.get('heading', {})
         for k in (set(heading.keys()) - set(cls.VALID_HEADING_FIELDS.keys())):
@@ -371,7 +372,7 @@ class MasterParseInfo(object, DefaultStrMixin):
 
     @classmethod
     def from_dict(cls, d):
-        '''
+        """
         Create a MasterParseData object from a dictionary of values.
 
         :param d: the dictionary.
@@ -379,7 +380,7 @@ class MasterParseInfo(object, DefaultStrMixin):
         :return: The object. Throws exceptions on error. Extra keys are not
                  interpreted as an error here; callers can report those errors
                  with more context.
-        '''
+        """
         heading = cls._parse_heading_data(d.get('heading'))
 
         return MasterParseInfo(
@@ -397,11 +398,11 @@ class MasterParseInfo(object, DefaultStrMixin):
         )
 
     def to_dict(self):
-        '''
+        """
         Convert this object into a dictionary.
 
         :return: the dictionary of fields
-        '''
+        """
         res = {}
         res.update(self.__dict__)
         return res
@@ -434,9 +435,9 @@ class MasterParseInfo(object, DefaultStrMixin):
 
 
 class NotebookData(object, DefaultStrMixin):
-    '''
+    """
     Parsed notebook data.
-    '''
+    """
     def __init__(self,
                  src,
                  dest,
@@ -455,40 +456,40 @@ class NotebookData(object, DefaultStrMixin):
         self.upload_download = upload_download
 
     def master_enabled(self):
-        '''
+        """
         Determine whether master notebook processing is enabled for this
         notebook.
 
         :return: true or false
-        '''
+        """
         return self.master.enabled
 
     def total_master_langs(self):
-        '''
+        """
         Get the number of output languages produced by the master parser
         for this notebook.
 
         :return: 0 if the master parser isn't enabled. Number of output
                  languages otherwise.
-        '''
+        """
         return len(self.master.enabled_langs()) if self.master.enabled else 0
 
     def master_multiple_langs(self):
-        '''
+        """
         Determine whether the master parser is parsing to multiple languages
         or not.
 
         :return: True if master parsing is enabled and parsing to multiple
                  languages; False if master parsing is disabled or is enabled
                  but with only one output language.
-        '''
+        """
         return self.total_master_langs() > 0
 
 
 class BuildData(object, DefaultStrMixin):
-    '''
+    """
     Parsed build data.
-    '''
+    """
     def __init__(self,
                  build_file_path,
                  top_dbc_folder_name,
@@ -504,7 +505,7 @@ class BuildData(object, DefaultStrMixin):
                  markdown_cfg,
                  notebook_type_map,
                  variables=None):
-        '''
+        """
         Create a new BuildData object.
 
         :param build_file_path:       path to the build file, for reference
@@ -521,7 +522,7 @@ class BuildData(object, DefaultStrMixin):
         :param notebook_type_map:     a dict mapping notebook types to strings.
                                       Keys are from the NotebookType enum.
         :param variables:             a map of user-defined variables
-        '''
+        """
         super(BuildData, self).__init__()
         self.build_file_path = build_file_path
         self.course_directory = path.dirname(build_file_path)
@@ -560,12 +561,12 @@ class BuildData(object, DefaultStrMixin):
 
     @property
     def course_id(self):
-        '''
+        """
         The course ID, which is a combination of the course name and the
         version.
 
         :return: the course ID string
-        '''
+        """
         return '{0}-{1}'.format(self.name, self.course_info.version)
 
 # ---------------------------------------------------------------------------
@@ -624,7 +625,7 @@ def load_build_yaml(yaml_file):
     import yaml
 
     def required(d, key, where, error=None):
-        '''
+        """
         Get a required key
 
         :param d:      the dictionary
@@ -632,7 +633,7 @@ def load_build_yaml(yaml_file):
         :param where:  where in the file the key should be (for errors)
         :param error:  error message, or None for default
         :return:
-        '''
+        """
         v = d.get(key)
         if v is None:
             if error:
@@ -1410,7 +1411,7 @@ def build_course(opts, build):
 
 
 def dbw(subcommand, args, capture_stdout=True):
-    '''
+    """
     Invoke "databricks workspace" with specified arguments.
 
     :param subcommand: the "databricks workspace" subcommand
@@ -1421,7 +1422,7 @@ def dbw(subcommand, args, capture_stdout=True):
     :return: A tuple of (returncode, parsed_json) on error,
              or (returncode, stdout) on success. If capture_stdout is False,
              then a successful result will return an empty string for stdout.
-    '''
+    """
     dbw = find_in_path('databricks')
     try:
         full_args = [dbw, 'workspace', subcommand] + args
@@ -1527,14 +1528,14 @@ def notebook_is_transferrable(nb, build):
 
 
 def get_sources_and_targets(build):
-    '''
+    """
     Get the list of source notebooks to be uploaded/downloaded and map them
     to their target names on the shard.
 
     :param build: the build
 
     :return: A dict of source names to partial-path target names
-    '''
+    """
     template_data = {
         TARGET_LANG: '',
         NOTEBOOK_TYPE: '',
@@ -1616,6 +1617,7 @@ def upload_notebooks(build, shard_path):
         dbw('rm', [shard_path], capture_stdout=False)
         die(e.message)
 
+
 def download_notebooks(build, shard_path):
     shard_path = expand_shard_path(shard_path)
     ensure_shard_path_exists(shard_path)
@@ -1656,6 +1658,7 @@ def download_notebooks(build, shard_path):
                          " were not copied").format(shard_path))
                 for f in leftover_files:
                     print("    {0}".format(f))
+
 
 def list_notebooks(build):
     for notebook in build.notebooks:

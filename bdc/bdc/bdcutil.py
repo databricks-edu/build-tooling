@@ -13,8 +13,7 @@ import contextlib
 import markdown2
 import shutil
 import codecs
-from collections import namedtuple
-import parsimonious
+import sys
 from parsimonious.grammar import Grammar
 from parsimonious import grammar, expressions
 from parsimonious.exceptions import ParseError, VisitationError
@@ -685,8 +684,28 @@ term                  = edit / ternary / var / text
 # Two forms of variable references are permitted: $var and ${var}
 var                   = var1 / var2
 var1                  = var_prefix (!var_prefix identifier) 
-var2                  = full_var_prefix (!var_prefix identifier) full_var_suffix
+var2                  = full_var_prefix 
+                        (!var_prefix identifier)
+                        subscript? 
+                        full_var_suffix
 
+subscript_start_op    = '['
+subscript_end_op      = ']'
+
+index                 = '-'? digit+
+slice_start           = index
+slice_end             = index
+
+index_sep             = ':'
+subscript             = subscript_start_op !subscript_start_op
+                        ( (index index_sep index)
+                        / (index index_sep)
+                        / (index_sep index)
+                        / index_sep
+                        / index
+                        )
+                        subscript_end_op
+                        
 full_var_prefix       = "${"
 full_var_suffix       = '}'
 var_prefix            = @VAR_PREFIX@
@@ -714,10 +733,6 @@ ternary               = full_var_prefix
 ternary_true_side     = quote var_or_text* quote
 ternary_false_side    = quote var_or_text* quote
 ternary_compare_term  = quote var_or_text* quote
-
-# Text within a quote has to be handled so that it supports escaping quotes.
-#quoted_text           = ((!quote char) / (backslash quote))* 
-#var_or_text           = var / quoted_text
 
 var_or_text           = var / text
 
@@ -946,6 +961,22 @@ class VariableSubstituter(object):
     'NO'
     >>> v.substitute({"foo": "quux", "x": "ab$cquuxdef"})
     'YES'
+    >>> v = VariableSubstituter(r'$foo ${foo} ${foo[0]} ${foo[-1]} ${foo[2:-1]} ${foo[-11:0]}')
+    >>> v.substitute({'foo': "Boy, howdy"})
+    'Boy, howdy Boy, howdy B y y, howd '
+    >>> v = VariableSubstituter('${foo[]}')
+    Traceback (most recent call last):
+    ...
+    VariableSubstituterParseError: Failed to parse ...
+    >>> v = VariableSubstituter('${foo[:]} $foo ${foo}')
+    >>> v.substitute({'foo': 'hello'})
+    'hello hello hello'
+    >>> v = VariableSubstituter('${foo[2:]}')
+    >>> v.substitute({'foo': 'hello'})
+    'llo'
+    >>> v = VariableSubstituter('${foo[:2]}')
+    >>> v.substitute({'foo': 'hello'})
+    'he'
     '''
     def __init__(self, template):
         '''
@@ -1056,7 +1087,7 @@ class VariableSubstituter(object):
     def _subst(self, get_var):
         def handle_token(token):
             if type(token) is _Var:
-                result = get_var(token.name)
+                result = token.evaluate(get_var(token.name))
             elif type(token) == _Text:
                 result = token.text
             elif type(token) == _Ternary:
@@ -1077,13 +1108,34 @@ class _Var(DefaultStrMixin):
     '''
     Captures a variable name in the modified (i.e., non-Parsimonious) AST.
     '''
-    def __init__(self, name):
+    def __init__(self, name, slice_start=None, slice_end=None):
         '''
         Create a new variable reference.
 
-        :param name: the variable name
+        :param name:        the variable name
+        :param slice_start: starting subscript, if any. None if not.
+        :param slice_end:   ending subscript, if any. None if not.
         '''
-        self.name = name
+        self.name        = name
+        self.slice_start = slice_start
+        self.slice_end   = slice_end
+
+    def evaluate(self, value):
+        '''
+        Evaluate the variable's value, applying any subscripts.
+
+        :return: the possibly-sliced value
+        '''
+        v = str(value)
+        if self.slice_start is None:  # No subscripts.
+            return v
+
+        if self.slice_end is None: # One subscript
+            return v[self.slice_start]
+
+        end = len(v) if self.slice_end > len(v) else self.slice_end
+
+        return v[self.slice_start:end]
 
 
 class _Text(DefaultStrMixin):
@@ -1167,6 +1219,8 @@ class _Edit(DefaultStrMixin):
 class _VarSubstASTVisitor(grammar.NodeVisitor):
     GROUPREF_RE  = re.compile(r'^groupref$')
     NON_DELIM_RE = re.compile(r'^non_edit_delim\d$')
+    SUBSCRIPT_RE = re.compile(r'^subscript$')
+    IDENT_RE     = re.compile(r'^identifier$')
 
     '''
     This visitor translates the parsed Parsimonious AST into something more
@@ -1206,7 +1260,36 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
         :return: A `_Var` object
         '''
-        return _Var(node.text[2:-1])
+        sub_node = self._find_recursively(node, self.SUBSCRIPT_RE)
+        slice_nums = [None, None]
+        if sub_node:
+            tokens = [n.text for n in self._all_descendent_exprs(sub_node)
+                      if n.expr.name in ('index', 'index_sep')]
+            # Convert the whole thing into a pattern, for easy matching.
+            pat = ''
+            for t in tokens:
+                pat += ':' if t == ':' else 'n'
+
+            if pat == ':':
+                # ${var[:]} is the same as ${var}
+                pass
+            elif pat == 'n:':
+                slice_nums = [int(tokens[0]), sys.maxint]
+            elif pat == ':n':
+                slice_nums = [0, int(tokens[1])]
+            elif pat == 'n':
+                slice_nums = [int(tokens[0]), None]
+            elif pat == 'n:n':
+                slice_nums = [int(tokens[0]), int(tokens[2])]
+            else:
+                raise VariableSubstituterParseError(
+                    '(BUG) Unrecognized slice pattern "{0}" in "{1}".'.format(
+                        ''.join(tokens), node.text
+                    )
+                )
+
+        var_name = self._find_recursively(node, self.IDENT_RE)
+        return _Var(var_name.text, *slice_nums)
 
     def visit_text(self, node, children):
         '''

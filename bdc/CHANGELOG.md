@@ -7,6 +7,9 @@
   "false" string. Double quotes are still required, and only simple 
   substitutions are permitted (i.e., ternary IFs and replacements are not).
   Examples:
+* Variables can now be subscripted, Python-style, as long as they use the
+  brace (`${var}`) syntax. Examples: `${foo[0]}`, `${foo[-1]}`,
+  `${foo[2:3]}`, `${foo[:]}`, `${foo[:-1]}`, `${foo[1:]}`
 * Character escaping changes:
     - To escape a `$`, use `\$` _or_ `$$`.
     - To escape a double quote, use `\"`.

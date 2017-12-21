@@ -566,10 +566,13 @@ def variable_ref_patterns(variable_name):
     '''
     return (
         re.compile(r'^(.*)(\$\{' + variable_name + r'\})(.*)$'),
+        re.compile(r'^(.*)(\$\{' + variable_name + r'\[\d*:?\d*\]\})(.*)$'),
         re.compile(r'^(.*)(\$' + variable_name + r')([^a-zA-Z_]+.*)$'),
         re.compile(r'^(.*)(\$' + variable_name + r')()$'), # empty group 3
         # This next bit of ugliness matches the ternary IF syntax
-        re.compile(r'^(.*)(\${' + variable_name + r'\s*[=!]=\s*"[^}?:]*"\s*\?\s*"[^}?:]*"\s*:\s*"[^}?:]*"})(.*)$')
+        re.compile(r'^(.*)(\${' + variable_name + r'\s*[=!]=\s*"[^}?:]*"\s*\?\s*"[^}?:]*"\s*:\s*"[^}?:]*"})(.*)$'),
+        # And this one matches the edit syntax.
+        re.compile(r'^(.*)(\${' + variable_name + '[/|][^/|]*[/|][^/|]*[/|][ig]?})(.*)$')
     )
 
 
@@ -1074,7 +1077,6 @@ class VariableSubstituter(object):
         '''
         def get_var(varname):
             return str(variables[varname])
-        print('--- variables={}'.format(variables))
         return self._subst(get_var)
 
     def safe_substitute(self, variables):
@@ -1247,7 +1249,6 @@ class _Edit(DefaultStrMixin):
     def evaluate(self, get_var):
         value = str(get_var(self.variable))
         # Assemble replacement string.
-        print(self.repl)
         repl = ''
         for token in self.repl:
             if isinstance(token, _Var):

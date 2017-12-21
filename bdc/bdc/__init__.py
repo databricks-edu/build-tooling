@@ -683,8 +683,9 @@ def load_build_yaml(yaml_file):
 
         fields.update(extra_vars)
 
-        # Restore escaped variables.
         adj_dest = VariableSubstituter(adj_dest).substitute(fields)
+
+        # Restore escaped variables.
         escaped = re.compile(r'^([^@]*)@([^@]+)@(.*)$')
         m = escaped.match(adj_dest)
         while m:

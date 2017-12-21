@@ -63,9 +63,9 @@
 # 1. The braces are _not_ optional.
 # 2. The strings (SOMESTRING, TRUESTRING and FALSESTRING) must be surrounded
 #    by double quotes. Single quotes are not supported.
-# 3. Simple variable substitutions ($var and ${var}) are permitted within the
-#    quoted strings, but the quotes are still required. Ternary IFs and inline
-#    editing are not supported within a ternary IF.
+# 3. Simple variable substitutions ($var ${var}, ${var[0], etc.) are permitted
+#    within the quoted strings, but the quotes are still required. Ternary IFs
+#    and inline editing are not supported within a ternary IF.
 # 4. The white space is optional.
 # 5. When using a ternary IF substitution, your MUST surround the entire string
 #    in single quotes. The string has to be quoted to prevent the YAML

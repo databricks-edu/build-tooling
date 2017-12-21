@@ -797,7 +797,7 @@ non_edit_delim1       = ( (backslash edit_delim1)
                         / (!edit_delim1 char)
                         )
 pattern1              = non_edit_delim1+
-replacement1          = (groupref / non_edit_delim1)*
+replacement1          = (groupref / var / non_edit_delim1)*
 
 edit_delim2           = @EDIT_DELIM_2@
 non_edit_delim2       = ( (backslash edit_delim2)
@@ -805,7 +805,7 @@ non_edit_delim2       = ( (backslash edit_delim2)
                         / (!edit_delim2 char)
                         )
 pattern2              = non_edit_delim2+
-replacement2          = (groupref / non_edit_delim2)*
+replacement2          = (groupref / var / non_edit_delim2)*
 
 groupref_prefix       = @EDIT_GROUPREF_PREFIX@
 groupref              = (!backslash groupref_prefix digit)
@@ -988,6 +988,17 @@ class VariableSubstituter(object):
     'W'
     >>> v.substitute({'foo': 'xxx', 'bar': 'WERTYU'})
     'E'
+    >>> v = VariableSubstituter(r'${file/^\d+/X${bar[2]}/}')
+    >>> v.substitute({'file': '01-abc', 'bar': "ABC"})
+    'XC-abc'
+    >>> v.substitute({'file': '01-abc', 'bar': "A"})
+    'XA-abc'
+    >>> v = VariableSubstituter(r'${file/^\d+/X${bar[2]}-$baz/}')
+    >>> v.substitute({'file': '01-abc', 'bar': 'tuvw', 'baz': '!!'})
+    'Xv-!!-abc'
+    >>> v = VariableSubstituter(r'${file/^\d+-(.*)$/X${bar[0:2]}-$baz.$1/}')
+    >>> v.substitute({'file': '01-abc', 'bar': 'tuvw', 'baz': '!!'})
+    'Xtu-!!.abc'
     '''
     def __init__(self, template):
         '''
@@ -1102,11 +1113,9 @@ class VariableSubstituter(object):
             elif type(token) == _Text:
                 result = token.text
             elif type(token) == _Ternary:
-                result = ''
-                for t in token.evaluate(get_var):
-                    result += handle_token(t)
+                result = token.evaluate(get_var)
             elif type(token) == _Edit:
-                result = token.evaluate(get_var(token.variable))
+                result = token.evaluate(get_var)
             else:
                 raise KeyError('(BUG) Unknown token: {0}'.format(token))
 
@@ -1146,7 +1155,6 @@ class _Var(DefaultStrMixin):
             return v[i]
 
         end = len(v) if self.slice_end > len(v) else self.slice_end
-
         return v[self.slice_start:end]
 
 
@@ -1194,23 +1202,27 @@ class _Ternary(DefaultStrMixin):
 
         :return: the sub-tokens to process
         '''
-        expanded = ""
-        for token in self.to_compare:
-            if isinstance(token, _Var):
-                expanded += get_var(token.name)
-            elif isinstance(token, _Text):
-                expanded += token.text
+        def expand(tokens):
+            expanded = ""
+            for token in tokens:
+                if isinstance(token, _Var):
+                    expanded += token.evaluate(get_var(token.name))
+                elif isinstance(token, _Text):
+                    expanded += token.text
+            return expanded
+
+        to_compare = expand(self.to_compare)
 
         this_var_value = get_var(self.variable)
         if self.op == _VAR_SUBST_EQ_OP:
-            test = expanded == this_var_value
+            test = to_compare == this_var_value
         else:
-            test = expanded != this_var_value
+            test = to_compare != this_var_value
 
         if test is True:
-            return self.if_true
+            return expand(self.if_true)
         else:
-            return self.if_false
+            return expand(self.if_false)
 
 class _Edit(DefaultStrMixin):
     '''
@@ -1223,10 +1235,18 @@ class _Edit(DefaultStrMixin):
         self.flags = flags
         self.replace_all = replace_all
 
-    def evaluate(self, variable_value):
-        value = str(variable_value)
+    def evaluate(self, get_var):
+        value = str(get_var(self.variable))
+        # Assemble replacement string.
+        repl = ''
+        for token in self.repl:
+            if isinstance(token, _Var):
+                repl += token.evaluate(get_var(token.name))
+            elif isinstance(token, _Text):
+                repl += token.text
+
         count = 0 if self.replace_all else 1
-        return self.pattern.sub(self.repl, value, count=count)
+        return self.pattern.sub(repl, value, count=count)
 
 class _VarSubstASTVisitor(grammar.NodeVisitor):
     GROUPREF_RE  = re.compile(r'^groupref$')
@@ -1467,25 +1487,31 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
                 repl_string = child.text
                 tokens = []
-                for i in child:
-                    n = self._find_recursively(i, self.GROUPREF_RE)
-                    if n:
+                for n in self._all_descendent_exprs(child):
+                    if self.GROUPREF_RE.match(n.expr.name):
                         group = n.text[1:]
-                        tokens.append('\\' + group)
+                        tokens.append(_Text('\\' + group))
                         referenced_groups.append(int(group))
                         continue
 
-                    n = self._find_recursively(i, self.NON_DELIM_RE)
-                    if n:
+                    if self.NON_DELIM_RE.match(n.expr.name):
                         s = (
                             n.text
                              .replace(backslash_delim, delim)
                              .replace(escaped_group_ref, '$')
                         )
-                        tokens.append(s)
+                        tokens.append(_Text(s))
                         continue
 
-                repl = ''.join(tokens)
+                    if n.expr.name == 'var1':
+                        tokens.append(self.visit_var1(n, []))
+                        continue
+
+                    if n.expr.name == 'var2':
+                        tokens.append(self.visit_var2(n, []))
+                        continue
+
+                repl = tokens
 
             elif expr.name == 'flags':
                 flag_set = set(child.text)

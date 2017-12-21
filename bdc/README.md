@@ -178,9 +178,9 @@ Rules:
 1. The braces are _not_ optional.
 2. The strings (`SOMESTRING`, `TRUESTRING` and `FALSESTRING`) _must_ be
    surrounded by double quotes. Single quotes are _not_ supported.
-3. Simple variable substitutions (`$var` and `${var}`) are permitted _within_
-   the quoted strings, but the quotes are still required. Ternary IFs
-   and inline editing are _not_ supported within a ternary IF.
+3. Simple variable substitutions (`$var`, `${var}`, `${var[0]}`, etc.)
+   are permitted _within_ the quoted strings, but the quotes are still required.
+   Ternary IFs and inline editing are _not_ supported within a ternary IF.
 4. The white space is optional.
 5. When using a ternary IF substitution, your _must_ surround the entire string
    in **single quotes**. The string has to be quoted to prevent the YAML
@@ -265,6 +265,9 @@ ${foo|abc/def|abc.def|}
   `regex`, it's usually more readable to use the alternate delimiter).
 * You can refer to regular expression groups as "$1", "$2", etc.
 * You can escape a literal dollar sign with a backslash.
+* Simple variable substitutions (`$var`, `${var}`, `${var[0]}`, etc.) are
+  permitted the replacement. Ternary IFs and nested inline editing are _not_ 
+  supported. 
 
 **`flags`**  
 

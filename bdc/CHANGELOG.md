@@ -7,12 +7,6 @@
   "false" string. Double quotes are still required, and only simple 
   substitutions are permitted (i.e., ternary IFs and replacements are not).
   Examples:
-* Variables can now be subscripted, Python-style, as long as they use the
-  brace (`${var}`) syntax. Examples: `${foo[0]}`, `${foo[-1]}`,
-  `${foo[2:3]}`, `${foo[:]}`, `${foo[:-1]}`, `${foo[1:]}`
-* Character escaping changes:
-    - To escape a `$`, use `\$` _or_ `$$`.
-    - To escape a double quote, use `\"`.
 
 ```
 ${foo == "$bar" ? "It matches $$bar." : "It's $foo, not $bar"}
@@ -20,7 +14,27 @@ ${foo == "$bar" ? "It matches $$bar." : "It's $foo, not $bar"}
          Note that the double quotes are REQUIRED
 
 ${x == "abc${foo}def" ? "YES" : "NO."}
+
+${x == "01-abc" ? "${bar[0]}" : "${bar[-1]}"}
 ```  
+
+* Similarly, the replacement string in a substitution edit can contain
+  simple variable substitutions (but not ternary IFs and replacements).
+  Examples:
+  
+```
+${file/^\d+/$x/g}
+${foo/\d/ABC${bar[0]}DEF/g}
+```
+
+* Variables can now be subscripted, Python-style, as long as they use the
+  brace (`${var}`) syntax. Examples: `${foo[0]}`, `${foo[-1]}`,
+  `${foo[2:3]}`, `${foo[:]}`, `${foo[:-1]}`, `${foo[1:]}`
+
+* Character escaping changes:
+    - To escape a `$`, use `\$` _or_ `$$`.
+    - To escape a double quote, use `\"`.
+
 
 * Fixed a bug: Escaped "$" (i.e., "$$") sequences weren't properly being
   unescaped.

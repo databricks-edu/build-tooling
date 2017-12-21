@@ -5,7 +5,7 @@ Run this module as a main program, or run it through `python -m doctest`,
 to exercise embedded tests.
 '''
 
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 import re
 import os
 from os import path
@@ -104,24 +104,6 @@ _info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
-
-def all_pred(func, iterable):
-    '''
-    Similar to the built-in `all()` function, this function ensures that
-    `func()` returns `True` for every element of the supplied iterable.
-    It short-circuits on the first failure.
-
-    :param func:     function or lambda to call with each element
-    :param iterable: the iterable
-
-    :return: `True` if all elements pass, `False` otherwise
-    '''
-    for i in iterable:
-        if not func(i):
-            return False
-
-    return True
-
 
 def set_verbosity(verbose, verbose_prefix):
     '''
@@ -235,6 +217,65 @@ def parse_version_string(version):
         raise ValueError('"{0}" is a malformed version string: {1}'.format(
             version, e.message
         ))
+
+
+def all_pred(func, iterable):
+    '''
+    Similar to the built-in `all()` function, this function ensures that
+    `func()` returns `True` for every element of the supplied iterable.
+    It short-circuits on the first failure.
+
+    :param func:     function or lambda to call with each element
+    :param iterable: the iterable
+
+    :return: `True` if all elements pass, `False` otherwise
+    '''
+    for i in iterable:
+        if not func(i):
+            return False
+
+    return True
+
+
+def flatten(it):
+    '''
+    Recursively flatten an iterable. Yields a generator for a new iterable.
+
+    NOTE: This function explicitly does NOT treat strings as iterables, even
+    though they are.
+
+    :param the iterable to flatten
+
+    :return: a generator for the recursively flattened result
+
+    >>> list(flatten(['foobar', range(1, 3), ['a', 'b', range(4, 6)], 'xyz']))
+    ['foobar', 1, 2, 'a', 'b', 4, 5, 'xyz']
+    >>> list(flatten([(1, 2, (3, 4), 5), [6, 7, [[8, 9]], 10]]))
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    >>> list(flatten([(1, 2, (3, 4), 5), [6, 7, [[8, 9]], 10], range(11, 20)]))
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+    '''
+
+    # Special case for strings: Since a string is iterable, but cannot be
+    # nested, and since looping over it produces single-character strings,
+    # which themselves are iterable (leading to infinite recursion), strings
+    # must be handled specially.
+    if type(it) is str:
+        yield it
+
+    else:
+        for i in it:
+            if type(i) is str:
+                yield i
+                continue
+
+            try:
+                # Is this thing iterable?
+                for j in flatten(iter(i)):
+                    yield j
+            except TypeError:
+                # No. Just yield it as is.
+                yield i
 
 
 def merge_dicts(dict1, dict2):
@@ -613,7 +654,7 @@ def matches_variable_ref(patterns, string):
 # Classes
 # ---------------------------------------------------------------------------
 
-class DefaultStrMixin:
+class DefaultStrMixin(object):
     '''
     Provides default implementations of __str__() and __repr__(). These
     implementations assume that all arguments passed to the constructor are
@@ -654,6 +695,9 @@ class DefaultStrMixin:
 # visitor relies on this behavior. Changes to the grammar will affect
 # the visitor, so be careful.
 #
+# If you make ANY changes to the grammar, (a) run the doctests, and (b) write
+# more doctests.
+#
 # GRAMMAR DEBUGGING HINTS:
 #
 # 1. Parsimonious produces its own complicated AST when it parses a string
@@ -662,9 +706,9 @@ class DefaultStrMixin:
 # 2. The _VarSubstASTVisitor class is custom Parsimonious visitor that
 #    traverses the Parsimonious AST and converts it into a sequence of tokens
 #    for easier processing. (Those tokens include _Var, _Text, _Edit and
-#    _Ternary objects.) Print that token stream can also help.
+#    _Ternary objects.) Printing that token stream can also help.
 # 3. The _VarSubstASTVisitor class's methods do a lot of work, and they're
-#    highly dependent (coupled to) on the grammar. Print statements in those
+#    highly dependent on (coupled to) the grammar. Print statements in those
 #    methods are also helpful.
 # 4. When doctests fail, the errors aren't always as helpful as if the same
 #    failure occurred outside of doctest. Run the same test inside the REPL.
@@ -1036,7 +1080,7 @@ class VariableSubstituter(object):
             self._grammar = Grammar(_VAR_SUBST_GRAMMAR)
             parsimonious_ast = self._grammar.parse(template)
             visitor = _VarSubstASTVisitor()
-            self._tokens = self._flatten(visitor.visit(parsimonious_ast))
+            self._tokens = list(flatten(visitor.visit(parsimonious_ast)))
 
         except ParseError as e:
             if e.message:
@@ -1121,16 +1165,14 @@ class VariableSubstituter(object):
 
         return self._subst(get_var)
 
-    def _flatten(self, nested_list):
-        res = []
-        for i in nested_list:
-            if type(i) is list:
-                res.extend(self._flatten(i))
-            else:
-                res.append(i)
-        return res
-
     def _subst(self, get_var):
+        '''
+        Workhorse method for both substitute() and safe_substitute().
+
+        :param get_var:  function to call to retrieve a variable's value
+
+        :return: The substituted string
+        '''
         def handle_token(token):
             if type(token) is _Var:
                 result = token.evaluate(get_var(token.name))
@@ -1145,10 +1187,46 @@ class VariableSubstituter(object):
 
             return result
 
-        return ''.join([handle_token(t) for t in self._tokens])
+        return ''.join([t.evaluate(get_var) for t in self._tokens])
 
 
-class _Var(DefaultStrMixin):
+class _Token(DefaultStrMixin):
+    '''
+    Abstract base class for tokens generated from the Parsimionious AST.
+    implementations assume that all arguments passed to the constructor are
+    captured in same-named fields in `self`.
+    '''
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def evaluate(self, get_var):
+        '''
+        Evaluate the token, returning the resulting string.
+
+        :param get_var: A function that will retrieve the value of a variable
+
+        :return: the expanded string
+        '''
+        pass
+
+    def _expand(self, get_var, tokens, allowed_tokens):
+        '''
+        Expands a list of tokens, processing each one by calling its
+        evaluate() method.
+
+        :param get_var         a function that will retrieve the value of a
+                               variable
+        :param tokens:         the list of tokens
+        :param allowed_tokens: the set of allowed token classes; any others are
+                               ignored
+
+        :return: the resulting string
+        '''
+        return (''.join([t.evaluate(get_var) for t in tokens
+                         if t.__class__ in allowed_tokens]))
+
+
+class _Var(_Token):
     '''
     Captures a variable name in the modified (i.e., non-Parsimonious) AST.
     '''
@@ -1160,17 +1238,20 @@ class _Var(DefaultStrMixin):
         :param slice_start: starting subscript, if any. None if not.
         :param slice_end:   ending subscript, if any. None if not.
         '''
+        super(_Var, self).__init__()
         self.name        = name
         self.slice_start = slice_start
         self.slice_end   = slice_end
 
-    def evaluate(self, value):
+    def evaluate(self, get_var):
         '''
         Evaluate the variable's value, applying any subscripts.
 
+        :param get_var: A function that will retrieve the value of a variable
+
         :return: the possibly-sliced value
         '''
-        v = str(value)
+        v = str(get_var(self.name))
         if len(v) == 0:
             return ''
 
@@ -1195,10 +1276,21 @@ class _Text(DefaultStrMixin):
 
         :param text: the contents of the text
         '''
+        super(_Text, self).__init__()
         self.text = text
 
+    def evaluate(self, get_var):
+        '''
+        Evaluate the token. In this case, just return the text
 
-class _Ternary(DefaultStrMixin):
+        :param get_var: A function that will retrieve the value of a variable
+
+        :return: the text
+        '''
+        return self.text
+
+
+class _Ternary(_Token):
     '''
     Captures the pieces of a ternary IF.
     '''
@@ -1212,6 +1304,7 @@ class _Ternary(DefaultStrMixin):
         :param if_true:     the string to substitute if the comparison is true
         :param if_false:    the string to substitute if the comnparison is false
         '''
+        super(_Ternary, self).__init__()
         self.variable   = variable
         self.op         = op
         self.to_compare = to_compare
@@ -1220,25 +1313,16 @@ class _Ternary(DefaultStrMixin):
 
     def evaluate(self, get_var):
         '''
-        Convenience method: Takes the value for the variable (which the caller
-        must provide) and performs the appropriate test, returning the
-        `if_true` value if the comparison succeeds and the `if_false` value
-        otherwise.
+        Evaluate the ternary expression, returning the resulting string.
 
-        :param variable_value:
-
-        :return: the sub-tokens to process
+        :param get_var: A function that will take a variable name and retrieve
+                        its value
+        :return: the resulting string
         '''
-        def expand(tokens):
-            expanded = ""
-            for token in tokens:
-                if isinstance(token, _Var):
-                    expanded += token.evaluate(get_var(token.name))
-                elif isinstance(token, _Text):
-                    expanded += token.text
-            return expanded
 
-        to_compare = expand(self.to_compare)
+        to_compare = self._expand(get_var,
+                                  self.to_compare,
+                                  {_Var, _Text})
 
         this_var_value = get_var(self.variable)
         if self.op == _VAR_SUBST_EQ_OP:
@@ -1247,35 +1331,50 @@ class _Ternary(DefaultStrMixin):
             test = to_compare != this_var_value
 
         if test is True:
-            return expand(self.if_true)
+            return self._expand(get_var, self.if_true, {_Var, _Text})
         else:
-            return expand(self.if_false)
+            return self._expand(get_var, self.if_false, {_Var, _Text})
 
-class _Edit(DefaultStrMixin):
+class _Edit(_Token):
     '''
     Stores the pieces of an inline variable value edit.
     '''
-    def __init__(self, variable, pattern, repl, flags, replace_all=False):
+    def __init__(self, variable, pattern, repl, replace_all=False):
+        '''
+        Create a new _Edit token.
+
+        :param variable:    the variable whose value is to be edited
+        :param pattern:     the regular expression to find and substitute
+        :param repl:        the replacement tokens (a list of _Text and _Var
+                            objects)
+        :param replace_all: whether to not to do a global replacement
+        '''
+        super(_Token, self).__init__()
         self.variable = variable
         self.pattern = pattern
         self.repl = repl
-        self.flags = flags
         self.replace_all = replace_all
 
     def evaluate(self, get_var):
-        value = str(get_var(self.variable))
-        # Assemble replacement string.
-        repl = ''
-        for token in self.repl:
-            if isinstance(token, _Var):
-                repl += token.evaluate(get_var(token.name))
-            elif isinstance(token, _Text):
-                repl += token.text
+        '''
+        Evaluate the edit expression, returning the resulting string.
 
+        :param get_var: A function that will take a variable name and retrieve
+                        its value
+        :return: the resulting string
+        '''
+        value = str(get_var(self.variable))
+
+        # Expand the replacement string.
+        repl = self._expand(get_var, self.repl, {_Var, _Text})
         count = 0 if self.replace_all else 1
         return self.pattern.sub(repl, value, count=count)
 
 class _VarSubstASTVisitor(grammar.NodeVisitor):
+    '''
+    Node visitor, which translates the Parsimonious AST to a list of
+    tokens.
+    '''
     GROUPREF_RE  = re.compile(r'^groupref$')
     NON_DELIM_RE = re.compile(r'^non_edit_delim\d$')
     SUBSCRIPT_RE = re.compile(r'^subscript$')
@@ -1578,7 +1677,7 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
             )
 
         return _Edit(variable=var, pattern=pattern, repl=repl,
-                     flags=flags, replace_all=replace_all)
+                     replace_all=replace_all)
 
     def _all_descendents(self, node):
         for child in node:

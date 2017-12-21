@@ -542,7 +542,7 @@ def dict_get_and_del(d, key, default=None):
 
 def variable_ref_patterns(variable_name):
     '''
-    Convert a variable name into a series of regular expressions that will will
+    Convert a variable name into a series of regular expressions that will
     match a reference to the variable. (Regular expression alternation syntax
     is too complicated and error-prone for this purpose.)
 
@@ -578,7 +578,7 @@ def variable_ref_patterns(variable_name):
 
 def matches_variable_ref(patterns, string):
     '''
-    Matches the string against the pattern, returning a 3-tuple on match and
+    Matches the string against the patterns, returning a 3-tuple on match and
     None on no match.
 
     :param patterns: A series of patterns returned from variable_ref_patterns().
@@ -653,6 +653,22 @@ class DefaultStrMixin:
 # NOTE: Even simple terminal constants (like '"') have token names. The
 # visitor relies on this behavior. Changes to the grammar will affect
 # the visitor, so be careful.
+#
+# GRAMMAR DEBUGGING HINTS:
+#
+# 1. Parsimonious produces its own complicated AST when it parses a string
+#    with this grammar. Printing that AST (via a tactical print statement in
+#    the VariableSubstituter constructor) can help.
+# 2. The _VarSubstASTVisitor class is custom Parsimonious visitor that
+#    traverses the Parsimonious AST and converts it into a sequence of tokens
+#    for easier processing. (Those tokens include _Var, _Text, _Edit and
+#    _Ternary objects.) Print that token stream can also help.
+# 3. The _VarSubstASTVisitor class's methods do a lot of work, and they're
+#    highly dependent (coupled to) on the grammar. Print statements in those
+#    methods are also helpful.
+# 4. When doctests fail, the errors aren't always as helpful as if the same
+#    failure occurred outside of doctest. Run the same test inside the REPL.
+#    You'll get more detailed errors.
 
 _VAR_SUBST_EQ_OP = '=='
 _VAR_SUBST_NE_OP = '!='
@@ -674,7 +690,7 @@ def _replace_tokens(s, tokens):
     return s2
 
 # The grammar itself. Some values are substituted, so they can be shared
-# with the code (the PEG alternation syntax).
+# with the code.
 _VAR_SUBST_OPS_RULE = ' / '.join(['"{}"'.format(op) for op in _VAR_SUBST_OPS])
 _VAR_SUBST_GRAMMAR = _replace_tokens(r"""
 # A line consists of zero or more terms. 
@@ -1020,7 +1036,7 @@ class VariableSubstituter(object):
             self._grammar = Grammar(_VAR_SUBST_GRAMMAR)
             parsimonious_ast = self._grammar.parse(template)
             visitor = _VarSubstASTVisitor()
-            self._ast = self._flatten(visitor.visit(parsimonious_ast))
+            self._tokens = self._flatten(visitor.visit(parsimonious_ast))
 
         except ParseError as e:
             if e.message:
@@ -1129,7 +1145,7 @@ class VariableSubstituter(object):
 
             return result
 
-        return ''.join([handle_token(t) for t in self._ast])
+        return ''.join([handle_token(t) for t in self._tokens])
 
 
 class _Var(DefaultStrMixin):

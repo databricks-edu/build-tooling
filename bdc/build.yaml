@@ -22,6 +22,26 @@
 #
 # Legal variable names consist of alphanumeric and underscore characters only.
 #
+# SUBSCRIPTING AND SLICING
+# ------------------------
+#
+# Variables can be subscripted and sliced, Python-style, as long as they use the
+# brace (${var}) syntax.
+#
+# Examples:
+#
+# - ${foo[0]}
+# - ${foo[-1]}
+# - ${foo[2:3]}
+# - ${foo[:]}
+# - ${foo[:-1]}
+# - ${foo[1:]}
+#
+# Subscripts are interpreted as in Python code, except that the "stride"
+# capability isn't supported. (That is, you cannot use ${foo[0:-1:2]
+# to slice through a value with index jumps of 2.)
+#
+#
 # INLINE ("TERNARY") IF
 # ---------------------
 #

@@ -43,7 +43,8 @@
 #
 # One difference: If the final subscript is too large, it's sized down. For
 # instance, if the variable "foo" is "ABCDEF", the substitution ${foo[100]}
-# yields "F", and the substitution `${foo[1:10000]}` yields "BCDEF".
+# yields "F", and the substitution `${foo[1:10000]}` yields "BCDEF". As a
+# special case, subscripting an empty variable always yields an empty string.
 #
 # INLINE ("TERNARY") IF
 # ---------------------

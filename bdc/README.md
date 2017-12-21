@@ -161,7 +161,8 @@ to slice through a value with index jumps of 2.)
 One difference: If the final subscript is too large, it's sized down. For 
 instance, given the variable `foo` set to `"ABCDEF"`, the substitution 
 `${foo[100]}` yields `"F"`, and the substitution `${foo[1:10000]}` yields
-`"BCDEF"`.
+`"BCDEF"`. As a special case, subscripting an empty variable always
+yields an empty string, regardless of the subscript.
 
 #### Inline ("ternary") IF
 

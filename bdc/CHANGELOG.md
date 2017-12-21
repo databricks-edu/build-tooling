@@ -35,7 +35,6 @@ ${foo/\d/ABC${bar[0]}DEF/g}
     - To escape a `$`, use `\$` _or_ `$$`.
     - To escape a double quote, use `\"`.
 
-
 * Fixed a bug: Escaped "$" (i.e., "$$") sequences weren't properly being
   unescaped.
 

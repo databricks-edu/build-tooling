@@ -983,6 +983,12 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter('${foo[1:100000000]}')
     >>> v.substitute({'foo': 'hello'})
     'ello'
+    >>> v = VariableSubstituter('${x[0]}')
+    >>> v.substitute({'x': ''})
+    ''
+    >>> v = VariableSubstituter('${x[10000]}')
+    >>> v.substitute({'x': ''})
+    ''
     >>> v = VariableSubstituter(r'${foo == "abc" ? "${bar[0]}" : "${bar[1]}"}')
     >>> v.substitute({'foo': 'abc', 'bar': 'WERTYU'})
     'W'
@@ -1068,7 +1074,7 @@ class VariableSubstituter(object):
         '''
         def get_var(varname):
             return str(variables[varname])
-
+        print('--- variables={}'.format(variables))
         return self._subst(get_var)
 
     def safe_substitute(self, variables):
@@ -1147,6 +1153,9 @@ class _Var(DefaultStrMixin):
         :return: the possibly-sliced value
         '''
         v = str(value)
+        if len(v) == 0:
+            return ''
+
         if self.slice_start is None:  # No subscripts.
             return v
 
@@ -1238,6 +1247,7 @@ class _Edit(DefaultStrMixin):
     def evaluate(self, get_var):
         value = str(get_var(self.variable))
         # Assemble replacement string.
+        print(self.repl)
         repl = ''
         for token in self.repl:
             if isinstance(token, _Var):

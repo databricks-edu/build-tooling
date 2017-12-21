@@ -1372,8 +1372,7 @@ class _Edit(_Token):
 
 class _VarSubstASTVisitor(grammar.NodeVisitor):
     '''
-    Node visitor, which translates the Parsimonious AST to a list of
-    tokens.
+    Node visitor, which translates the Parsimonious AST to a list of tokens.
     '''
     GROUPREF_RE  = re.compile(r'^groupref$')
     NON_DELIM_RE = re.compile(r'^non_edit_delim\d$')
@@ -1559,9 +1558,25 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                        if_true=if_true, if_false=if_false)
 
     def visit_edit1(self, node, children):
+        '''
+        Processes an 'edit1' node.
+
+        :param node:      the node
+        :param children:  its children
+
+        :return: the tokens
+        '''
         return self._handle_sub(node, children, _VAR_SUBST_EDIT_DELIM1)
 
     def visit_edit2(self, node, children):
+        '''
+        Processes an 'edit2' node.
+
+        :param node:      the node
+        :param children:  its children
+
+        :return: the tokens
+        '''
         return self._handle_sub(node, children, _VAR_SUBST_EDIT_DELIM2)
 
     def _handle_sub(self, node, children, delim):
@@ -1680,22 +1695,54 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                      replace_all=replace_all)
 
     def _child_exprs(self, node):
+        '''
+        Return a generator of all of a node's immediate child nodes that have
+        an `expr` field.
+
+        :param node: the node
+
+        :return: the child nodes
+        '''
         for child in node:
             if hasattr(child, 'expr'):
                 yield child
 
     def _all_descendents(self, node):
+        '''
+        Return a generator of all of a node's descendents.
+
+        :param node: the node
+
+        :return: the descendent nodes
+        '''
         for child in node:
             yield child
             for c in self._all_descendents(child):
                 yield c
 
     def _all_descendent_exprs(self, node):
+        '''
+        Return a generator of all of a node's descendents that have an
+        `expr` field.
+
+        :param node: the node
+
+        :return: the descendent nodes
+        '''
         for child in self._all_descendents(node):
             if hasattr(child, 'expr'):
                 yield child
 
     def _find_recursively(self, node, expr_re):
+        '''
+        Search all of a node's descendents for the ones that have an `expr_name`
+        that matches the specified regular expression.
+
+        :param node:     the node
+        :param expr_re:  the compiled regular expression
+
+        :return: the matching nodes
+        '''
         for child in self._all_descendents(node):
             try:
                 if expr_re.search(child.expr_name):
@@ -1710,8 +1757,21 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 # ---------------------------------------------------------------------------
 
 def _do_copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
-    # Workhorse function that actually copies a file. Used by move() and
-    # copy().
+    '''
+    Workhorse function that actually copies a text file. Used by move() and
+    copy(). The source file's mode and other stats are copied, as well as its
+    contents.
+
+    :param src:                    the path to the file to be copied.
+    :param dest:                   the path to the target, which is assumed
+                                   to be a file, not a directory
+    :param ensure_final_newline:   True to ensure that the copied file has a
+                                   final newline, False to simply copy it as
+                                   is
+    :param encoding:               the encoding of the source file
+
+    :raise IOError: On error
+    '''
     if not path.exists(src):
         raise IOError('"{0}" does not exist.'.format(src))
     src = path.abspath(src)

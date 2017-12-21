@@ -1574,6 +1574,42 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
         :return: an _Edit object
         '''
+        def parse_replacement(child):
+            # The replacement node is an AST consisting of groupref,
+            # variable, and non_delim tokens. Reassemble them as a Python
+            # re.sub()-compliant string, where group references are
+            # introduced by backslashes.
+
+            repl_string = child.text
+            tokens = []
+            for n in self._all_descendent_exprs(child):
+                if self.GROUPREF_RE.match(n.expr.name):
+                    group = n.text[1:]
+                    tokens.append(_Text('\\' + group))
+                    referenced_groups.append(int(group))
+                    continue
+
+                if self.NON_DELIM_RE.match(n.expr.name):
+                    s = (
+                        n.text
+                            .replace(backslash_delim, delim)
+                            .replace(escaped_group_ref, '$')
+                    )
+                    tokens.append(_Text(s))
+                    continue
+
+                if n.expr.name == 'var1':
+                    tokens.append(self.visit_var1(n, []))
+                    continue
+
+                if n.expr.name == 'var2':
+                    tokens.append(self.visit_var2(n, []))
+                    continue
+
+            return tokens
+
+        # Main method logic
+
         var = None
         pattern = None
         repl = ''
@@ -1584,19 +1620,14 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         escaped_group_ref = '\\$'
         referenced_groups = []
 
-        for child in node:
-            try:
-                expr = child.expr
-            except AttributeError:
-                continue
-
+        for child in self._child_exprs(node):
+            expr = child.expr
             if expr.name == 'identifier':
                 var = child.text
 
             elif expr.name.startswith('pattern'):
-                s = child.text.replace(backslash_delim, delim)
                 try:
-                    pattern = s
+                    pattern = child.text.replace(backslash_delim, delim)
                     re.compile(pattern)
                 except:
                     raise VariableSubstituterParseError(
@@ -1606,38 +1637,7 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                     )
 
             elif expr.name.startswith('replacement'):
-                # The replacement node is an AST consisting of groupref
-                # and non_delim tokens. Reassemble them as a Python
-                # re.sub()-compliant string, where group references are
-                # introduced by backslashes.
-
-                repl_string = child.text
-                tokens = []
-                for n in self._all_descendent_exprs(child):
-                    if self.GROUPREF_RE.match(n.expr.name):
-                        group = n.text[1:]
-                        tokens.append(_Text('\\' + group))
-                        referenced_groups.append(int(group))
-                        continue
-
-                    if self.NON_DELIM_RE.match(n.expr.name):
-                        s = (
-                            n.text
-                             .replace(backslash_delim, delim)
-                             .replace(escaped_group_ref, '$')
-                        )
-                        tokens.append(_Text(s))
-                        continue
-
-                    if n.expr.name == 'var1':
-                        tokens.append(self.visit_var1(n, []))
-                        continue
-
-                    if n.expr.name == 'var2':
-                        tokens.append(self.visit_var2(n, []))
-                        continue
-
-                repl = tokens
+                repl = parse_replacement(child)
 
             elif expr.name == 'flags':
                 flag_set = set(child.text)
@@ -1679,6 +1679,11 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         return _Edit(variable=var, pattern=pattern, repl=repl,
                      replace_all=replace_all)
 
+    def _child_exprs(self, node):
+        for child in node:
+            if hasattr(child, 'expr'):
+                yield child
+
     def _all_descendents(self, node):
         for child in node:
             yield child
@@ -1687,11 +1692,8 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
     def _all_descendent_exprs(self, node):
         for child in self._all_descendents(node):
-            try:
-                if hasattr(child, 'expr'):
-                    yield child
-            except AttributeError:
-                continue
+            if hasattr(child, 'expr'):
+                yield child
 
     def _find_recursively(self, node, expr_re):
         for child in self._all_descendents(node):

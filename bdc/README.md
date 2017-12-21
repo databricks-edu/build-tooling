@@ -158,6 +158,11 @@ Subscripts are interpreted as in Python code, except that the "stride"
 capability isn't supported. (That is, you cannot use `${foo[0:-1:2]`
 to slice through a value with index jumps of 2.)
 
+One difference: If the final subscript is too large, it's sized down. For 
+instance, given the variable `foo` set to `"ABCDEF"`, the substitution 
+`${foo[100]}` yields `"F"`, and the substitution `${foo[1:10000]}` yields
+`"BCDEF"`.
+
 #### Inline ("ternary") IF
 
 The variable syntax supports a C-like "ternary IF" statement. The general

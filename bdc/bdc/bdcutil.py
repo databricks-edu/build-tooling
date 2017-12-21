@@ -977,6 +977,17 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter('${foo[:2]}')
     >>> v.substitute({'foo': 'hello'})
     'he'
+    >>> v = VariableSubstituter('${foo[100000]}')
+    >>> v.substitute({'foo': 'hello'})
+    'o'
+    >>> v = VariableSubstituter('${foo[1:100000000]}')
+    >>> v.substitute({'foo': 'hello'})
+    'ello'
+    >>> v = VariableSubstituter(r'${foo == "abc" ? "${bar[0]}" : "${bar[1]}"}')
+    >>> v.substitute({'foo': 'abc', 'bar': 'WERTYU'})
+    'W'
+    >>> v.substitute({'foo': 'xxx', 'bar': 'WERTYU'})
+    'E'
     '''
     def __init__(self, template):
         '''
@@ -1131,7 +1142,8 @@ class _Var(DefaultStrMixin):
             return v
 
         if self.slice_end is None: # One subscript
-            return v[self.slice_start]
+            i = len(v) - 1 if self.slice_start > len(v) else self.slice_start
+            return v[i]
 
         end = len(v) if self.slice_end > len(v) else self.slice_end
 

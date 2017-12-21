@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.14.0"
+VERSION = "1.15.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -683,8 +683,9 @@ def load_build_yaml(yaml_file):
 
         fields.update(extra_vars)
 
-        # Restore escaped variables.
         adj_dest = VariableSubstituter(adj_dest).substitute(fields)
+
+        # Restore escaped variables.
         escaped = re.compile(r'^([^@]*)@([^@]+)@(.*)$')
         m = escaped.match(adj_dest)
         while m:

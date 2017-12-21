@@ -132,9 +132,37 @@ doesn't get mashed together with a subsequent non-white space string, e.g.:
 - `${var}foo` substitutes the value of "var" preceding the string "foo"
 - `$varfoo` attempts to substitute the value of "varfoo"
 
+To escape a `$`, use `$$` or `\$`.
+
+To escape a backslash, use `\\`.
+
 #### Variable names
 
 Legal variable names consist of alphanumeric and underscore characters only.
+
+#### Subscripting and slicing
+
+Variables can be subscripted and sliced, Python-style, as long as they use the
+brace (`${var}`) syntax.
+
+Examples: 
+
+- `${foo[0]}`
+- `${foo[-1]}`
+- `${foo[2:3]}`
+- `${foo[:]}`
+- `${foo[:-1]}`
+- `${foo[1:]}`
+
+Subscripts are interpreted as in Python code, except that the "stride"
+capability isn't supported. (That is, you cannot use `${foo[0:-1:2]`
+to slice through a value with index jumps of 2.)
+
+One difference: If the final subscript is too large, it's sized down. For 
+instance, given the variable `foo` set to `"ABCDEF"`, the substitution 
+`${foo[100]}` yields `"F"`, and the substitution `${foo[1:10000]}` yields
+`"BCDEF"`. As a special case, subscripting an empty variable always
+yields an empty string, regardless of the subscript.
 
 #### Inline ("ternary") IF
 
@@ -142,8 +170,8 @@ The variable syntax supports a C-like "ternary IF" statement. The general
 form is:
 
 ```
-${variable == SOMESTRING ? TRUESTRING : FALSESTRING}
-${variable != SOMESTRING ? TRUESTRING : FALSESTRING}
+${variable == "SOMESTRING" ? "TRUESTRING" : "FALSESTRING"}
+${variable != "SOMESTRING" ? "TRUESTRING" : "FALSESTRING"}
 ```
 
 Rules:
@@ -151,25 +179,45 @@ Rules:
 1. The braces are _not_ optional.
 2. The strings (`SOMESTRING`, `TRUESTRING` and `FALSESTRING`) _must_ be
    surrounded by double quotes. Single quotes are _not_ supported.
-3. The white space is optional.
-4. When using a ternary IF substitution, your _must_ surround the entire string
+3. Simple variable substitutions (`$var`, `${var}`, `${var[0]}`, etc.)
+   are permitted _within_ the quoted strings, but the quotes are still required.
+   Ternary IFs and inline editing are _not_ supported within a ternary IF.
+4. The white space is optional.
+5. When using a ternary IF substitution, your _must_ surround the entire string
    in **single quotes**. The string has to be quoted to prevent the YAML
    parser from getting confused by the embedded ":" character.
+6. To use a literal double quote within one of the ternary expressions,
+   escape it with `\"`.
 
 **Examples**:
 
-Substitute the string "FOO" if "$foo" equals "foo". Otherwise, substitute
-the string "BAR".
+Substitute the string "FOO" if variable "foo" equals "foo". Otherwise,
+substitute the string "BAR":
 
 ```
 ${foo == "foo" ? "FOO" : "BAR"}
 ```
 
-Substitute the string "-solution" if "notebook_type" is "answers".
-Otherwise, substitute nothing.
+Substitute the string "-solution" if variable "notebook_type" is "answers".
+Otherwise, substitute nothing:
 
 ```
 ${notebook_type=="answers"?"-solution":""}
+```
+
+Variables within the ternary expressions:
+```
+${foo == "$bar" ? "It matches $$bar." : "It's $foo, not $bar"}
+         ^    ^   ^                 ^   ^                   ^
+         Note that the double quotes are REQUIRED
+
+${x == "abc${foo}def" ? "YES" : "NO."}
+```
+
+Double quote (") as part of a value being tested:
+
+```
+${foo == "\"" ? "QUOTE" : "NOT QUOTE"}
 ```
 
 #### Inline editing
@@ -218,6 +266,9 @@ ${foo|abc/def|abc.def|}
   `regex`, it's usually more readable to use the alternate delimiter).
 * You can refer to regular expression groups as "$1", "$2", etc.
 * You can escape a literal dollar sign with a backslash.
+* Simple variable substitutions (`$var`, `${var}`, `${var[0]}`, etc.) are
+  permitted the replacement. Ternary IFs and nested inline editing are _not_ 
+  supported. 
 
 **`flags`**  
 
@@ -390,4 +441,4 @@ token = lsakdjfaksjhasdfkjhaslku89iuyhasdkfhjasd
 home = /Users/user@example.net
 ```
 
-[build.yaml](build.yaml)
+[build.yaml]: build.yaml

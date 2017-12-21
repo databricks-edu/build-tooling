@@ -13,8 +13,7 @@ import contextlib
 import markdown2
 import shutil
 import codecs
-from collections import namedtuple
-import parsimonious
+import sys
 from parsimonious.grammar import Grammar
 from parsimonious import grammar, expressions
 from parsimonious.exceptions import ParseError, VisitationError
@@ -567,10 +566,13 @@ def variable_ref_patterns(variable_name):
     '''
     return (
         re.compile(r'^(.*)(\$\{' + variable_name + r'\})(.*)$'),
+        re.compile(r'^(.*)(\$\{' + variable_name + r'\[\d*:?\d*\]\})(.*)$'),
         re.compile(r'^(.*)(\$' + variable_name + r')([^a-zA-Z_]+.*)$'),
         re.compile(r'^(.*)(\$' + variable_name + r')()$'), # empty group 3
         # This next bit of ugliness matches the ternary IF syntax
-        re.compile(r'^(.*)(\${' + variable_name + r'\s*[=!]=\s*"[^}?:]*"\s*\?\s*"[^}?:]*"\s*:\s*"[^}?:]*"})(.*)$')
+        re.compile(r'^(.*)(\${' + variable_name + r'\s*[=!]=\s*"[^}?:]*"\s*\?\s*"[^}?:]*"\s*:\s*"[^}?:]*"})(.*)$'),
+        # And this one matches the edit syntax.
+        re.compile(r'^(.*)(\${' + variable_name + '[/|][^/|]*[/|][^/|]*[/|][ig]?})(.*)$')
     )
 
 
@@ -659,6 +661,8 @@ _VAR_SUBST_OPS = {   # the supported ternary expression operators
     _VAR_SUBST_EQ_OP, _VAR_SUBST_NE_OP
 }
 
+_VAR_SUBST_VAR_PREFIX           = '$'
+_VAR_SUBST_ESCAPED_VAR_PREFIX   = _VAR_SUBST_VAR_PREFIX + _VAR_SUBST_VAR_PREFIX
 _VAR_SUBST_EDIT_DELIM1          = '/'
 _VAR_SUBST_EDIT_DELIM2          = '|'
 _VAR_SUBST_EDIT_GROUPREF_PREFIX = '$'
@@ -682,8 +686,32 @@ term                  = edit / ternary / var / text
 
 # Two forms of variable references are permitted: $var and ${var}
 var                   = var1 / var2
-var1                  = '$' identifier
-var2                  = "${" identifier '}'
+var1                  = var_prefix (!var_prefix identifier) 
+var2                  = full_var_prefix 
+                        (!var_prefix identifier)
+                        subscript? 
+                        full_var_suffix
+
+subscript_start_op    = '['
+subscript_end_op      = ']'
+
+index                 = '-'? digit+
+slice_start           = index
+slice_end             = index
+
+index_sep             = ':'
+subscript             = subscript_start_op !subscript_start_op
+                        ( (index index_sep index)
+                        / (index index_sep)
+                        / (index_sep index)
+                        / index_sep
+                        / index
+                        )
+                        subscript_end_op
+                        
+full_var_prefix       = "${"
+full_var_suffix       = '}'
+var_prefix            = @VAR_PREFIX@
 
 backslash             = '\\'
 char                  = ~"."
@@ -691,20 +719,12 @@ char                  = ~"."
 # Only double quotes are permitted in quoted strings.
 quote                 = '"'
 
-# NOTE: "!" is a negative lookahead assertion: It asserts that the token isn't
-# present, but doesn't consume anything. Thus, "!quote" asserts that the first
-# character isn't a quote, but doesn't consume it, so it'll get picked up
-# by "char".  
-
-optional_text         = (!quote char)*
-required_text         = (!quote char)+
-
 # Ternary IF. Format:
 # 
 #    ${var == "SOMESTRING" ? "TRUESUB" : "FALSESUB"}
 #    ${var != "SOMESTRING" ? "TRUESUB" : "FALSESUB"}
 
-ternary               = "${"
+ternary               = full_var_prefix
                         identifier OPT_WS
                         compare_op OPT_WS
                         ternary_compare_term OPT_WS
@@ -712,10 +732,13 @@ ternary               = "${"
                         ternary_true_side OPT_WS
                         ternary_else OPT_WS
                         ternary_false_side
-                        '}'
-ternary_true_side     = quote optional_text quote
-ternary_false_side    = quote optional_text quote
-ternary_compare_term  = quote optional_text quote
+                        full_var_suffix
+ternary_true_side     = quote var_or_text* quote
+ternary_false_side    = quote var_or_text* quote
+ternary_compare_term  = quote var_or_text* quote
+
+var_or_text           = var / text
+
 ternary_op            = '?'
 ternary_else          = ':'
 
@@ -746,7 +769,7 @@ compare_op            = @OPS@
 #                                  becomes "01a-Foobar".
 
 edit                  = edit1 / edit2
-edit1                 = "${"
+edit1                 = full_var_prefix
                         identifier
                         edit_delim1
                         pattern1
@@ -754,8 +777,8 @@ edit1                 = "${"
                         replacement1
                         edit_delim1
                         flags
-                        '}'
-edit2                 = "${"
+                        full_var_suffix
+edit2                 = full_var_prefix
                         identifier
                         edit_delim2
                         pattern2
@@ -763,38 +786,48 @@ edit2                 = "${"
                         replacement2
                         edit_delim2
                         flags
-                        '}'
-flags                 = (~"[a-z]"i)*
+                        full_var_suffix
+flags                 = (~"[ig]"i)*
+
+# NOTE: "!" is a negative lookahead assertion: It asserts that the token isn't
+# present, but doesn't consume anything. Thus, "!quote" asserts that the first
+# character isn't a quote, but doesn't consume it, so it'll get picked up
+# by "char".  
 
 edit_delim1           = @EDIT_DELIM_1@
-non_edit_delim1       = (backslash edit_delim1) /
-                        (backslash groupref_prefix) /
-                        (!edit_delim1 char)
+non_edit_delim1       = ( (backslash edit_delim1) 
+                        / (backslash groupref_prefix)
+                        / (!edit_delim1 char)
+                        )
 pattern1              = non_edit_delim1+
-replacement1          = (groupref / non_edit_delim1)*
+replacement1          = (groupref / var / non_edit_delim1)*
 
 edit_delim2           = @EDIT_DELIM_2@
-non_edit_delim2       = (backslash edit_delim2) /
-                        (backslash groupref_prefix) /
-                        (!edit_delim2 char)
+non_edit_delim2       = ( (backslash edit_delim2)
+                        / (backslash groupref_prefix)
+                        / (!edit_delim2 char)
+                        )
 pattern2              = non_edit_delim2+
-replacement2          = (groupref / non_edit_delim2)*
+replacement2          = (groupref / var / non_edit_delim2)*
 
 groupref_prefix       = @EDIT_GROUPREF_PREFIX@
 groupref              = (!backslash groupref_prefix digit)
 
 digit                 = ~"\d"
 identifier            = ~"[A-Z0-9_]+"i
-nonvar1               = ~"[^$]+"
-nonvar2               = ~"[^$]*\$\$[^$]*"
-nonvar                = nonvar1 / nonvar2
-text                  = nonvar*
+non_var               = ( (backslash var_prefix)
+                        / (backslash ~"[\"]")
+                        / (var_prefix var_prefix)
+                        / ~"[^$\"]" 
+                        )
+text                  = non_var*
 OPT_WS                = ~"\s*"
 """, {
     "@OPS@":                  _VAR_SUBST_OPS_RULE,
     "@EDIT_DELIM_1@":         "'" + _VAR_SUBST_EDIT_DELIM1 + "'",
     "@EDIT_DELIM_2@":         "'" + _VAR_SUBST_EDIT_DELIM2 + "'",
     "@EDIT_GROUPREF_PREFIX@": "'" + _VAR_SUBST_EDIT_GROUPREF_PREFIX + "'",
+    "@VAR_PREFIX@":           "'" + _VAR_SUBST_VAR_PREFIX + "'",
 })
 
 #print(_VAR_SUBST_GRAMMAR);import sys;sys.exit(1)
@@ -823,13 +856,13 @@ class VariableSubstituter(object):
     >>> v.template == template
     True
     >>> v.substitute({'foo': 'FOO', 'bar': 'BAR', 'a': 'hello'})
-    'FOO $$ BAR woof'
+    'FOO $ BAR woof'
     >>> v.substitute({'foo': 'FOO', 'a': 'hello'})
     Traceback (most recent call last):
     ...
     KeyError: 'bar'
     >>> v.safe_substitute({'foo': 'FOO', 'a': 'hello'})
-    'FOO $$  woof'
+    'FOO $  woof'
     >>> v = VariableSubstituter('${foo $bar')
     Traceback (most recent call last):
     ...
@@ -903,8 +936,79 @@ class VariableSubstituter(object):
     >>> v = VariableSubstituter(r'${file/\.py$//}')
     >>> v.substitute({'file': 'Foobar.py'})
     'Foobar'
+    >>> v = VariableSubstituter(r'${foo == "$bar" ? "BAR" : "NOT BAR"}')
+    >>> v.substitute({"foo": "x", "bar": "y"})
+    'NOT BAR'
+    >>> v.substitute({"foo": "x", "bar": "x"})
+    'BAR'
+    >>> v = VariableSubstituter(r"""${foo == "$bar" ? "It matches $$bar." : "It's $foo, not $bar"}""")
+    >>> v.substitute({"foo": "hello", "bar": "hello"})
+    'It matches $bar.'
+    >>> v.substitute({"foo": "hello", "bar": "goodbye"})
+    "It's hello, not goodbye"
+    >>> v = VariableSubstituter(r"""${x == "abc${foo}def" ? "YES" : "NO"}""")
+    >>> v.substitute({"foo": "quux", "x": "abcquuxdef"})
+    'YES'
+    >>> v.substitute({"foo": "quux", "x": "abc---def"})
+    'NO'
+    >>> v = VariableSubstituter(r"""${foo == "ab\\"" ?  "YES" : "NO"}""")
+    >>> v.substitute({'foo': 'xxx'})
+    'NO'
+    >>> v.substitute({'foo': 'ab"'})
+    'YES'
+    >>> v = VariableSubstituter(r'\\"\\"\\"\\"\\"')
+    >>> v.substitute({})
+    '\"\"\"\"\"'
+    >>> v = VariableSubstituter(r"""${x == "ab\$c${foo}def" ? "YES" : "NO"}""")
+    >>> v.substitute({"foo": "quux", "x": "abcquuxdef"})
+    'NO'
+    >>> v.substitute({"foo": "quux", "x": "ab$cquuxdef"})
+    'YES'
+    >>> v = VariableSubstituter(r'$foo ${foo} ${foo[0]} ${foo[-1]} ${foo[2:-1]} ${foo[-11:0]}')
+    >>> v.substitute({'foo': "Boy, howdy"})
+    'Boy, howdy Boy, howdy B y y, howd '
+    >>> v = VariableSubstituter('${foo[]}')
+    Traceback (most recent call last):
+    ...
+    VariableSubstituterParseError: Failed to parse ...
+    >>> v = VariableSubstituter('${foo[:]} $foo ${foo}')
+    >>> v.substitute({'foo': 'hello'})
+    'hello hello hello'
+    >>> v = VariableSubstituter('${foo[2:]}')
+    >>> v.substitute({'foo': 'hello'})
+    'llo'
+    >>> v = VariableSubstituter('${foo[:2]}')
+    >>> v.substitute({'foo': 'hello'})
+    'he'
+    >>> v = VariableSubstituter('${foo[100000]}')
+    >>> v.substitute({'foo': 'hello'})
+    'o'
+    >>> v = VariableSubstituter('${foo[1:100000000]}')
+    >>> v.substitute({'foo': 'hello'})
+    'ello'
+    >>> v = VariableSubstituter('${x[0]}')
+    >>> v.substitute({'x': ''})
+    ''
+    >>> v = VariableSubstituter('${x[10000]}')
+    >>> v.substitute({'x': ''})
+    ''
+    >>> v = VariableSubstituter(r'${foo == "abc" ? "${bar[0]}" : "${bar[1]}"}')
+    >>> v.substitute({'foo': 'abc', 'bar': 'WERTYU'})
+    'W'
+    >>> v.substitute({'foo': 'xxx', 'bar': 'WERTYU'})
+    'E'
+    >>> v = VariableSubstituter(r'${file/^\d+/X${bar[2]}/}')
+    >>> v.substitute({'file': '01-abc', 'bar': "ABC"})
+    'XC-abc'
+    >>> v.substitute({'file': '01-abc', 'bar': "A"})
+    'XA-abc'
+    >>> v = VariableSubstituter(r'${file/^\d+/X${bar[2]}-$baz/}')
+    >>> v.substitute({'file': '01-abc', 'bar': 'tuvw', 'baz': '!!'})
+    'Xv-!!-abc'
+    >>> v = VariableSubstituter(r'${file/^\d+-(.*)$/X${bar[0:2]}-$baz.$1/}')
+    >>> v.substitute({'file': '01-abc', 'bar': 'tuvw', 'baz': '!!'})
+    'Xtu-!!.abc'
     '''
-
     def __init__(self, template):
         '''
         Create a new variable substituter.
@@ -973,7 +1077,6 @@ class VariableSubstituter(object):
         '''
         def get_var(varname):
             return str(variables[varname])
-
         return self._subst(get_var)
 
     def safe_substitute(self, variables):
@@ -1012,33 +1115,58 @@ class VariableSubstituter(object):
         return res
 
     def _subst(self, get_var):
-        result = ""
-        for token in self._ast:
+        def handle_token(token):
             if type(token) is _Var:
-                result += get_var(token.name)
+                result = token.evaluate(get_var(token.name))
             elif type(token) == _Text:
-                result += token.text
+                result = token.text
             elif type(token) == _Ternary:
-                result += token.evaluate(get_var(token.variable))
+                result = token.evaluate(get_var)
             elif type(token) == _Edit:
-                result += token.evaluate(get_var(token.variable))
+                result = token.evaluate(get_var)
             else:
                 raise KeyError('(BUG) Unknown token: {0}'.format(token))
 
-        return result
+            return result
+
+        return ''.join([handle_token(t) for t in self._ast])
 
 
 class _Var(DefaultStrMixin):
     '''
     Captures a variable name in the modified (i.e., non-Parsimonious) AST.
     '''
-    def __init__(self, name):
+    def __init__(self, name, slice_start=None, slice_end=None):
         '''
         Create a new variable reference.
 
-        :param name: the variable name
+        :param name:        the variable name
+        :param slice_start: starting subscript, if any. None if not.
+        :param slice_end:   ending subscript, if any. None if not.
         '''
-        self.name = name
+        self.name        = name
+        self.slice_start = slice_start
+        self.slice_end   = slice_end
+
+    def evaluate(self, value):
+        '''
+        Evaluate the variable's value, applying any subscripts.
+
+        :return: the possibly-sliced value
+        '''
+        v = str(value)
+        if len(v) == 0:
+            return ''
+
+        if self.slice_start is None:  # No subscripts.
+            return v
+
+        if self.slice_end is None: # One subscript
+            i = len(v) - 1 if self.slice_start > len(v) else self.slice_start
+            return v[i]
+
+        end = len(v) if self.slice_end > len(v) else self.slice_end
+        return v[self.slice_start:end]
 
 
 class _Text(DefaultStrMixin):
@@ -1074,7 +1202,7 @@ class _Ternary(DefaultStrMixin):
         self.if_true    = if_true
         self.if_false   = if_false
 
-    def evaluate(self, variable_value):
+    def evaluate(self, get_var):
         '''
         Convenience method: Takes the value for the variable (which the caller
         must provide) and performs the appropriate test, returning the
@@ -1083,17 +1211,29 @@ class _Ternary(DefaultStrMixin):
 
         :param variable_value:
 
-        :return: the substitution
+        :return: the sub-tokens to process
         '''
+        def expand(tokens):
+            expanded = ""
+            for token in tokens:
+                if isinstance(token, _Var):
+                    expanded += token.evaluate(get_var(token.name))
+                elif isinstance(token, _Text):
+                    expanded += token.text
+            return expanded
+
+        to_compare = expand(self.to_compare)
+
+        this_var_value = get_var(self.variable)
         if self.op == _VAR_SUBST_EQ_OP:
-            test = variable_value == self.to_compare
+            test = to_compare == this_var_value
         else:
-            test = variable_value != self.to_compare
+            test = to_compare != this_var_value
 
         if test is True:
-            return self.if_true
+            return expand(self.if_true)
         else:
-            return self.if_false
+            return expand(self.if_false)
 
 class _Edit(DefaultStrMixin):
     '''
@@ -1106,14 +1246,24 @@ class _Edit(DefaultStrMixin):
         self.flags = flags
         self.replace_all = replace_all
 
-    def evaluate(self, variable_value):
-        value = str(variable_value)
+    def evaluate(self, get_var):
+        value = str(get_var(self.variable))
+        # Assemble replacement string.
+        repl = ''
+        for token in self.repl:
+            if isinstance(token, _Var):
+                repl += token.evaluate(get_var(token.name))
+            elif isinstance(token, _Text):
+                repl += token.text
+
         count = 0 if self.replace_all else 1
-        return self.pattern.sub(self.repl, value, count=count)
+        return self.pattern.sub(repl, value, count=count)
 
 class _VarSubstASTVisitor(grammar.NodeVisitor):
     GROUPREF_RE  = re.compile(r'^groupref$')
     NON_DELIM_RE = re.compile(r'^non_edit_delim\d$')
+    SUBSCRIPT_RE = re.compile(r'^subscript$')
+    IDENT_RE     = re.compile(r'^identifier$')
 
     '''
     This visitor translates the parsed Parsimonious AST into something more
@@ -1153,7 +1303,36 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
         :return: A `_Var` object
         '''
-        return _Var(node.text[2:-1])
+        sub_node = self._find_recursively(node, self.SUBSCRIPT_RE)
+        slice_nums = [None, None]
+        if sub_node:
+            tokens = [n.text for n in self._all_descendent_exprs(sub_node)
+                      if n.expr.name in ('index', 'index_sep')]
+            # Convert the whole thing into a pattern, for easy matching.
+            pat = ''
+            for t in tokens:
+                pat += ':' if t == ':' else 'n'
+
+            if pat == ':':
+                # ${var[:]} is the same as ${var}
+                pass
+            elif pat == 'n:':
+                slice_nums = [int(tokens[0]), sys.maxint]
+            elif pat == ':n':
+                slice_nums = [0, int(tokens[1])]
+            elif pat == 'n':
+                slice_nums = [int(tokens[0]), None]
+            elif pat == 'n:n':
+                slice_nums = [int(tokens[0]), int(tokens[2])]
+            else:
+                raise VariableSubstituterParseError(
+                    '(BUG) Unrecognized slice pattern "{0}" in "{1}".'.format(
+                        ''.join(tokens), node.text
+                    )
+                )
+
+        var_name = self._find_recursively(node, self.IDENT_RE)
+        return _Var(var_name.text, *slice_nums)
 
     def visit_text(self, node, children):
         '''
@@ -1164,7 +1343,32 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
         :return: a `_Text` object
         '''
-        return _Text(node.text)
+        # Be sure to unescape stuff.
+        def unescape(s):
+            s2 = ''
+            saw_backslash = False
+            for c in s:
+                if saw_backslash:
+                    if c in {_VAR_SUBST_VAR_PREFIX, '\\', '"'}:
+                        s2 += c
+                    else:
+                        s2 += '\\' + c
+                    saw_backslash = False
+                    continue
+
+                if c == '\\':
+                    saw_backslash = True
+                    continue
+
+                s2 += c
+
+            return s2
+
+        # Also handle "$$" as a special caswe.
+        return _Text(
+            unescape(node.text).replace(_VAR_SUBST_ESCAPED_VAR_PREFIX,
+                                        _VAR_SUBST_VAR_PREFIX)
+        )
 
     def visit_ternary(self, node, children):
         '''
@@ -1184,11 +1388,26 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         # necessary.
         #
         # THIS CODE IS COUPLED TIGHTLY TO THE GRAMMAR.
+
+        def var_or_text_nodes(node):
+            res = []
+            for c in self._all_descendent_exprs(node):
+                name = c.expr.name
+                if name == 'text':
+                    res.append(self.visit_text(c, []))
+                elif name == 'var1':
+                    res.append(self.visit_var1(c, []))
+                elif name == 'var2':
+                    res.append(self.visit_var2(c, []))
+
+            return res
+
         var = None
         to_compare = None
         if_true = None
         if_false = None
         op = None
+
         for child in node:
             try:
                 expr = child.expr
@@ -1204,13 +1423,13 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                 op = child.text
 
             elif expr.name == 'ternary_compare_term':
-                to_compare = self._find_child(child, 'optional_text').text
+                to_compare = var_or_text_nodes(child)
 
             elif expr.name == 'ternary_true_side':
-                if_true = self._find_child(child, 'optional_text').text
+                if_true = var_or_text_nodes(child)
 
             elif expr.name == 'ternary_false_side':
-                if_false = self._find_child(child, 'optional_text').text
+                if_false = var_or_text_nodes(child)
 
         if not all_pred(lambda i: i is not None,
                         [var, op, to_compare, if_true, if_false]):
@@ -1279,25 +1498,31 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
                 repl_string = child.text
                 tokens = []
-                for i in child:
-                    n = self._find_recursively(i, self.GROUPREF_RE)
-                    if n:
+                for n in self._all_descendent_exprs(child):
+                    if self.GROUPREF_RE.match(n.expr.name):
                         group = n.text[1:]
-                        tokens.append('\\' + group)
+                        tokens.append(_Text('\\' + group))
                         referenced_groups.append(int(group))
                         continue
 
-                    n = self._find_recursively(i, self.NON_DELIM_RE)
-                    if n:
+                    if self.NON_DELIM_RE.match(n.expr.name):
                         s = (
                             n.text
                              .replace(backslash_delim, delim)
                              .replace(escaped_group_ref, '$')
                         )
-                        tokens.append(s)
+                        tokens.append(_Text(s))
                         continue
 
-                repl = ''.join(tokens)
+                    if n.expr.name == 'var1':
+                        tokens.append(self.visit_var1(n, []))
+                        continue
+
+                    if n.expr.name == 'var2':
+                        tokens.append(self.visit_var2(n, []))
+                        continue
+
+                repl = tokens
 
             elif expr.name == 'flags':
                 flag_set = set(child.text)
@@ -1326,6 +1551,7 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
         # Compile the regular expression.
         pattern = re.compile(pattern, flags=flags)
+
         # Validate the group references.
         total_groups = pattern.groups
         max_group_num = max(referenced_groups) if referenced_groups else 0
@@ -1338,29 +1564,27 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         return _Edit(variable=var, pattern=pattern, repl=repl,
                      flags=flags, replace_all=replace_all)
 
-    def _find_child(self, node, expr_name):
+    def _all_descendents(self, node):
         for child in node:
+            yield child
+            for c in self._all_descendents(child):
+                yield c
+
+    def _all_descendent_exprs(self, node):
+        for child in self._all_descendents(node):
             try:
-                if child.expr_name == expr_name:
-                    return child
+                if hasattr(child, 'expr'):
+                    yield child
             except AttributeError:
                 continue
 
-        raise VariableSubstituterParseError(
-            '(BUG) Unable to find {}'.format(expr_name)
-        )
-
     def _find_recursively(self, node, expr_re):
-        for child in node:
+        for child in self._all_descendents(node):
             try:
                 if expr_re.search(child.expr_name):
                     return child
             except AttributeError:
                 continue
-
-            n = self._find_recursively(child, expr_re)
-            if n:
-                return n
 
         return None
 

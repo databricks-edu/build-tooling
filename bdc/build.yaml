@@ -193,8 +193,11 @@ course_info:
   #copyright_year: 2015
   deprecated: false
 
-# Other variables that can be substituted. If you use any of the predefined
-# names, they will be silently ignored.
+# You can define your own build-wide variables in a "variables" section.
+# These variables cannot override built-in variables, such as ${course_id},
+# ${basename}, etc. Attempts to do so are simply ignored.
+#
+# You can override these variables on a per-notebook basis, as well.
 variables:
   foo: bar
 
@@ -443,7 +446,17 @@ notebook_defaults:
       #path: /path/to/alternate/notebook/footer
       #enabled: false
   dest: $basename.$target_extension
-
+  # You can define notebook-specific variables that are evaluated when the
+  # notebook is generated, after master parsing is done. They're permitted
+  # in individual notebook sections, as well as in the notebook_defaults
+  # section.
+  #
+  # Variables defined here override any variables defined in the global
+  # "variables" section. However, they cannot override built-in variables,
+  # such as ${course_id}, ${notebook_type}, etc. Attempts to do so are
+  # simply ignored.
+  variables:
+    suffix: ${notebook_type[0]} # expanded during processing
 
 notebooks:
   # List of notebooks in the course.

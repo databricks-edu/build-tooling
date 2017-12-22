@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.15.0"
+VERSION = "1.16.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -223,15 +223,17 @@ NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
 
 
 class NotebookDefaults(DefaultStrMixin):
-    def __init__(self, dest=None, master=None):
+    def __init__(self, dest=None, master=None, variables=None):
         """
         Create a new NotebookDefaults object.
 
-        :param dest:    The destination value (str)
-        :param master:  The master parse section (dict, not MasterParseInfo)
+        :param dest:      The destination value (str)
+        :param variables: Default (unexpanded) variables
+        :param master:    The master parse section (dict, not MasterParseInfo)
         """
         self.dest = dest
         self.master = master or {}
+        self.variables = variables or {}
 
 
 class MasterParseInfo(DefaultStrMixin):
@@ -443,17 +445,26 @@ class NotebookData(object, DefaultStrMixin):
                  dest,
                  upload_download=True,
                  master=None,
-                 notebook_defaults=None):
+                 variables=None):
+        '''
+        Captures parsed notebook data.
+
+        :param src:             Partial or full path to the notebook
+        :param dest:            Destination for the notebook, which can
+                                contain variables. This value can be set
+                                to `None`, as long as a destination is
+                                available in the notebook defaults.
+        :param upload_download: Whether upload and download are enabled
+                                for this notebook.
+        :param master:          The master parse data.
+        :param variables:       Any variables for the notebook.
+        '''
         super(NotebookData, self).__init__()
         self.src = src
         self.dest = dest
-        if master:
-            self.master = master
-        else:
-            self.master = merge_dicts(MASTER_PARSE_DEFAULTS,
-                                      notebook_defaults.get('master', {}))
-        self.notebook_defaults = notebook_defaults
+        self.master = master
         self.upload_download = upload_download
+        self.variables = variables
 
     def master_enabled(self):
         """
@@ -542,8 +553,7 @@ class BuildData(object, DefaultStrMixin):
         if top_dbc_folder_name is None:
             top_dbc_folder_name = '${course_name}'
 
-        folder_vars = dict(variables)
-        folder_vars.update({
+        folder_vars = merge_dicts(variables, {
             'course_name':    course_info.name,
             'course_version': course_info.version,
             'course_id':      self.course_id,
@@ -645,7 +655,7 @@ def load_build_yaml(yaml_file):
 
         return v
 
-    def subst(dest, src, allow_lang=True, extra_vars=None):
+    def parse_time_subst(dest, src, allow_lang=True, extra_vars=None):
         # Handles parse-time variable substitution. Some variables are
         # substituted later.
         if extra_vars is None:
@@ -749,8 +759,10 @@ def load_build_yaml(yaml_file):
 
         master = parse_master_section(dict_get_and_del(cfg, 'master', {}),
                                       'notebook_defaults')
+        variables = dict_get_and_del(cfg, 'variables', {})
+
         res = NotebookDefaults(dest=dict_get_and_del(cfg, 'dest', None),
-                               master=master)
+                               master=master, variables=variables)
 
         if len(cfg.keys()) > 0:
             raise UnknownFieldsError("build", section_name, cfg.keys())
@@ -768,8 +780,10 @@ def load_build_yaml(yaml_file):
                 ('Notebook "{0}": Missing "dest" section, and no default ' +
                  '"dest" in notebook defaults.').format(src)
             )
-
-        dest = subst(dest, src, extra_vars=extra_vars)
+        variables = merge_dicts(notebook_defaults.variables,
+                                obj.get('variables', {}))
+        all_extra_vars = merge_dicts(extra_vars, variables)
+        dest = parse_time_subst(dest, src, extra_vars=all_extra_vars)
         if bool_field(obj, 'skip'):
             verbose('Skipping notebook {0}'.format(src))
             return None
@@ -817,7 +831,8 @@ def load_build_yaml(yaml_file):
             src=src,
             dest=dest,
             master=master,
-            upload_download=bool_field(obj, 'upload_download', True)
+            upload_download=bool_field(obj, 'upload_download', True),
+            variables=variables
         )
 
         return nb
@@ -831,7 +846,7 @@ def load_build_yaml(yaml_file):
         else:
             return SlideData(
                 src=src,
-                dest=subst(dest, src, allow_lang=False, extra_vars=extra_vars)
+                dest=parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars)
             )
 
     def parse_misc_file(obj, extra_vars):
@@ -843,7 +858,7 @@ def load_build_yaml(yaml_file):
         else:
             return MiscFileData(
                 src=src,
-                dest=subst(dest, src, allow_lang=False, extra_vars=extra_vars)
+                dest=parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars)
             )
 
     def parse_dataset(obj, extra_vars):
@@ -856,7 +871,7 @@ def load_build_yaml(yaml_file):
             src_dir = path.dirname(src)
             return DatasetData(
                 src=src,
-                dest=subst(dest, src, allow_lang=False, extra_vars=extra_vars),
+                dest=parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars),
                 license=joinpath(src_dir, 'LICENSE.md'),
                 readme=joinpath(src_dir, 'README.md')
             )
@@ -1136,13 +1151,16 @@ def process_master_notebook(dest_root, notebook, src_path, build):
                 glob_pattern = glob_template.format(suffix, lang_ext)
                 matches = eglob(glob_pattern, mp_notebook_dir)
                 ext = LANG_EXT[lc_lang]
-                dest_subst = VariableSubstituter(
-                    notebook.dest
-                ).safe_substitute({
+                fields = merge_dicts(notebook.variables, {
                     TARGET_LANG: lang_dir,
                     TARGET_EXTENSION: ext[1:] if ext.startswith('') else ext,
                     NOTEBOOK_TYPE: notebook_type_map.get(notebook_type, '')
                 })
+                dest_subst = VariableSubstituter(
+                    notebook.dest
+                ).safe_substitute(
+                    fields
+                )
                 if dest_subst.startswith(os.path.sep):
                     dest_subst = dest_subst[len(os.path.sep):]
 
@@ -1364,14 +1382,17 @@ def build_course(opts, build):
         mkdirp(joinpath(dest_dir, d))
 
     version = build.course_info.version
-    version_notebook = VariableSubstituter(
-        VERSION_NOTEBOOK_TEMPLATE
-    ).substitute({
+    fields = merge_dicts(build.variables, {
         'course_name':     build.course_info.name,
         'version':         version,
         'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
         'year':            build.course_info.copyright_year,
     })
+    version_notebook = VariableSubstituter(
+        VERSION_NOTEBOOK_TEMPLATE
+    ).substitute(
+        fields
+    )
 
     labs_full_path = joinpath(dest_dir, build.student_dir, STUDENT_LABS_SUBDIR)
     copy_notebooks(build, labs_full_path, dest_dir)

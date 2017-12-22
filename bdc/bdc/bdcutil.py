@@ -278,12 +278,14 @@ def flatten(it):
                 yield i
 
 
-def merge_dicts(dict1, dict2):
+def merge_dicts(dict1, dict2, *dicts):
     """
-    Merge two dictionaries, producing a third one
+    Merge multiple dictionaries, producing a merged result without modifying
+    the arguments.
 
     :param dict1:  the first dictionary
     :param dict2:  the second dictionary
+    :param dicts:  additional dictionaries
 
     :return: The merged dictionary. Keys in dict2 overwrite duplicate keys in
              dict1
@@ -298,9 +300,14 @@ def merge_dicts(dict1, dict2):
     [('a', 10), ('b', 30), ('c', 'hello')]
     >>> sorted(list(y.items())) # should not be modified
     [('b', 'Bee'), ('d', 40), ('x', 'Ecks')]
+    >>> z = {'z': 'Frammis', 'c': 'Cee'}
+    >>> sorted(list(merge_dicts(x, y, z)))
+    [('a', 10), ('b', 'Bee'), ('c', 'Cee'), ('d', 40), ('x', 'Ecks'), ('z', 'Frammis')]
     """
     res = dict1.copy()
     res.update(dict2)
+    for d in dicts:
+        res.update(d)
     return res
 
 

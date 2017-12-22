@@ -118,8 +118,24 @@ See [build.yaml][] in this directory for a fully-documented example.
 
 ### A note about variable substitution in `build.yaml`
 
+#### Where do variables come from?
+
 Many (but not all) items in a `build.yaml` file support variable substitution. 
-(See the sample [build.yaml][] for full details.)
+Variables currently come from several places:
+
+- There are variables that are built into `bdc`, such as `${notebook_type}`,
+  `${basename}`, and others.
+- You can define build-wide variables of your own in the "variables" section
+  in `build.yaml`. (These variables cannot override built-in variables.)
+- You can define per-notebook variables in a "variables" section in each
+  notebook. These variables can also override build-wide globals, on a
+  per-notebook basis, though they cannot override `bdc` built-ins.
+- You can define variables for all notebooks in the `notebook_defaults`
+  section.
+  
+See the sample [build.yaml][] for full details.
+
+#### Variable Substitution Syntax
 
 The variable substitution syntax is Unix shell-like:
 
@@ -136,11 +152,11 @@ To escape a `$`, use `$$` or `\$`.
 
 To escape a backslash, use `\\`.
 
-#### Variable names
+##### Variable names
 
 Legal variable names consist of alphanumeric and underscore characters only.
 
-#### Subscripting and slicing
+##### Subscripting and slicing
 
 Variables can be subscripted and sliced, Python-style, as long as they use the
 brace (`${var}`) syntax.
@@ -164,7 +180,7 @@ instance, given the variable `foo` set to `"ABCDEF"`, the substitution
 `"BCDEF"`. As a special case, subscripting an empty variable always
 yields an empty string, regardless of the subscript.
 
-#### Inline ("ternary") IF
+##### Inline ("ternary") IF
 
 The variable syntax supports a C-like "ternary IF" statement. The general
 form is:
@@ -220,7 +236,7 @@ Double quote (") as part of a value being tested:
 ${foo == "\"" ? "QUOTE" : "NOT QUOTE"}
 ```
 
-#### Inline editing
+##### Inline editing
 
 `bdc` supports basic sed-like editing on a variable's value, using a syntax
 that's vaguely reminiscent (but somewhat more readable) than the Bash

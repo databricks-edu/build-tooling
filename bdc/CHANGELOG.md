@@ -1,5 +1,13 @@
 # Change Log for BDC
 
+### Version 1.16.0
+
+* Variables can now be defined in the `notebook_defaults` section and in the
+  individual notebooks. These variables are expanded at notebook processing
+  time, so they can access variables like `${notebook_type}` and
+  `${target_lang}`. They can also override variables in the build-wide
+  "variables" section.
+
 ### Version 1.15.0
 
 * The ternary IF variable substitution syntax now supports simple variable

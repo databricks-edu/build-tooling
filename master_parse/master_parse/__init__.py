@@ -27,7 +27,7 @@ from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 
-VERSION = "1.11.3"
+VERSION = "1.12.1"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -147,7 +147,7 @@ VALID_CELL_TYPES_FOR_LABELS = {
     CommandLabel.SCALA_ONLY:      ALL_CELL_TYPES,
     CommandLabel.R_ONLY:          ALL_CELL_TYPES,
     CommandLabel.SQL_ONLY:        ALL_CELL_TYPES,
-    CommandLabel.ANSWER:          CODE_CELL_TYPES,
+    CommandLabel.ANSWER:          ALL_CELL_TYPES,
     CommandLabel.TODO:            CODE_CELL_TYPES,
     CommandLabel.TEST:            CODE_CELL_TYPES,
     CommandLabel.PRIVATE_TEST:    CODE_CELL_TYPES,

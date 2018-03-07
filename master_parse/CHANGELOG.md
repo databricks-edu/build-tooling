@@ -1,8 +1,14 @@
 # Change Log for Master Parse Tool
 
-Version 1.11.3:
+Version 1.12.1:
 
 * Changed default header image.
+
+Version 1.12.0:
+
+* ALLOW --ANSWER in markdown cells.  This addresses a usecase where we want
+  additional documentation that appears only in answer notebooks to explain
+  a solution.
 
 Version 1.11.2:
 

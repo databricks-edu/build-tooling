@@ -1,5 +1,9 @@
 # Change Log for Master Parse Tool
 
+Version 1.11.3:
+
+* Changed default header image.
+
 Version 1.11.2:
 
 * Default footer now includes a support link.

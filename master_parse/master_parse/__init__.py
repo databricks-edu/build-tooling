@@ -89,9 +89,9 @@ class NotebookUser(Enum):
 # Constants
 # -----------------------------------------------------------------------------
 
-def _s3_icon_url(image):
+def _icon_image_url(image):
     return (
-        'https://s3-us-west-2.amazonaws.com/curriculum-release/images/eLearning/' +
+        'https://files.training.databricks.com/static/images/' +
         image
     )
 
@@ -99,32 +99,32 @@ INLINE_TOKENS = [
     InlineToken(
         title='Hint',
         tag=':HINT:',
-        image=_s3_icon_url('icon-light-bulb.svg'),
+        image=_icon_image_url('icon-light-bulb.svg'),
         template=r'<img alt="${title}" title="${title}" style="${style}" src="${image}"/>&nbsp;**${title}:**',
         style='height:1.75em; top:0.3em'
     ),
     InlineToken(
         title='Caution',
         tag=':CAUTION:',
-        image=_s3_icon_url('icon-warning.svg'),
+        image=_icon_image_url('icon-warning.svg'),
         style='height:1.3em; top:0.0em'
     ),
     InlineToken(
         tag=':BESTPRACTICE:',
         title='Best Practice',
-        image=_s3_icon_url('icon-blue-ribbon.svg'),
+        image=_icon_image_url('icon-blue-ribbon.svg'),
         style='height:1.75em; top:0.3em'
     ),
     #InlineToken(
     #    tag=':KEYPOINT:',
     #    title='Key Point',
-    #    image=_s3_icon_url('icon-key.svg'),
+    #    image=_icon_image_url('icon-key.svg'),
     #    style='height:1.3em; top:0.1.5em'
     #),
     InlineToken(
         tag=':SIDENOTE:',
         title='Side Note',
-        image=_s3_icon_url('icon-note.webp'),
+        image=_icon_image_url('icon-note.webp'),
         style='height:1.75em; top:0.05em; transform:rotate(15deg)'
     ),
 ]
@@ -176,19 +176,19 @@ DEFAULT_OUTPUT_DIR = 'build_mp'
 # is currently ignored.
 VIDEO_TEMPLATE = (
 '''<script src="https://fast.wistia.com/embed/medias/${id}.jsonp" async></script>
-<script src="https://s3-us-west-2.amazonaws.com/files.training.databricks.com/courses/spark-sql/Wistia.js" async></script>
+<script src="https://files.training.databricks.com/courses/spark-sql/Wistia.js" async></script>
 <div class="wistia_embed wistia_async_${id}" style="height:360px;width:640px;color:red">
   Error displaying video. Please click the link, below.
 </div>
 <a target="_blank" href="https://fast.wistia.net/embed/iframe/${id}?seo=false">
-<img style="width:16px" alt="Opens in new tab" src="''' + _s3_icon_url('external-link-icon.png') +
+<img style="width:16px" alt="Opens in new tab" src="''' + _icon_image_url('external-link-icon.png') +
 '''"/>&nbsp;Watch full-screen.</a>
 ''')
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
 DEFAULT_NOTEBOOK_HEADING = """<div style="text-align: center; line-height: 0; padding-top: 9px;">
-  <img src="https://databricks.com/wp-content/uploads/2018/03/db-academy-rgb-1200px.png" alt="Databricks Learning" width="555" height="64">
+  <img src="https://databricks.com/wp-content/uploads/2018/03/db-academy-rgb-1200px.png" alt="Databricks Learning" style="width: 600px; height: 163px">
 </div>"""
 
 DEFAULT_NOTEBOOK_FOOTER = """&copy; {copyright_year} Databricks, Inc. All rights reserved.<br/>

@@ -1,5 +1,10 @@
 # Change Log for Master Parse Tool
 
+Version 1.12.2:
+
+* Updated generated S3 links to point to `files.training.databricks.com`.
+* Updated style for header image.
+
 Version 1.12.1:
 
 * Changed default header image.

@@ -137,12 +137,43 @@ Master parse labels are cells that are marked with special tokens that only
 the master parse tool recognizes. Some labels make sense only in code cells.
 Others can be used in code cells, Markdown cells, etc.
 
-All  labels _must_ be preceded by a single command character, and the comment
-character must be correct for the notebook type. That is, a Python notebook
-(ending in `.py`) always uses "#" as the comment character. This is true
-even in Markdown cells.
+All labels _must_ be preceded by a comment sequence. For instance:
 
-Cells not marked with any label appear in _all_ outputs.
+```
+# TODO
+// TODO
+-- TODO
+```
+
+Labels must appear on a line by themselves. Thus, use:
+
+```
+%md
+// SCALA_ONLY
+```
+
+not 
+
+```
+%md // SCALA_ONLY
+```
+
+
+#### Unlabeled
+
+Cells not marked with any label are handled specially, depending on the cell
+type:
+
+* `%md`, `%md-sandbox`: Markdown cells appear in all output notebooks, unless
+  suppressed, for example, with `SCALA_ONLY`, `PYTHON_ONLY`,
+  `INSTRUCTOR_NOTE`, etc.
+  
+* `%fs` and `%sh` cells appear in all output notebooks, unless explicitly
+  suppressed.
+  
+* Code cells only appear in the output notebook for their language, unless
+  marked with `ALL_NOTEBOOKS`. Thus, a Scala cell only shows up in Scala 
+  notebooks, unless marked with `ALL_NOTEBOOKS`.
 
 #### Examples
 

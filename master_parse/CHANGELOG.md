@@ -1,5 +1,9 @@
 # Change Log for Master Parse Tool
 
+Version 1.12.3:
+
+* Added border around video player.
+
 Version 1.12.2:
 
 * Updated generated S3 links to point to `files.training.databricks.com`.

@@ -27,7 +27,7 @@ from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 
-VERSION = "1.12.2"
+VERSION = "1.12.3"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -177,11 +177,11 @@ DEFAULT_OUTPUT_DIR = 'build_mp'
 VIDEO_TEMPLATE = (
 '''<script src="https://fast.wistia.com/embed/medias/${id}.jsonp" async></script>
 <script src="https://files.training.databricks.com/courses/spark-sql/Wistia.js" async></script>
-<div class="wistia_embed wistia_async_${id}" style="height:360px;width:640px;color:red">
+<div class="wistia_embed wistia_async_${id}" style="height:360px;width:640px;color:red;border:1px;border-color:#1cb1c2;border-style:solid">
   Error displaying video. Please click the link, below.
 </div>
 <a target="_blank" href="https://fast.wistia.net/embed/iframe/${id}?seo=false">
-<img style="width:16px" alt="Opens in new tab" src="''' + _icon_image_url('external-link-icon.png') +
+  <img style="width:16px" alt="Opens in new tab" src="''' + _icon_image_url('external-link-icon.png') +
 '''"/>&nbsp;Watch full-screen.</a>
 ''')
 

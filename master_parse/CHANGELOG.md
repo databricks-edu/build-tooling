@@ -5,6 +5,10 @@ Version 1.13.0:
 * Added support for `AZURE_ONLY` and `AMAZON_ONLY` tags, triggered
   by `--target-profile` command line argument.
 
+Version 1.12.3:
+
+* Added border around video player.
+
 Version 1.12.2:
 
 * Updated generated S3 links to point to `files.training.databricks.com`.

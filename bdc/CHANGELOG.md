@@ -1,5 +1,9 @@
 # Change Log for BDC
 
+### Version 1.17.0
+
+* Added support for Amazon and Azure target profiles.
+
 ### Version 1.16.0
 
 * Variables can now be defined in the `notebook_defaults` section and in the

@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.16.0"
+VERSION = "1.17.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -106,6 +106,8 @@ INSTRUCTOR_NOTES_SUBDIR = "InstructorNotes" # in the instructor directory
 TARGET_LANG = 'target_lang'
 TARGET_EXTENSION = 'target_extension'
 NOTEBOOK_TYPE = 'notebook_type'
+
+VALID_PROFILES = {'amazon', 'azure'}
 
 POST_MASTER_PARSE_VARIABLES = {
     TARGET_LANG:         variable_ref_patterns(TARGET_LANG),
@@ -279,35 +281,38 @@ class MasterParseInfo(DefaultStrMixin):
                  heading=NotebookHeading(path=None, enabled=True),
                  footer=NotebookFooter(path=None, enabled=True),
                  encoding_in='UTF-8',
-                 encoding_out='UTF-8'):
+                 encoding_out='UTF-8',
+                 target_profile=master_parse.TargetProfile.NONE):
         """
         Create a new parsed master parse data object
 
-        :param enabled:      whether master parsing is enabled for the notebook
-        :param python:       whether Python notebook generation is enabled
-        :param scala:        whether Scala notebook generation is enabled
-        :param r:            whether R notebook generation is enabled
-        :param sql:          whether SQL notebook generation is enabled
-        :param answers:      whether to generate answer notebooks
-        :param exercises:    whether to generate exercises notebook
-        :param instructor:   whether to generate instructor notebooks
-        :param heading:      heading information (a NotebookHeading object)
-        :param footer:       footer information (a NotebookFooter object)
-        :param encoding_in:  the encoding of the source notebooks
-        :param encoding_out: the encoding to use when writing notebooks
+        :param enabled:        whether master parsing is enabled for the notebook
+        :param python:         whether Python notebook generation is enabled
+        :param scala:          whether Scala notebook generation is enabled
+        :param r:              whether R notebook generation is enabled
+        :param sql:            whether SQL notebook generation is enabled
+        :param answers:        whether to generate answer notebooks
+        :param exercises:      whether to generate exercises notebook
+        :param instructor:     whether to generate instructor notebooks
+        :param heading:        heading information (a NotebookHeading object)
+        :param footer:         footer information (a NotebookFooter object)
+        :param encoding_in:    the encoding of the source notebooks
+        :param encoding_out:   the encoding to use when writing notebooks
+        :param target_profile: the target profile, if any
         """
-        self.enabled      = enabled
-        self.python       = python
-        self.scala        = scala
-        self.r            = r
-        self.sql          = sql
-        self.answers      = answers
-        self.exercises    = exercises
-        self.instructor   = instructor
-        self.heading      = heading
-        self.footer       = footer
-        self.encoding_in  = encoding_in
-        self.encoding_out = encoding_out
+        self.enabled        = enabled
+        self.python         = python
+        self.scala          = scala
+        self.r              = r
+        self.sql            = sql
+        self.answers        = answers
+        self.exercises      = exercises
+        self.instructor     = instructor
+        self.heading        = heading
+        self.footer         = footer
+        self.encoding_in    = encoding_in
+        self.encoding_out   = encoding_out
+        self.target_profile = target_profile
 
     def lang_is_enabled(self, lang):
         """
@@ -363,7 +368,7 @@ class MasterParseInfo(DefaultStrMixin):
         :return: any unknown keys, or None if there aren't any.
         """
         extra = set(d.keys()) - set(cls.VALID_FIELDS.keys())
-        heading = d.get('heading', {})
+        heading = d.get('heading') or {}
         for k in (set(heading.keys()) - set(cls.VALID_HEADING_FIELDS.keys())):
             extra.add('heading.{0}'.format(k))
 
@@ -445,7 +450,8 @@ class NotebookData(object, DefaultStrMixin):
                  dest,
                  upload_download=True,
                  master=None,
-                 variables=None):
+                 variables=None,
+                 only_in_profile=None):
         '''
         Captures parsed notebook data.
 
@@ -458,6 +464,8 @@ class NotebookData(object, DefaultStrMixin):
                                 for this notebook.
         :param master:          The master parse data.
         :param variables:       Any variables for the notebook.
+        :param only_in_profile: Profile to which notebook is restricted, if
+                                any.
         '''
         super(NotebookData, self).__init__()
         self.src = src
@@ -465,6 +473,7 @@ class NotebookData(object, DefaultStrMixin):
         self.master = master
         self.upload_download = upload_download
         self.variables = variables
+        self.only_in_profile = only_in_profile
 
     def master_enabled(self):
         """
@@ -564,6 +573,13 @@ class BuildData(object, DefaultStrMixin):
         ).substitute(
             folder_vars
         )
+
+    @property
+    def profiles(self):
+        '''All profiles used in the build (or None).'''
+        p = { n.only_in_profile for n in self.notebooks
+              if n.only_in_profile is not None }
+        return p if len(p) > 0 else None
 
     @property
     def name(self):
@@ -827,12 +843,28 @@ def load_build_yaml(yaml_file):
                        'is disabled.').format(src, m[1])
                 )
 
+        prof = obj.get('only_in_profile')
+        if prof and (prof not in VALID_PROFILES):
+            raise ConfigError(
+                ('Notebook "{0}": Bad value of "{1}" for only_in_profile. ' +
+                 'Must be one of: {2}').format(
+                    src, prof, ', '.join(VALID_PROFILES)
+                )
+            )
+
+        if prof and (not master.enabled):
+            raise ConfigError(
+                ('Notebook "{0}": only_in_profile is set, but master is ' +
+                 'not enabled.'.format(src))
+            )
+
         nb = NotebookData(
             src=src,
             dest=dest,
             master=master,
             upload_download=bool_field(obj, 'upload_download', True),
-            variables=variables
+            variables=variables,
+            only_in_profile=prof
         )
 
         return nb
@@ -1073,16 +1105,17 @@ def copy_info_file(src_file, target_file, build):
             stylesheet=build.markdown.html_stylesheet)
 
 
-def process_master_notebook(dest_root, notebook, src_path, build):
+def process_master_notebook(dest_root, notebook, src_path, build, master_profile):
     """
     Process a master notebook.
 
-    :param dest_root:             top-level target directory for build
-    :param notebook:              the notebook data from the build YAML
-    :param src_path:              the pre-calculated path to the source notebook
-    :param dest_path:             the path to the target directory, calculated
-                                  from dest_root and notebook.dest
-    :param build                  parsed build data
+    :param dest_root:       top-level target directory for build
+    :param notebook:        the notebook data from the build YAML
+    :param src_path:        the pre-calculated path to the source notebook
+    :param dest_path:       the path to the target directory, calculated
+                            from dest_root and notebook.dest
+    :param build            parsed build data
+    :param master_profile:  master profile, or master_parser.TargetProfile.NONE
 
     :return: None
     """
@@ -1198,6 +1231,7 @@ def process_master_notebook(dest_root, notebook, src_path, build):
                 encoding_out=master.encoding_out,
                 enable_verbosity=verbosity_is_enabled(),
                 copyright_year=build.course_info.copyright_year,
+                target_profile=master_profile
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)
@@ -1207,19 +1241,37 @@ def process_master_notebook(dest_root, notebook, src_path, build):
             ))
             raise
 
-def copy_notebooks(build, labs_dir, dest_root):
+def copy_notebooks(build, labs_dir, dest_root, profile):
     """
     Copy the notebooks to the destination directory.
     """
     os.makedirs(labs_dir)
+
+    if profile is None:
+        master_profile = master_parse.TargetProfile.NONE
+    elif profile == 'amazon':
+        master_profile = master_parse.TargetProfile.AMAZON
+    elif profile == 'azure':
+        master_profile = master_parse.TargetProfile.AZURE
+    else:
+        assert(False)
+
     for notebook in build.notebooks:
         src_path = joinpath(build.source_base, notebook.src)
+        if (profile and notebook.only_in_profile and
+                notebook.only_in_profile != profile):
+            info('Suppressing notebook "{}", which is {}-only.'.format(
+                 src_path, profile.title()
+            ))
+            continue
+
         if notebook.master_enabled():
             process_master_notebook(
                 dest_root=dest_root,
                 notebook=notebook,
                 src_path=src_path,
-                build=build
+                build=build,
+                master_profile=master_profile
             )
         else:
             dest_path = joinpath(labs_dir, notebook.dest)
@@ -1356,6 +1408,58 @@ def write_version_notebook(dir, notebook_contents, version):
         out.write(notebook_contents)
 
 
+def do_build(build, gendbc, base_dest_dir, profile=None):
+    if profile:
+        dest_dir = path.join(base_dest_dir, profile)
+    else:
+        dest_dir = base_dest_dir
+
+    for d in (build.instructor_dir, build.student_dir):
+        mkdirp(joinpath(dest_dir, d))
+
+    version = build.course_info.version
+    fields = merge_dicts(build.variables, {
+        'course_name':     build.course_info.name,
+        'version':         version,
+        'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
+        'year':            build.course_info.copyright_year,
+    })
+    version_notebook = VariableSubstituter(
+        VERSION_NOTEBOOK_TEMPLATE
+    ).substitute(
+        fields
+    )
+
+    labs_full_path = joinpath(dest_dir, build.student_dir, STUDENT_LABS_SUBDIR)
+    copy_notebooks(build, labs_full_path, dest_dir, profile)
+    copy_instructor_notes(build, dest_dir)
+    write_version_notebook(labs_full_path, version_notebook, version)
+
+    make_dbc(gendbc=gendbc,
+             build=build,
+             labs_dir=labs_full_path,
+             dbc_path=joinpath(dest_dir, build.student_dir, STUDENT_LABS_DBC))
+
+    instructor_labs = joinpath(dest_dir,
+                               build.instructor_dir,
+                               INSTRUCTOR_LABS_SUBDIR)
+    if os.path.exists(instructor_labs):
+        instructor_dbc = joinpath(dest_dir,
+                                  build.instructor_dir,
+                                  INSTRUCTOR_LABS_DBC)
+        write_version_notebook(instructor_labs, version_notebook, version)
+        make_dbc(gendbc, build, instructor_labs, instructor_dbc)
+
+    copy_slides(build, dest_dir)
+    copy_misc_files(build, dest_dir)
+    copy_datasets(build, dest_dir)
+
+    # Finally, remove the instructor labs folder and the student labs
+    # folder.
+    if not build.keep_lab_dirs:
+        rm_rf(labs_full_path)
+        rm_rf(instructor_labs)
+
 def build_course(opts, build):
 
     if build.course_info.deprecated:
@@ -1378,50 +1482,13 @@ def build_course(opts, build):
 
         rm_rf(dest_dir)
 
-    for d in (build.instructor_dir, build.student_dir):
-        mkdirp(joinpath(dest_dir, d))
-
-    version = build.course_info.version
-    fields = merge_dicts(build.variables, {
-        'course_name':     build.course_info.name,
-        'version':         version,
-        'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
-        'year':            build.course_info.copyright_year,
-    })
-    version_notebook = VariableSubstituter(
-        VERSION_NOTEBOOK_TEMPLATE
-    ).substitute(
-        fields
-    )
-
-    labs_full_path = joinpath(dest_dir, build.student_dir, STUDENT_LABS_SUBDIR)
-    copy_notebooks(build, labs_full_path, dest_dir)
-    copy_instructor_notes(build, dest_dir)
-    write_version_notebook(labs_full_path, version_notebook, version)
-
-    make_dbc(gendbc=gendbc,
-             build=build,
-             labs_dir=labs_full_path,
-             dbc_path=joinpath(dest_dir, build.student_dir, STUDENT_LABS_DBC))
-
-    instructor_labs = joinpath(dest_dir,
-                                build.instructor_dir,
-                                INSTRUCTOR_LABS_SUBDIR)
-    if os.path.exists(instructor_labs):
-        instructor_dbc = joinpath(dest_dir,
-                                   build.instructor_dir,
-                                   INSTRUCTOR_LABS_DBC)
-        write_version_notebook(instructor_labs, version_notebook, version)
-        make_dbc(gendbc, build, instructor_labs, instructor_dbc)
-    copy_slides(build, dest_dir)
-    copy_misc_files(build, dest_dir)
-    copy_datasets(build, dest_dir)
-
-    # Finally, remove the instructor labs folder and the student labs
-    # folder.
-    if not build.keep_lab_dirs:
-        rm_rf(labs_full_path)
-        rm_rf(instructor_labs)
+    if build.profiles is None:
+        do_build(build, gendbc, dest_dir, profile=None)
+    else:
+        for profile in VALID_PROFILES:
+            info('')
+            info("Building profile {}".format(profile))
+            do_build(build, gendbc, dest_dir, profile)
 
     if errors > 0:
         raise BuildError("{0} error(s).".format(errors))
@@ -1698,6 +1765,8 @@ def main():
         set_verbosity(True, verbose_prefix='bdc: ')
 
     course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
+    if not os.path.exists(course_config):
+        die('{} does not exist.'.format(course_config))
 
     try:
         build = load_build_yaml(course_config)

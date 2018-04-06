@@ -211,6 +211,7 @@ variables:
 #                     item
 # ${course_id}      - Convenience variable: Same as
 #                     "${course_name}-${course_version}"
+# ${profile}        = name of current build profile, if any
 # <your variables>  - any variables in the "variables" config section
 
 #top_dbc_folder_name: ${course_name}
@@ -348,6 +349,11 @@ misc_files:
 #              or download operations, false otherwise. (False is useful when
 #              double-processing a notebook.)
 #
+# only_in_profile - Mark the notebook as either 'amazon' or 'azure', indicating
+#              that it is Amazon-only or Azure-only. The presence of profiles
+#              in any notebook settings causes a multi-profile build. If this
+#              value is set, the master parser must be enabled.
+#
 # master     - If this section is present, it marks the notebook as a master
 #              notebook to be processed by the master parse tool, and it
 #              contain master parse parameters. If this section is missing,
@@ -370,6 +376,8 @@ misc_files:
 #
 #   answers          - whether or not to generate answer notebooks. True by
 #                      default.
+#   azure_only       - keep all cells marked AZURE_ONLY. False by default.
+#   amazon_only      - keep all cells marked AMAZON_ONLY. True by default.
 #   instructor       - whether or not to generate answer notebooks. True by
 #                      default.
 #   scala            - true to generate a Scala notebook. True by default.
@@ -406,6 +414,7 @@ misc_files:
 # ${basename}         - the base file name of the source, WITHOUT the extension
 # ${filename}         - the base file name of the source, WITH the extension
 # ${extension}        - the file extension, without any leading "."
+# ${profile}          - the name of the build profile, if any, or "" if none.
 # <your variables>    - Any variables defined in the "variables" section can
 #                       also be substituted.
 #

@@ -27,12 +27,32 @@ from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 
-VERSION = "1.12.3"
+VERSION = "1.13.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
 # API, for ease of modification.)
 # -----------------------------------------------------------------------------
+
+class TargetProfile(Enum):
+    '''
+    The target output profile, currently either AZURE or AMAZON.
+    '''
+    AZURE = 'azure'
+    AMAZON = 'amazon'
+    NONE = 'none'
+
+# Strictly speaking, this is not an enum, but it's here for convenience.
+# It maps target profile values to their in-cell keywords.
+
+LABEL_TO_TARGET_PROFILE = {
+    '{}_ONLY'.format(t.value.upper()): t for t in TargetProfile
+    if t is not TargetProfile.NONE
+}
+
+TARGET_PROFILE_TO_LABEL = {
+    v: k for k, v in LABEL_TO_TARGET_PROFILE.items()
+}
 
 class CommandLabel(Enum):
     IPYTHON_ONLY      = 'IPYTHON_ONLY'
@@ -42,6 +62,8 @@ class CommandLabel(Enum):
     SQL_ONLY          = 'SQL_ONLY'
     ANSWER            = 'ANSWER'
     TODO              = 'TODO'
+    AZURE_ONLY        = TARGET_PROFILE_TO_LABEL[TargetProfile.AZURE]
+    AMAZON_ONLY       = TARGET_PROFILE_TO_LABEL[TargetProfile.AMAZON]
     TEST              = 'TEST'
     PRIVATE_TEST      = 'PRIVATE_TEST'
     DATABRICKS_ONLY   = 'DATABRICKS_ONLY'
@@ -151,6 +173,8 @@ VALID_CELL_TYPES_FOR_LABELS = {
     CommandLabel.TODO:            CODE_CELL_TYPES,
     CommandLabel.TEST:            CODE_CELL_TYPES,
     CommandLabel.PRIVATE_TEST:    CODE_CELL_TYPES,
+    CommandLabel.AMAZON_ONLY:     ALL_CELL_TYPES,
+    CommandLabel.AZURE_ONLY:      ALL_CELL_TYPES,
     CommandLabel.INLINE:          ALL_CELL_TYPES,
     CommandLabel.INSTRUCTOR_NOTE: { CommandCode.MARKDOWN,
                                     CommandCode.MARKDOWN_SANDBOX },
@@ -234,6 +258,7 @@ class Params(object):
                  add_footer=False,
                  notebook_footer_path=None,
                  add_heading=False,
+                 target_profile=TargetProfile.NONE,
                  notebook_heading_path=None,
                  encoding_in=DEFAULT_ENCODING_IN,
                  encoding_out=DEFAULT_ENCODING_OUT,
@@ -263,6 +288,8 @@ class Params(object):
         self._notebook_footer = None
         self.notebook_footer_path = notebook_footer_path
         self.copyright_year = copyright_year or datetime.now().year
+        assert(target_profile in set(TargetProfile))
+        self.target_profile = target_profile
 
         for purpose, file in (('Notebook footer', notebook_footer_path),
                               ('Notebook header', notebook_heading_path)):
@@ -353,13 +380,14 @@ class NotebookGenerator(object):
         :param params:         parsed (usually command-line) parameters
         '''
         base_keep = set(CommandLabel.__members__.values())
-        self.keep_labels = self._get_labels(notebook_kind,
-                                            notebook_user,
-                                            notebook_code)
+        self.keep_labels = self._get_keep_labels(notebook_kind,
+                                                 notebook_user,
+                                                 notebook_code)
         # discard labels not explicitly kept
         self.discard_labels = base_keep - self.keep_labels
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
-                       _all_notebooks, _instructor_note, _video]
+                       _all_notebooks, _instructor_note, _video,
+                       _azure_only, _amazon_only]
         self.replace = [(_ipythonReplaceRemoveLine, ''),
                         _rename_public_test,
                         _rename_import_public_test]
@@ -370,11 +398,19 @@ class NotebookGenerator(object):
         self.base_comment = _code_to_comment[self.notebook_code]
         self.params = params
 
-    def _get_labels(self, *params):
+    def _get_keep_labels(self, *params):
         labels = {CommandLabel.TEST, CommandLabel.INLINE}
         for param in params:
             label = NotebookGenerator.param_to_label[param]
             labels.update(label)
+
+        # Don't discard the profile labels.
+        for c in CommandLabel:
+            tp = LABEL_TO_TARGET_PROFILE.get(c.value)
+            if tp is not None:
+                # This is a target profile label. Mark it as kept.
+                labels.add(c)
+
         return labels
 
     def _get_extension(self):
@@ -434,7 +470,6 @@ class NotebookGenerator(object):
                 file_out = file_out.replace('.py', '.ipynb')
 
             magic_prefix = '{0} MAGIC'.format(self.base_comment)
-
             with codecs.open(file_out, 'w', _file_encoding_out,
                              errors=_file_encoding_errors) as output:
 
@@ -553,6 +588,31 @@ class NotebookGenerator(object):
                         # -- ALL_NOTEBOOKS
                         labels = labels - {CommandLabel.ALL_NOTEBOOKS}
 
+
+                    # Check for target profile label.
+                    remove_profile_cell = False
+                    cell_profile_labels = []
+                    for label in labels:
+                        lv = label.value
+                        cell_profile = LABEL_TO_TARGET_PROFILE.get(lv)
+                        if cell_profile is None:
+                            continue
+                        cell_profile_labels.append(lv)
+
+                        if ((params.target_profile is not TargetProfile.NONE) and
+                            (cell_profile != params.target_profile)):
+                            remove_profile_cell = True
+
+                    if len(cell_profile_labels) > 1:
+                        raise Exception(
+                            'Cell {} in {} has multiple profile tags: {}'.format(
+                                cell_num, input_name, ', '.join(cell_profile_labels)
+                            )
+                        )
+                    if remove_profile_cell:
+                        continue
+
+                    # Process the cell.
                     # This thing just gets uglier and uglier.
                     if ( (not (discard_labels & labels)) and
                          (((inline and code != self.notebook_code) or
@@ -829,6 +889,8 @@ _dbc_only = or_magic(CommandLabel.DATABRICKS_ONLY.value)
 _ipython_only = or_magic(CommandLabel.IPYTHON_ONLY.value)
 _python_only = or_magic(CommandLabel.PYTHON_ONLY.value)
 _scala_only = or_magic(CommandLabel.SCALA_ONLY.value)
+_amazon_only = or_magic(CommandLabel.AMAZON_ONLY.value)
+_azure_only = or_magic(CommandLabel.AZURE_ONLY.value)
 _sql_only = or_magic(CommandLabel.SQL_ONLY.value)
 _r_only = or_magic(CommandLabel.R_ONLY.value)
 _new_part = or_magic(r'NEW_PART')
@@ -1021,6 +1083,8 @@ class Parser:
                         (_ipython_only, CommandLabel.IPYTHON_ONLY),
                         (_scala_only, CommandLabel.SCALA_ONLY),
                         (_python_only, CommandLabel.PYTHON_ONLY),
+                        (_amazon_only, CommandLabel.AMAZON_ONLY),
+                        (_azure_only, CommandLabel.AZURE_ONLY),
                         (_r_only, CommandLabel.R_ONLY),
                         (_all_notebooks, CommandLabel.ALL_NOTEBOOKS),
                         (_instructor_note, CommandLabel.INSTRUCTOR_NOTE),
@@ -1232,7 +1296,7 @@ def process_notebooks(params):
     if os.path.isdir(params.path):
         files = []
         for p in ['*.py', '*.scala', '*.r', '*.sql']:
-            files.extend(glob.glob(os.path.join(path, p)))
+            files.extend(glob.glob(os.path.join(params.path, p)))
     else:
         files = [params.path]
 
@@ -1368,6 +1432,13 @@ def main():
                                  '--heading.',
                             default=None,
                             metavar="<file>")
+    arg_parser.add_argument('-tp', '--target-profile',
+                            help="Target output profile, if any. Valid " +
+                                 "values: amazon, azure",
+                            metavar="<profile>",
+                            choices=('amazon', 'azure'),
+                            default=None)
+
     arg_parser.add_argument('--heading',
                             help='By default, even if you specify -nh, this ' +
                                  'tool does not add the notebook heading to ' +
@@ -1405,6 +1476,12 @@ def main():
     if not args.filename:
         arg_parser.error('Missing notebook path.')
 
+    if args.target_profile:
+        target_profiles = { t.value : t for t in TargetProfile }
+        args.target_profile = target_profiles[args.target_profile]
+    else:
+        args.target_profile = TargetProfile.NONE
+
     params = Params(
         path=args.filename,
         output_dir=args.output_dir,
@@ -1426,7 +1503,8 @@ def main():
         encoding_out=args.encoding_out,
         enable_verbosity=args.verbose,
         enable_debug=args.debug,
-        copyright_year=args.copyright
+        copyright_year=args.copyright,
+        target_profile=args.target_profile
     )
 
     try:

@@ -524,6 +524,7 @@ class BuildData(object, DefaultStrMixin):
                  keep_lab_dirs,
                  markdown_cfg,
                  notebook_type_map,
+                 use_profiles=False,
                  variables=None):
         """
         Create a new BuildData object.
@@ -541,6 +542,7 @@ class BuildData(object, DefaultStrMixin):
         :param markdown_cfg:          parsed MarkdownInfo object
         :param notebook_type_map:     a dict mapping notebook types to strings.
                                       Keys are from the NotebookType enum.
+        :param use_profiles:          whether to use Azure/Amazon build profiles
         :param variables:             a map of user-defined variables
         """
         super(BuildData, self).__init__()
@@ -558,6 +560,7 @@ class BuildData(object, DefaultStrMixin):
         self.keep_lab_dirs = keep_lab_dirs
         self.notebook_type_map = notebook_type_map
         self.variables = variables or {}
+        self.use_profiles = use_profiles
 
         if top_dbc_folder_name is None:
             top_dbc_folder_name = '${course_name}'
@@ -573,13 +576,6 @@ class BuildData(object, DefaultStrMixin):
         ).substitute(
             folder_vars
         )
-
-    @property
-    def profiles(self):
-        '''All profiles used in the build (or None).'''
-        p = { n.only_in_profile for n in self.notebooks
-              if n.only_in_profile is not None }
-        return p if len(p) > 0 else None
 
     @property
     def name(self):
@@ -1002,6 +998,7 @@ def load_build_yaml(yaml_file):
     build_yaml_full = path.abspath(yaml_file)
     build_yaml_dir = path.dirname(build_yaml_full)
     src_base = path.abspath(joinpath(build_yaml_dir, src_base))
+    use_profiles = bool_field(contents, 'use_profiles')
 
     notebook_defaults = parse_notebook_defaults(contents, 'notebook_defaults')
 
@@ -1024,6 +1021,16 @@ def load_build_yaml(yaml_file):
     if notebooks_cfg:
         notebooks = parse_file_section(notebooks_cfg, parse_notebook,
                                        notebook_defaults, variables)
+
+        # If there are any profiles in the notebooks, and use_profiles is off,
+        # abort.
+        profiles = {n.only_in_profile for n in notebooks if n.only_in_profile}
+        if (not use_profiles) and (len(profiles) > 0):
+            raise ConfigError(
+                'At least one notebook has "only_in_profile" set, but the ' +
+                'build does not specify "use_profiles: true".'
+            )
+
     else:
         notebooks = None
 
@@ -1071,7 +1078,8 @@ def load_build_yaml(yaml_file):
         keep_lab_dirs=bool_field(contents, 'keep_lab_dirs'),
         markdown_cfg=parse_markdown(contents.get('markdown')),
         notebook_type_map=parse_notebook_types(contents),
-        variables=variables
+        variables=variables,
+        use_profiles=use_profiles
     )
 
     return data
@@ -1482,7 +1490,7 @@ def build_course(opts, build):
 
         rm_rf(dest_dir)
 
-    if build.profiles is None:
+    if not build.use_profiles:
         do_build(build, gendbc, dest_dir, profile=None)
     else:
         for profile in VALID_PROFILES:

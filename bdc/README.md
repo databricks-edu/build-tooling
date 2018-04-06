@@ -361,6 +361,14 @@ You can use `bdc` to upload all notebooks for a course to a Databricks shard.
 
 `bdc --upload shard-path [build-yaml]`
 
+Or, if you want to use a different `databricks` authentication profile than
+`DEFAULT`:
+
+`bdc --upload --dprofile profile shard-path [build-yaml]`
+
+`--dbprofile` (or `-P`) corresponds _directly_ to the `databricks`
+command's `--profile` argument.
+
 This version of the command gets the list of source notebooks from the build 
 file and uploads them to a shard using a layout similar to the build layout.
 You can then edit and test the notebooks in Databricks. When you're done
@@ -390,6 +398,14 @@ See <https://docs.databricks.com/user-guide/databricks-cli.html> for details.
 You can use `bdc` to download all notebooks for a course to a Databricks shard.
 
 `bdc --download shard-path [build-yaml]`
+
+Or, if you want to use a different `databricks` authentication profile than
+`DEFAULT`:
+
+`bdc --download --dprofile profile shard-path [build-yaml]`
+
+`--dbprofile` (or `-P`) corresponds _directly_ to the `databricks`
+command's `--profile` argument.
 
 This version of the command downloads the contents of the specified Databricks
 shard folder to a local temporary directory. Then, for each downloaded file,

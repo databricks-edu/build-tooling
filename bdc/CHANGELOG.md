@@ -1,5 +1,11 @@
 # Change Log for BDC
 
+### Version 1.18.0
+
+* `--upload` and `--download` now honor a `--dbprofile` option to specify
+  the authentication profile to use with the `databricks-cli`. This option
+  corresponds directly to the `--profile` argument to the `databricks` command.
+
 ### Version 1.17.0
 
 * Added support for Amazon and Azure target profiles.

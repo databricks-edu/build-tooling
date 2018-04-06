@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.17.0"
+VERSION = "1.18.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -66,29 +66,33 @@ Usage:
   {0} (-h | --help)
   {0} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
   {0} --list-notebooks [BUILD_YAML]
-  {0} --upload [-v | --verbose] SHARD_FOLDER_PATH [BUILD_YAML]
-  {0} --download [-v | --verbose] SHARD_FOLDER_PATH [BUILD_YAML]
+  {0} --upload [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
+  {0} --download [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
 
 MASTER_CFG is the build tool's master configuration file.
 
 BUILD_YAML is the build file for the course to be built. Defaults to {2}.
 
-SHARD_FOLDER_PATH is the path to a folder on a Databricks shard, as supported
+SHARD_PATH is the path to a folder on a Databricks shard, as supported
 by the Databricks CLI. You must install databricks-cli and configure it
 properly for --upload and --download to work.
 
 Options:
-  -h --help            Show this screen.
-  -d DEST --dest DEST  Specify output destination. Defaults to
-                       ~/tmp/curriculum/<course_id>
-  -o --overwrite       Overwrite the destination directory, if it exists.
-  -v --verbose         Print what's going on to standard output.
-  --list-notebooks     List the full paths of all notebooks in a course
-  --upload             Upload all notebooks to a folder on Databricks.
-  --download           Download all notebooks from a folder on Databricks,
-                       copying them into their appropriate locations on the 
-                       local file system, as defined in the build.yaml file.
-  --version            Display version and exit.
+  -h --help                Show this screen.
+  -d DEST --dest DEST      Specify output destination. Defaults to
+                           ~/tmp/curriculum/<course_id>
+  -o --overwrite           Overwrite the destination directory, if it exists.
+  -v --verbose             Print what's going on to standard output.
+  --list-notebooks         List the full paths of all notebooks in a course
+  --upload                 Upload all notebooks to a folder on Databricks.
+  --download               Download all notebooks from a folder on Databricks,
+                           copying them into their appropriate locations on the 
+                           local file system, as defined in the build.yaml file.
+  -P PROF --dprofile PROF  When uploading and downloading, pass authentication
+                           profile PROF to the "databricks" commands. This
+                           option corresponds exactly with the --profile
+                           argument to "databricks".
+  --version                Display version and exit.
 
 """.format(PROG, VERSION, DEFAULT_BUILD_FILE))
 
@@ -1506,14 +1510,16 @@ def build_course(opts, build):
     ))
 
 
-def dbw(subcommand, args, capture_stdout=True):
+def dbw(subcommand, args, capture_stdout=True, db_profile=None):
     """
     Invoke "databricks workspace" with specified arguments.
 
-    :param subcommand: the "databricks workspace" subcommand
-    :param args: arguments, as a list
+    :param subcommand:     the "databricks workspace" subcommand
+    :param args:           arguments, as a list
     :param capture_stdout: True to capture and return standard output. False
                            otherwise.
+    :param db_profile:     The --profile argument for the "databricks" command,
+                           if any; None otherwise.
 
     :return: A tuple of (returncode, parsed_json) on error,
              or (returncode, stdout) on success. If capture_stdout is False,
@@ -1522,6 +1528,10 @@ def dbw(subcommand, args, capture_stdout=True):
     dbw = find_in_path('databricks')
     try:
         full_args = [dbw, 'workspace', subcommand] + args
+        if db_profile:
+            full_args.append('--profile')
+            full_args.append(db_profile)
+
         verbose('+ {0}'.format(' '.join(full_args)))
         stdout_loc = subprocess.PIPE if capture_stdout else None
         p = subprocess.Popen(full_args,
@@ -1678,7 +1688,7 @@ def get_sources_and_targets(build):
     return res
 
 
-def upload_notebooks(build, shard_path):
+def upload_notebooks(build, shard_path, db_profile):
     shard_path = expand_shard_path(shard_path)
     ensure_shard_path_does_not_exist(shard_path)
 
@@ -1700,7 +1710,8 @@ def upload_notebooks(build, shard_path):
 
             with working_directory(tempdir):
                 info("Uploading notebooks to {0}".format(shard_path))
-                rc, res = dbw('import_dir', ['.', shard_path], capture_stdout=False)
+                rc, res = dbw('import_dir', ['.', shard_path],
+                              capture_stdout=False, db_profile=db_profile)
                 if rc != 0:
                     raise UploadDownloadError(
                         "Upload failed: {0}".format(res.get('message', '?'))
@@ -1714,7 +1725,7 @@ def upload_notebooks(build, shard_path):
         die(e.message)
 
 
-def download_notebooks(build, shard_path):
+def download_notebooks(build, shard_path, db_profile):
     shard_path = expand_shard_path(shard_path)
     ensure_shard_path_exists(shard_path)
 
@@ -1732,7 +1743,7 @@ def download_notebooks(build, shard_path):
     with TemporaryDirectory() as tempdir:
         info("Downloading notebooks to temporary directory")
         with working_directory(tempdir):
-            rc, res = dbw('export_dir', [shard_path, '.'])
+            rc, res = dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
             if rc != 0:
                 die("Download failed: {0}".format(res.get('message', '?')))
 
@@ -1782,9 +1793,9 @@ def main():
         if opts['--list-notebooks']:
             list_notebooks(build)
         elif opts['--upload']:
-            upload_notebooks(build, opts['SHARD_FOLDER_PATH'])
+            upload_notebooks(build, opts['SHARD_PATH'], opts['--dprofile'])
         elif opts['--download']:
-            download_notebooks(build, opts['SHARD_FOLDER_PATH'])
+            download_notebooks(build, opts['SHARD_PATH'], opts['--dprofile'])
         else:
             build_course(opts, build)
 

@@ -470,7 +470,6 @@ class NotebookGenerator(object):
                 file_out = file_out.replace('.py', '.ipynb')
 
             magic_prefix = '{0} MAGIC'.format(self.base_comment)
-
             with codecs.open(file_out, 'w', _file_encoding_out,
                              errors=_file_encoding_errors) as output:
 
@@ -591,7 +590,6 @@ class NotebookGenerator(object):
 
 
                     # Check for target profile label.
-                    new_labels = set(labels)
                     remove_profile_cell = False
                     cell_profile_labels = []
                     for label in labels:
@@ -600,12 +598,11 @@ class NotebookGenerator(object):
                         if cell_profile is None:
                             continue
                         cell_profile_labels.append(lv)
-                        #new_labels = new_labels - {cell_profile}
+
                         if ((params.target_profile is not TargetProfile.NONE) and
                             (cell_profile != params.target_profile)):
                             remove_profile_cell = True
 
-                    #labels = new_labels
                     if len(cell_profile_labels) > 1:
                         raise Exception(
                             'Cell {} in {} has multiple profile tags: {}'.format(
@@ -615,6 +612,7 @@ class NotebookGenerator(object):
                     if remove_profile_cell:
                         continue
 
+                    # Process the cell.
                     # This thing just gets uglier and uglier.
                     if ( (not (discard_labels & labels)) and
                          (((inline and code != self.notebook_code) or

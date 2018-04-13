@@ -1,5 +1,9 @@
 # Change Log for Master Parse Tool
 
+Version 1.13.1:
+
+* Updated output for `-- VIDEO` to fix some issues.
+
 Version 1.13.0:
 
 * Added support for `AZURE_ONLY` and `AMAZON_ONLY` tags, triggered

@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.18.1
+
+* Fixed bug: `databricks` command profile wasn't being passed all the places
+  it should've been.
+  
 ### Version 1.18.0
 
 * `--upload` and `--download` now honor a `--dbprofile` option to specify

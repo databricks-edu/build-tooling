@@ -27,7 +27,7 @@ from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 
-VERSION = "1.13.0"
+VERSION = "1.13.1"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -199,15 +199,19 @@ DEFAULT_OUTPUT_DIR = 'build_mp'
 # VIDEO_TEMPLATE (a string template) requires ${id} and ${title}. ${title}
 # is currently ignored.
 VIDEO_TEMPLATE = (
-'''<script src="https://fast.wistia.com/embed/medias/${id}.jsonp" async></script>
-<script src="https://files.training.databricks.com/courses/spark-sql/Wistia.js" async></script>
-<div class="wistia_embed wistia_async_${id}" style="height:360px;width:640px;color:red;border:1px;border-color:#1cb1c2;border-style:solid">
-  Error displaying video. Please click the link, below.
-</div>
+'''<iframe  
+src="//fast.wistia.net/embed/iframe/${id}?videoFoam=true"
+style="border:1px solid #1cb1c2;"
+allowtransparency="true" scrolling="no" class="wistia_embed"
+name="wistia_embed" allowfullscreen mozallowfullscreen webkitallowfullscreen
+oallowfullscreen msallowfullscreen width="640" height="360" ></iframe>
+<div>
 <a target="_blank" href="https://fast.wistia.net/embed/iframe/${id}?seo=false">
-  <img style="width:16px" alt="Opens in new tab" src="''' + _icon_image_url('external-link-icon.png') +
+  <img alt="Opens in new tab" src="''' + _icon_image_url('external-link-icon-16x16.png') +
 '''"/>&nbsp;Watch full-screen.</a>
-''')
+</div>''')
+
+VIDEO_CELL_MAGIC = '%md'
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
@@ -642,7 +646,7 @@ class NotebookGenerator(object):
                         new_content = self._handle_video_cell(cell_num, content)
                         new_cell = [
                             '{0} MAGIC {1}'.format(self.base_comment, line)
-                            for line in ['%md-sandbox'] + new_content
+                            for line in [VIDEO_CELL_MAGIC] + new_content
                         ]
                         is_first = self._write_command(
                             output, command_cell, new_cell + ['\n'], is_first
@@ -1461,7 +1465,7 @@ def main():
     args = arg_parser.parse_args()
 
     if args.version:
-        print('Master Parse tool, version {0}'.format(VERSION))
+        print(VERSION)
         sys.exit(0)
 
     if not (args.databricks or args.ipython):

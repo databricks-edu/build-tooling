@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.18.0"
+VERSION = "1.18.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1556,8 +1556,8 @@ def dbw(subcommand, args, capture_stdout=True, db_profile=None):
         return (1, {'error_code': 'OS_ERROR', 'message': e.message})
 
 
-def ensure_shard_path_exists(shard_path):
-    rc, res = dbw('ls', [shard_path])
+def ensure_shard_path_exists(shard_path, db_profile):
+    rc, res = dbw('ls', [shard_path], db_profile=db_profile)
     if rc == 0 and res.startswith(u'Usage:'):
         die('(BUG) Error in "databricks" command:\n{0}'.format(res))
     elif rc == 0:
@@ -1573,8 +1573,8 @@ def ensure_shard_path_exists(shard_path):
             die('Unexpected error with "databricks": {0}'.format(message))
 
 
-def ensure_shard_path_does_not_exist(shard_path):
-    rc, res = dbw('ls', [shard_path])
+def ensure_shard_path_does_not_exist(shard_path, db_profile):
+    rc, res = dbw('ls', [shard_path], db_profile=db_profile)
     if rc == 0 and res.startswith('Usage:'):
         die('(BUG) Error in "databricks" command:\n{0}'.format(res))
     elif rc == 0:
@@ -1618,7 +1618,6 @@ def expand_shard_path(shard_path):
         shard_path = '{0}/{1}'.format(home, shard_path)
 
     return shard_path
-
 
 
 def notebook_is_transferrable(nb, build):
@@ -1690,7 +1689,7 @@ def get_sources_and_targets(build):
 
 def upload_notebooks(build, shard_path, db_profile):
     shard_path = expand_shard_path(shard_path)
-    ensure_shard_path_does_not_exist(shard_path)
+    ensure_shard_path_does_not_exist(shard_path, db_profile)
 
     notebooks = get_sources_and_targets(build)
     try:
@@ -1721,13 +1720,13 @@ def upload_notebooks(build, shard_path, db_profile):
                         len(notebooks), shard_path
                     ))
     except UploadDownloadError as e:
-        dbw('rm', [shard_path], capture_stdout=False)
+        dbw('rm', [shard_path], capture_stdout=False, db_profile=db_profile)
         die(e.message)
 
 
 def download_notebooks(build, shard_path, db_profile):
     shard_path = expand_shard_path(shard_path)
-    ensure_shard_path_exists(shard_path)
+    ensure_shard_path_exists(shard_path, db_profile)
 
     # get_sources_and_targets() returns a dict of
     # local-path -> remote-partial-path. Reverse it. Bail if there are any

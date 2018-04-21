@@ -27,7 +27,7 @@ from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 
-VERSION = "1.13.1"
+VERSION = "1.13.2"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -557,11 +557,12 @@ class NotebookGenerator(object):
                             content
                         )
 
-                    # Expand inline callouts.
-                    (content, sandbox) = expand_inline_tokens(INLINE_TOKENS,
-                                                              content)
-                    if sandbox:
-                        code = CommandCode.MARKDOWN_SANDBOX
+                    if code in (CommandCode.MARKDOWN, CommandCode.MARKDOWN_SANDBOX):
+                        # Expand inline callouts.
+                        (content, sandbox) = expand_inline_tokens(INLINE_TOKENS,
+                                                                  content)
+                        if sandbox:
+                            code = CommandCode.MARKDOWN_SANDBOX
 
                     inline = CommandLabel.INLINE in labels
 
@@ -643,10 +644,14 @@ class NotebookGenerator(object):
                                                        content, is_first)
 
                     elif CommandLabel.VIDEO in labels:
-                        new_content = self._handle_video_cell(cell_num, content)
+                        # First, handle the video cell expansion. Then, do the
+                        # usual remove and replace stuff.
+                        video_content = self._handle_video_cell(cell_num, content)
+                        new_content = self.remove_and_replace(
+                            video_content, code, inline, all_notebooks, is_first
+                        )
                         new_cell = [
-                            '{0} MAGIC {1}'.format(self.base_comment, line)
-                            for line in [VIDEO_CELL_MAGIC] + new_content
+                            line for line in [VIDEO_CELL_MAGIC] + new_content
                         ]
                         is_first = self._write_command(
                             output, command_cell, new_cell + ['\n'], is_first

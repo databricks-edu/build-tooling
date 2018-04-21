@@ -1,5 +1,12 @@
 # Change Log for Master Parse Tool
 
+Version 1.13.2:
+
+* Fixed a bug in the handling of inline tokens that led to cells being
+  suppressed or mis-marked with the `%md-sandbox` under certain circumstances.
+* Fixed a bug where a cell with a keyword (e.g., `// AMAZON_ONLY`) _and_
+  a `// VIDEO` label failed to get rid of the keyword.
+  
 Version 1.13.1:
 
 * Updated output for `-- VIDEO` to fix some issues.

@@ -27,7 +27,7 @@ from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 
-VERSION = "1.13.1"
+VERSION = "1.13.2"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -557,11 +557,12 @@ class NotebookGenerator(object):
                             content
                         )
 
-                    # Expand inline callouts.
-                    (content, sandbox) = expand_inline_tokens(INLINE_TOKENS,
-                                                              content)
-                    if sandbox:
-                        code = CommandCode.MARKDOWN_SANDBOX
+                    if code in (CommandCode.MARKDOWN, CommandCode.MARKDOWN_SANDBOX):
+                        # Expand inline callouts.
+                        (content, sandbox) = expand_inline_tokens(INLINE_TOKENS,
+                                                                  content)
+                        if sandbox:
+                            code = CommandCode.MARKDOWN_SANDBOX
 
                     inline = CommandLabel.INLINE in labels
 

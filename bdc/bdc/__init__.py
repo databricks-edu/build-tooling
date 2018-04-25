@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.18.1"
+VERSION = "1.18.2"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -112,6 +112,7 @@ TARGET_EXTENSION = 'target_extension'
 NOTEBOOK_TYPE = 'notebook_type'
 
 VALID_PROFILES = {'amazon', 'azure'}
+PROFILE_ABBREVIATIONS = {'amazon' : 'am', 'azure': 'az'}
 
 POST_MASTER_PARSE_VARIABLES = {
     TARGET_LANG:         variable_ref_patterns(TARGET_LANG),
@@ -1645,6 +1646,9 @@ def get_sources_and_targets(build):
         TARGET_LANG: '',
         NOTEBOOK_TYPE: '',
     }
+
+    profile_subst_pattern = re.compile(r'^(\d*-?)(.*)$')
+
     def map_notebook_dest(nb):
         template_data2 = {}
         template_data2.update(template_data)
@@ -1653,11 +1657,27 @@ def get_sources_and_targets(build):
             ext = ext[1:] # skip leading '.'
 
         template_data2[TARGET_EXTENSION] = ext
-        return path.normpath(
+        p = path.normpath(
             leading_slashes.sub(
                 '', VariableSubstituter(nb.dest).safe_substitute(template_data2)
             )
         )
+
+        if nb.only_in_profile:
+            (dir, file) = (path.dirname(p), path.basename(p))
+            m = profile_subst_pattern.match(file)
+            if not m:
+                new_file = '{}-{}'.format(
+                    PROFILE_ABBREVIATIONS[nb.only_in_profile], file
+                )
+            else:
+                new_file = '{}{}-{}'.format(
+                    m.group(1), PROFILE_ABBREVIATIONS[nb.only_in_profile],
+                    m.group(2)
+                )
+            p = path.join(dir, new_file)
+
+        return p
 
     res = {}
     notebooks = [nb for nb in build.notebooks
@@ -1668,7 +1688,7 @@ def get_sources_and_targets(build):
     for nb in notebooks:
         dest = map_notebook_dest(nb)
         if nb.master.enabled:
-            # The destination is a directory. Count how many notebooks
+            # The destination might be a directory. Count how many notebooks
             # end up in each directory.
             target_dirs[dest] = target_dirs.get(dest, 0) + 1
 

@@ -24,6 +24,9 @@ Run this command in a Python 2 environment:
 pip install --upgrade git+https://github.com/databricks-edu/build-tooling
 ```
 
+**WARNING**: The above is known to work with `pip` version 9. It has
+_not_ been tested with `pip` version 10. **Don't use `pip` 10.**
+
 It'll take a few minutes, but it will download and install all three pieces.
 
 ## Manual install 

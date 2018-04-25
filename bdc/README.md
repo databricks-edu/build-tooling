@@ -384,6 +384,32 @@ shard. If it already exists, the upload will abort.
 `build-yaml` is the path to the course's `build.yaml` file, and it defaults to 
 `build.yaml` in the current directory.
 
+**Uploads and build profiles**: If two notebooks with separate profiles
+("amazon" and "azure") map to the same `dest` value, `bdc` would overwrite one
+of them during the upload and would arbitrarily choose one on the download.
+Now, it adds an "az" or "am" qualifier to the uploaded file. For instance,
+assume `build.yaml` has these two notebooks (and assume typical values in
+`notebook_defaults`):
+  
+```
+  - src: 02-ETL-Process-Overview-az.py
+    dest: ${target_lang}/02-ETL-Process-Overview.py
+    only_in_profile: azure
+
+  - src: 02-ETL-Process-Overview-am.py
+    dest: ${target_lang}/02-ETL-Process-Overview.py
+    only_in_profile: amazon
+```  
+
+Both notebooks map to the same build destination. `bdc --upload` will upload
+`02-ETL-Process-Overview-az.py` as `01-az-ETL-Process-Overview.py`, and it will
+upload `02-ETL-Process-Overview-am.py` as `01-am-ETL-Process-Overview.py`.
+
+`bdc` always applies the `am` or `az` prefix, if `only_in_profile` is specified,
+even if there are no destination conflicts. The prefix is placed _after_ any
+numerals in the destination file name; if there are no numerals, it's placed
+at the beginning.
+
 #### Prerequisite
  
 This option _requires_ the `databricks-cli` package, which is only

@@ -1,5 +1,33 @@
 # Change Log for BDC
 
+### Version 1.18.2
+
+Fixed bug relating to upload and download capability: If two notebooks
+with separate profiles ("amazon" and "azure") map to the same `dest` value,
+`bdc` would overwrite one of them during the upload and would arbitrarily
+choose one on the download. Now, it adds an "az" or "am" qualifier to the
+uploaded file. For instance, assume `build.yaml` has these two notebooks (and
+assume typical values in `notebook_defaults`):
+  
+```
+  - src: 02-ETL-Process-Overview-az.py
+    dest: ${target_lang}/02-ETL-Process-Overview.py
+    only_in_profile: azure
+
+  - src: 02-ETL-Process-Overview-am.py
+    dest: ${target_lang}/02-ETL-Process-Overview.py
+    only_in_profile: amazon
+```  
+
+Both notebooks map to the same build destination. `bdc --upload` will upload
+`02-ETL-Process-Overview-az.py` as `01-az-ETL-Process-Overview.py`, and it will
+upload `02-ETL-Process-Overview-am.py` as `01-am-ETL-Process-Overview.py`.
+
+`bdc` always applies the `am` or `az` prefix, if `only_in_profile` is specified,
+even if there are no destination conflicts. The prefix is placed _after_ any
+numerals in the destination file name; if there are no numerals, it's placed
+at the beginning.
+
 ### Version 1.18.1
 
 * Fixed bug: `databricks` command profile wasn't being passed all the places

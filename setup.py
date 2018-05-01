@@ -43,29 +43,25 @@ class CustomInstallCommand(install):
 top_dir = os.path.dirname(os.path.abspath(__file__))
 
 print(sys.argv)
-#if len(sys.argv) > 1 and sys.argv[1] == 'install':
-#    import pip
-#    print('Installing/upgrading databricks-cli')
-#    rc = pip.main(['install', '--upgrade', 'databricks-cli'])
-#    if rc != 0:
-#        raise OSError('pip install failed.')
-#
-#    with chdir(os.path.join(top_dir, 'gendbc')):
-#        print('Installing gendbc...')
-#        cmd('bin/activator install')
-#
-#    for d in ('master_parse', 'bdc'):
-#        print('Installing {0}...'.format(d))
-#        with chdir(os.path.join(top_dir, d)):
-#            cmd('python setup.py install')
+if len(sys.argv) > 1 and sys.argv[1] in ('install', 'bdist_wheel'):
+    import pip
+    print('Installing/upgrading databricks-cli')
+    rc = pip.main(['install', '--upgrade', 'databricks-cli'])
+    if rc != 0:
+        raise OSError('pip install failed.')
+
+    with chdir(os.path.join(top_dir, 'gendbc')):
+        print('Installing gendbc...')
+        cmd('bin/activator install')
+
+    for d in ('master_parse', 'bdc'):
+        print('Installing {0}...'.format(d))
+        with chdir(os.path.join(top_dir, d)):
+            cmd('python setup.py install')
 
 setup(
     name='db-build-tooling',
     packages=[],
-    cmdclass={
-        'install': CustomInstallCommand,
-        'bdist_wheel': CustomInstallCommand
-    },
     version=VERSION,
     description='Wrapper package for Databricks Training build tools',
     author='Databricks Education Team',

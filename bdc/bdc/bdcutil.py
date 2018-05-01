@@ -83,6 +83,7 @@ h4 {
 
 COLUMNS = int(os.getenv('COLUMNS', '79'))
 WARNING_PREFIX = "*** WARNING: "
+DEBUG_PREFIX = "(DEBUG) "
 
 # ---------------------------------------------------------------------------
 # Module globals
@@ -100,6 +101,9 @@ _verbose_wrapper = TextWrapper(width=COLUMNS)
 _error_wrapper = TextWrapper(width=COLUMNS)
 
 _info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
+
+_debug_wrapper = TextWrapper(width=COLUMNS,
+                             subsequent_indent = ' ' * len(DEBUG_PREFIX))
 
 # ---------------------------------------------------------------------------
 # Public functions
@@ -140,11 +144,20 @@ def verbose(msg):
     Conditionally emit a verbose message. See also set_verbosity().
 
     :param msg: the message
-
-    :return:
     """
     if _verbose:
         print(_verbose_wrapper.fill("{0}{1}".format(_verbose_prefix, msg)))
+
+
+def debug(msg, debug_enabled=True):
+    '''
+    Conditionally emit a debug message.
+
+    :param msg:            the message
+    :param debug_enabled:  whether debug messages are enabled or not
+    '''
+    if debug_enabled:
+        print(_debug_wrapper.fill("{0}{1}".format(DEBUG_PREFIX, msg)))
 
 
 def warning(msg):

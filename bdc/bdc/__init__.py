@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.18.2"
+VERSION = "1.19.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -261,7 +261,8 @@ class MasterParseInfo(DefaultStrMixin):
         'heading': NotebookHeading.__class__,
         'footer': NotebookFooter.__class__,
         'encoding_in': str,
-        'encoding_out': str
+        'encoding_out': str,
+        'debug': bool
     }
 
     VALID_HEADING_FIELDS = {
@@ -287,7 +288,8 @@ class MasterParseInfo(DefaultStrMixin):
                  footer=NotebookFooter(path=None, enabled=True),
                  encoding_in='UTF-8',
                  encoding_out='UTF-8',
-                 target_profile=master_parse.TargetProfile.NONE):
+                 target_profile=master_parse.TargetProfile.NONE,
+                 debug=False):
         """
         Create a new parsed master parse data object
 
@@ -304,6 +306,8 @@ class MasterParseInfo(DefaultStrMixin):
         :param encoding_in:    the encoding of the source notebooks
         :param encoding_out:   the encoding to use when writing notebooks
         :param target_profile: the target profile, if any
+        :param debug:          enable/disable debug messages for the master
+                               parse phase
         """
         self.enabled        = enabled
         self.python         = python
@@ -318,6 +322,7 @@ class MasterParseInfo(DefaultStrMixin):
         self.encoding_in    = encoding_in
         self.encoding_out   = encoding_out
         self.target_profile = target_profile
+        self.debug          = debug
 
     def lang_is_enabled(self, lang):
         """
@@ -406,7 +411,8 @@ class MasterParseInfo(DefaultStrMixin):
             instructor=bool_field(d, 'instructor', True),
             heading=heading,
             encoding_in=d.get('encoding_in', 'UTF-8'),
-            encoding_out=d.get('encoding_out', 'UTF-8')
+            encoding_out=d.get('encoding_out', 'UTF-8'),
+            debug=bool_field(d, 'debug', False)
         )
 
     def to_dict(self):
@@ -617,6 +623,7 @@ MASTER_PARSE_DEFAULTS = {
     'encoding_out':     'UTF-8',
     'heading':          DEFAULT_NOTEBOOK_HEADING,
     'footer':           DEFAULT_NOTEBOOK_FOOTER,
+    'debug':            False
 }
 
 # ---------------------------------------------------------------------------
@@ -1244,7 +1251,8 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
                 encoding_out=master.encoding_out,
                 enable_verbosity=verbosity_is_enabled(),
                 copyright_year=build.course_info.copyright_year,
-                target_profile=master_profile
+                target_profile=master_profile,
+                enable_debug=master.debug
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)

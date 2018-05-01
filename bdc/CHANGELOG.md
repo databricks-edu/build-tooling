@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.19.0
+
+- Added ability to specify `debug: true` in a `master` section to enable
+  master parse-level debug messages for individual notebooks. 
+
 ### Version 1.18.2
 
 Fixed bug relating to upload and download capability: If two notebooks

@@ -1,5 +1,9 @@
 # Change Log for Master Parse Tool
 
+Version 1.13.3:
+
+* Reformatted debug output slightly.
+
 Version 1.13.2:
 
 * Fixed a bug in the handling of inline tokens that led to cells being

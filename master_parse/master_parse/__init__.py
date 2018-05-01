@@ -26,8 +26,9 @@ from collections import namedtuple
 from string import Template
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
+from textwrap import TextWrapper
 
-VERSION = "1.13.2"
+VERSION = "1.13.3"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -110,6 +111,8 @@ class NotebookUser(Enum):
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
+
+DEBUG_PREFIX = "(DEBUG) "
 
 def _icon_image_url(image):
     return (
@@ -809,13 +812,28 @@ _output_dir = DEFAULT_OUTPUT_DIR
 _be_verbose = False
 _show_debug = False
 
+COLUMNS = int(os.getenv('COLUMNS', '79'))
+DEBUG_PREFIX = "master_parse (DEBUG) "
+VERBOSE_PREFIX = "master_parse: "
+
+# Text wrappers
+
+_error_wrapper = TextWrapper(width=COLUMNS)
+
+_verbose_wrapper = TextWrapper(width=COLUMNS,
+                               subsequent_indent=' ' * len(VERBOSE_PREFIX))
+
+_debug_wrapper = TextWrapper(width=COLUMNS,
+                             subsequent_indent=' ' * len(DEBUG_PREFIX))
+
 def _debug(msg):
     if _show_debug:
-        print("master_parse: (DEBUG) {0}".format(msg))
+        print(_debug_wrapper.fill("{0}{1}".format(DEBUG_PREFIX, msg)))
+
 
 def _verbose(msg):
     if _be_verbose:
-        print("master_parse: {0}".format(msg))
+        print(_verbose_wrapper.fill("{0}{1}".format(VERBOSE_PREFIX, msg)))
 
 
 # Regular Expressions

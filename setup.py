@@ -59,14 +59,15 @@ print(sys.argv)
 #        with chdir(os.path.join(top_dir, d)):
 #            cmd('python setup.py install')
 
-setup(
-    name='db-build-tooling',
-    cmdclass={
-        'install': CustomInstallCommand,
-    },
-    version=VERSION,
-    description='Wrapper package for Databricks Training build tools',
-    author='Databricks Education Team',
-    author_email='training-logins@databricks.com',
-    license="Creative Commons Attribution-NonCommercial 4.0 International",
-)
+#setup(
+#    name='db-build-tooling',
+#    cmdclass={
+#        'install': CustomInstallCommand,
+#    },
+#    version=VERSION,
+#    description='Wrapper package for Databricks Training build tools',
+#    author='Databricks Education Team',
+#    author_email='training-logins@databricks.com',
+#    license="Creative Commons Attribution-NonCommercial 4.0 International",
+#)
+#

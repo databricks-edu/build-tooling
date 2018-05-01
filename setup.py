@@ -17,7 +17,7 @@ import os
 import sys
 from contextlib import contextmanager
 
-VERSION = '1.1.2'
+VERSION = '1.1.3'
 
 @contextmanager
 def chdir(dir):

@@ -64,6 +64,7 @@ setup(
     packages=[],
     cmdclass={
         'install': CustomInstallCommand,
+        'bdist_wheel': CustomInstallCommand
     },
     version=VERSION,
     description='Wrapper package for Databricks Training build tools',

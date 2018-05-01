@@ -36,7 +36,7 @@ def cmd(command):
 class CustomInstallCommand(install):
     """Customized setuptools install command - prints a friendly greeting."""
     def run(self):
-        print("Hello, developer, how are you? :)")
+        print("*** run()")
         install.run(self)
 
 

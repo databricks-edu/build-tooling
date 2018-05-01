@@ -3,7 +3,16 @@ Can be run to install all the subpieces.
 '''
 
 from __future__ import print_function
-from setuptools import setup
+
+try:
+    from setuptools import setup
+    from setuptools.command.install import install
+    from setuptools.command.sdist import sdist
+except ImportError:
+    from distutils.core import setup
+    from distutils.command.install import install
+    from distutils.command.sdist import sdist
+
 import os
 import sys
 from contextlib import contextmanager
@@ -24,27 +33,37 @@ def cmd(command):
     if rc != 0:
         raise OSError('"{0}" failed with return code {1}'.format(command, rc))
 
+class CustomInstallCommand(install):
+    """Customized setuptools install command - prints a friendly greeting."""
+    def run(self):
+        print("Hello, developer, how are you? :)")
+        install.run(self)
+
+
 top_dir = os.path.dirname(os.path.abspath(__file__))
 
-if len(sys.argv) > 1 and sys.argv[1] == 'install':
-    import pip
-    print('Installing/upgrading databricks-cli')
-    rc = pip.main(['install', '--upgrade', 'databricks-cli'])
-    if rc != 0:
-        raise OSError('pip install failed.')
-
-    with chdir(os.path.join(top_dir, 'gendbc')):
-        print('Installing gendbc...')
-        cmd('bin/activator install')
-
-    for d in ('master_parse', 'bdc'):
-        print('Installing {0}...'.format(d))
-        with chdir(os.path.join(top_dir, d)):
-            cmd('python setup.py install')
+print(sys.argv)
+#if len(sys.argv) > 1 and sys.argv[1] == 'install':
+#    import pip
+#    print('Installing/upgrading databricks-cli')
+#    rc = pip.main(['install', '--upgrade', 'databricks-cli'])
+#    if rc != 0:
+#        raise OSError('pip install failed.')
+#
+#    with chdir(os.path.join(top_dir, 'gendbc')):
+#        print('Installing gendbc...')
+#        cmd('bin/activator install')
+#
+#    for d in ('master_parse', 'bdc'):
+#        print('Installing {0}...'.format(d))
+#        with chdir(os.path.join(top_dir, d)):
+#            cmd('python setup.py install')
 
 setup(
     name='db-build-tooling',
-    package=[],
+    cmdclass={
+        'install': CustomInstallCommand,
+    },
     version=VERSION,
     description='Wrapper package for Databricks Training build tools',
     author='Databricks Education Team',

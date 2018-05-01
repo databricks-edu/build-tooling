@@ -36,8 +36,8 @@ def cmd(command):
 class CustomInstallCommand(install):
     """Customized setuptools install command - prints a friendly greeting."""
     def run(self):
-        print("*** run()")
         install.run(self)
+        print("*** run()")
 
 
 top_dir = os.path.dirname(os.path.abspath(__file__))

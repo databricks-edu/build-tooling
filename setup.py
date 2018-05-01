@@ -43,7 +43,8 @@ class CustomInstallCommand(install):
 top_dir = os.path.dirname(os.path.abspath(__file__))
 
 print(sys.argv)
-if len(sys.argv) > 1 and sys.argv[1] in ('install', 'bdist_wheel'):
+if (len(sys.argv) > 1 and
+    (sys.argv[1] == 'install') or (sys.argv[1].startswith('bdist'))):
     print('Installing/upgrading databricks-cli')
     cmd('pip install --upgrade databricks-cli')
 

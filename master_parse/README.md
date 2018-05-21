@@ -239,6 +239,48 @@ one marked PYTHON_ONLY and the other marked SCALA_ONLY.
 Cells show up only in exercise notebooks. These cells are usually
 exercises the user needs to complete.
 
+As a special case, if the entire TODO cell is comment out, the master parser
+will strip the first level of comments. This allows for runnable TODO cells
+in source notebooks. Thus, the following two TODO cells are functionally
+equivalent in the output notebooks:
+
+Not runnable in source notebook:
+
+```python
+# TODO
+x = <fill this in>
+```
+
+Runnable in source notebook:
+
+```python
+# TODO
+#x = <fill this in>
+```
+
+Both cells will render as follows in the Python answers output notebook:
+
+```python
+# TODO
+x = <fill this in>
+```
+
+**NOTE**: When you create a runnable TODO cell, blanks following the comment
+characters are _not_ stripped, because the master parse cannot do so reliably
+without possibly compromising formatting and syntax. So, prefer this:
+
+```python
+# TODO
+#x = <fill this in>
+```
+
+to this:
+
+```
+# TODO
+# x = <fill this in>
+```
+
 **ANSWER**
 
 Cells show up only in instructor and answer notebooks.

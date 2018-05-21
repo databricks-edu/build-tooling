@@ -1,5 +1,9 @@
 # Change Log for Master Parse Tool
 
+Version 1.14.0:
+
+* Added support for runnable TODO cells.
+
 Version 1.13.3:
 
 * Reformatted debug output slightly.

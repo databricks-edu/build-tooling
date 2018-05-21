@@ -28,7 +28,7 @@ from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
 
-VERSION = "1.13.3"
+VERSION = "1.14.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -111,8 +111,6 @@ class NotebookUser(Enum):
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
-
-DEBUG_PREFIX = "(DEBUG) "
 
 def _icon_image_url(image):
     return (
@@ -560,6 +558,10 @@ class NotebookGenerator(object):
                             content
                         )
 
+                    if CommandLabel.TODO in labels:
+                        content = self._handle_todo_cell(cell_num, content)
+
+
                     if code in (CommandCode.MARKDOWN, CommandCode.MARKDOWN_SANDBOX):
                         # Expand inline callouts.
                         (content, sandbox) = expand_inline_tokens(INLINE_TOKENS,
@@ -673,6 +675,36 @@ class NotebookGenerator(object):
 
             if is_IPython:
                 self.generate_ipynb(file_out)
+
+    def _handle_todo_cell(self, cell_num, content):
+        # Special case processing for runnable To-Do cells: If
+        # every line in the cell starts with a comment character,
+        # remove the leading comment characters.
+        comment_start = re.compile(_comment_with_optional_blanks)
+        def starts_with_comment(line):
+            if (comment_start.search(line) or
+                    (len(line.strip()) == 0)):
+                return True
+            else:
+                return False
+
+        if all_pred(starts_with_comment, content):
+            _debug("Cell #{} is a runnable TODO cell.".format(cell_num))
+            new_content = []
+            for s in content:
+                if _todo.match(s):
+                    # Don't edit the TODO line
+                    new_content.append(s)
+                elif len(s.strip()) == 0:
+                    new_content.append(s)
+                else:
+                    # Remove leading comment.
+                    m = comment_start.search(s)
+                    assert m is not None
+                    new_content.append(m.group(2))
+            return new_content
+
+        return content
 
     def _handle_test_cell(self, cell_num, content):
         new_content = []
@@ -838,9 +870,28 @@ def _verbose(msg):
 
 # Regular Expressions
 _comment = r'(#|//|--)' # Allow Python, Scala, and SQL style comments
+_comment_with_optional_blanks = r'^\s*(#|//|--)(.*)$'
 _line_start = r'\s*{0}+\s*'.format(_comment)  # flexible format
 _line_start_restricted = r'\s*{0}\s*'.format(_comment)  # only 1 comment allowed
 
+# COPIED FROM bdc CODE. Should be shared, but there's no simple way to do that
+# right now.
+def all_pred(func, iterable):
+    """
+    Similar to the built-in `all()` function, this function ensures that
+    `func()` returns `True` for every element of the supplied iterable.
+    It short-circuits on the first failure.
+
+    :param func:     function or lambda to call with each element
+    :param iterable: the iterable
+
+    :return: `True` if all elements pass, `False` otherwise
+    """
+    for i in iterable:
+        if not func(i):
+            return False
+
+    return True
 
 def or_magic(re_text):
     """Create a regular expression for matching MAGIC (%cells) and code cells.

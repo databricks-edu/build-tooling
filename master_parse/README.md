@@ -211,7 +211,7 @@ In a Python code cell, this is not valid Master Parse Tool syntax and will simpl
 
 The valid labels are:
 
-**IPYTHON\_ONLY**
+##### IPYTHON\_ONLY
 
 **This cell type is _deprecated_ and will be removed in a future release of
 this tool. Use of it will generate warnings.**
@@ -219,14 +219,14 @@ this tool. Use of it will generate warnings.**
 Cells which need to be in IPython (or Jupyter) notebooks only.
 If IPython notebooks aren't being generated, these cells are stripped out.
 
-**DATABRICKS\_ONLY**
+##### DATABRICKS\_ONLY
 
 **This cell type is _deprecated_ and will be removed in a future release of
 this tool. Use of it will generate warnings.**
 
 Cells which need to be in Databricks notebooks only.
 
-**SCALA\_ONLY**, **PYTHON\_ONLY**, **SQL\_ONLY**, **R\_ONLY**
+##### SCALA\_ONLY, PYTHON\_ONLY, SQL\_ONLY, R\_ONLY
 
 Cells marked with this show up only when generating notebooks for _lang. These
 are for special cells (like Markdown cells, `%fs` cells, `%sh` cells) that you
@@ -234,9 +234,7 @@ want to include on a language-dependent basis. For example, if a Markdown cell
 is different for Scala vs. Python, then you can create two `%md` cells, with
 one marked PYTHON_ONLY and the other marked SCALA_ONLY.
 
-<a id="todo" name="todo"/>
-
-**TODO**
+##### TODO
 
 Cells show up only in exercise notebooks. These cells are usually
 exercises the user needs to complete.
@@ -277,11 +275,11 @@ character after the leading comment. (The blank is optional.) The master parser
 will remove the leading comment and, optionally, one subsequent blank from
 every commented line _except_ for the line with the "TODO" marker.
 
-**ANSWER**
+##### ANSWER
 
 Cells show up only in instructor and answer notebooks.
 
-**TEST**
+##### TEST
 
 These cells identify tests and usually follow an exercise cell. Test cells
 provide a means for a student to test the solution to an exercise. You can
@@ -304,11 +302,11 @@ will be emitted, in the generated notebooks, as:
 ```
 
 
-**PRIVATE\_TEST**
+##### PRIVATE\_TEST
 
 Cells show up in instructor/answer notebooks.
 
-**VIDEO**
+##### VIDEO
 
 Valid only in Markdown cells, this command is replaced with HTML for a
 large video button. When clicked, the button launches a new tab to the
@@ -317,13 +315,13 @@ is the link to the video. The title (optional) is the video's title which,
 if present, will appear in the button. If no title is supplied, the button
 will not contain a title.
 
-**INSTRUCTOR_NOTE**
+##### INSTRUCTOR_NOTE
 
 Valid only in Markdown cells, this command causes the cell to be copied into
 the answer, or instructor, notebook and omitted from the student notebook.
 An "Instructor Note" header will automatically be added to the cell.
 
-**ALL_NOTEBOOKS**
+##### ALL_NOTEBOOKS
 
 The cell should be copied into all generated notebooks, regardless of language.
 Consider the following code in a Scala notebook:
@@ -339,7 +337,7 @@ instructor and student notebooks, that cell will appear in the generated Scala
 notebooks (instructor _and_ answers) as well in the generated Python notebooks
 (instructor _and_ answers).
 
-**INLINE**
+##### INLINE
 
 **This cell type is _deprecated_ and will be removed in a future release of
 this tool. Use of it will generate warnings.**
@@ -372,7 +370,7 @@ Meanwhile, the opposite happens with the second cell. Because the second cell
 is Scala, but is marked as `// INLINE`, it is _only_ written to non-Scala
 output notebooks.
 
-**NEW_PART**
+##### NEW_PART
 
 Start a new part of the lab. A lab can be divided into multiple parts with each
 part starting with a cell labeled `NEW_PART`. Every time the tool encounters a `NEW_PART`

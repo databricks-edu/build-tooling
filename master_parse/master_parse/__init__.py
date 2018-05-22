@@ -680,7 +680,7 @@ class NotebookGenerator(object):
         # Special case processing for runnable To-Do cells: If
         # every line in the cell starts with a comment character,
         # remove the leading comment characters.
-        comment_start = re.compile(_comment_with_optional_blanks)
+        comment_start = re.compile(_comment_with_optional_blank)
         def starts_with_comment(line):
             if (comment_start.search(line) or
                     (len(line.strip()) == 0)):
@@ -870,7 +870,7 @@ def _verbose(msg):
 
 # Regular Expressions
 _comment = r'(#|//|--)' # Allow Python, Scala, and SQL style comments
-_comment_with_optional_blanks = r'^\s*(#|//|--)(.*)$'
+_comment_with_optional_blank = r'^\s*(#|//|--)\s?(.*)$'
 _line_start = r'\s*{0}+\s*'.format(_comment)  # flexible format
 _line_start_restricted = r'\s*{0}\s*'.format(_comment)  # only 1 comment allowed
 

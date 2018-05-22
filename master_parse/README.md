@@ -234,6 +234,7 @@ want to include on a language-dependent basis. For example, if a Markdown cell
 is different for Scala vs. Python, then you can create two `%md` cells, with
 one marked PYTHON_ONLY and the other marked SCALA_ONLY.
 
+<div id="todo"/>
 **TODO**
 
 Cells show up only in exercise notebooks. These cells are usually

@@ -241,45 +241,39 @@ exercises the user needs to complete.
 
 As a special case, if the entire TODO cell is comment out, the master parser
 will strip the first level of comments. This allows for runnable TODO cells
-in source notebooks. Thus, the following two TODO cells are functionally
+in source notebooks. Thus, the following three TODO cells are functionally
 equivalent in the output notebooks:
 
 Not runnable in source notebook:
 
 ```python
 # TODO
-x = <fill this in>
+x = FILL_THIS_IN
 ```
 
 Runnable in source notebook:
 
 ```python
 # TODO
-#x = <fill this in>
+#x = FILL_THIS_IN
 ```
-
-Both cells will render as follows in the Python answers output notebook:
 
 ```python
 # TODO
-x = <fill this in>
+# x = FILL_THIS_IN
 ```
 
-**NOTE**: When you create a runnable TODO cell, blanks following the comment
-characters are _not_ stripped, because the master parse cannot do so reliably
-without possibly compromising formatting and syntax. So, prefer this:
+All three cells will render as follows in the Python answers output notebook:
 
 ```python
 # TODO
-#x = <fill this in>
+x = FILL_THIS_IN
 ```
 
-to this:
-
-```
-# TODO
-# x = <fill this in>
-```
+**NOTE**: When you create a runnable TODO cell, you can use at most one blank
+character after the leading comment. (The blank is optional.) The master parser
+will remove the leading comment and, optionally, one subsequent blank from
+every commented line _except_ for the line with the "TODO" marker.
 
 **ANSWER**
 

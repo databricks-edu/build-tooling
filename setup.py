@@ -37,12 +37,10 @@ class CustomInstallCommand(install):
     """Customized setuptools install command - prints a friendly greeting."""
     def run(self):
         install.run(self)
-        print("*** run()")
 
 
 top_dir = os.path.dirname(os.path.abspath(__file__))
 
-print(sys.argv)
 if (len(sys.argv) > 1 and
     (sys.argv[1] == 'install') or (sys.argv[1].startswith('bdist'))):
     print('Installing/upgrading databricks-cli')

@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.19.0"
+VERSION = "1.20.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -63,6 +63,7 @@ USAGE = ("""
 
 Usage:
   {0} (--version)
+  {0} --info [--shell] [BUILD_YAML]
   {0} (-h | --help)
   {0} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
   {0} --list-notebooks [BUILD_YAML]
@@ -83,6 +84,9 @@ Options:
                            ~/tmp/curriculum/<course_id>
   -o --overwrite           Overwrite the destination directory, if it exists.
   -v --verbose             Print what's going on to standard output.
+  --info                   Display the course name and version, and exit
+  --shell                  Used with --info, this option causes the course
+                           name and version to be emitted as shell variables.
   --list-notebooks         List the full paths of all notebooks in a course
   --upload                 Upload all notebooks to a folder on Databricks.
   --download               Download all notebooks from a folder on Databricks,
@@ -1799,6 +1803,16 @@ def list_notebooks(build):
         src_path = joinpath(build.source_base, notebook.src)
         print(src_path)
 
+
+def print_info(build, shell):
+    if shell:
+        print('COURSE_NAME="{}"; COURSE_VERSION="{}"'.format(
+            build.name, build.course_info.version
+        ))
+    else:
+        print("Course name:    {}".format(build.name))
+        print("Course version: {}".format(build.course_info.version))
+
 # ---------------------------------------------------------------------------
 # Main program
 # ---------------------------------------------------------------------------
@@ -1819,6 +1833,8 @@ def main():
 
         if opts['--list-notebooks']:
             list_notebooks(build)
+        elif opts['--info']:
+            print_info(build, opts['--shell'])
         elif opts['--upload']:
             upload_notebooks(build, opts['SHARD_PATH'], opts['--dprofile'])
         elif opts['--download']:

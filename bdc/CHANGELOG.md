@@ -1,5 +1,9 @@
 # Change Log for BDC
 
+### Version 1.20.0
+
+- Added `--info` and `--shell` command line parameters.
+
 ### Version 1.19.0
 
 - Added ability to specify `debug: true` in a `master` section to enable

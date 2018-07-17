@@ -228,7 +228,7 @@ Cells which need to be in Databricks notebooks only.
 
 ##### SCALA\_ONLY, PYTHON\_ONLY, SQL\_ONLY, R\_ONLY
 
-Cells marked with this show up only when generating notebooks for _lang. These
+Cells marked with this show up only when generating notebooks for _lang_. These
 are for special cells (like Markdown cells, `%fs` cells, `%sh` cells) that you
 want to include on a language-dependent basis. For example, if a Markdown cell
 is different for Scala vs. Python, then you can create two `%md` cells, with
@@ -270,10 +270,18 @@ All three cells will render as follows in the Python answers output notebook:
 x = FILL_THIS_IN
 ```
 
-**NOTE**: When you create a runnable TODO cell, you can use at most one blank
-character after the leading comment. (The blank is optional.) The master parser
-will remove the leading comment and, optionally, one subsequent blank from
-every commented line _except_ for the line with the "TODO" marker.
+**NOTES**:
+
+1. When you create a runnable TODO cell, you can use at most one blank
+   character after the leading comment. (The blank is optional.) The master
+   parser will remove the leading comment and, optionally, one subsequent
+   blank from every commented line _except_ for the line with the "TODO"
+   marker.
+
+2. Do **not** precede `TODO` with multiple comment characters, even in a
+   runnable `TODO` cell.. It won't work.  That is, use `// TODO` or `# TODO`,
+   not `// // TODO` or `# # TODO`. The latter won't be recognized as a
+   proper TODO cell.
 
 ##### ANSWER
 

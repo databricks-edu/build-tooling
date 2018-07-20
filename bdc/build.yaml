@@ -139,7 +139,7 @@
 #  as bdc will never break build parsing with a patch release.
 #
 # WARNING: Be sure to quote this value, so it isn't interpreted as a float!
-bdc_min_version: "1.11"
+bdc_min_version: "1.21"
 
 # master_parse_min_version:
 
@@ -152,7 +152,7 @@ bdc_min_version: "1.11"
 #  master parse won't break parsing.
 #
 # WARNING: Be sure to quote this value, so it isn't interpreted as a float!
-master_parse_min_version: "1.11"
+master_parse_min_version: "1.15"
 
 # course_info: Basic information about the course being built.
 #
@@ -164,6 +164,8 @@ master_parse_min_version: "1.11"
 # version         - semantic version number of the course (e.g., 1.0.1). See
 #                   semver.org for a discussion of semantic versioning.
 #                   REQUIRED.
+# type            - The course type, ILT or Self-Paced. Legal values: "ilt",
+#                   "self-paced". REQUIRED.
 # class_setup     - path to the (PDF) class setup instructions (for site
 #                   managers of a given training site) on how to prepare the
 #                   classroom environment. For Databricks and New Circle

@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.21.0
+
+- Added `course_info.type` build setting, which can be `ilt` or `self-paced`.
+  This `build.yaml` setting is now required.
+
 ### Version 1.20.0
 
 - Added `--info` and `--shell` command line parameters.

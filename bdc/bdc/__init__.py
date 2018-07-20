@@ -51,7 +51,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.20.0"
+VERSION = "1.21.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -227,7 +227,8 @@ SlideData = namedtuple('SlideData', ('src', 'dest'))
 DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
 CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
                                        'schedule', 'instructor_prep',
-                                       'copyright_year', 'deprecated'))
+                                       'copyright_year', 'deprecated',
+                                       'type'))
 MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
@@ -540,6 +541,7 @@ class BuildData(object, DefaultStrMixin):
                  markdown_cfg,
                  notebook_type_map,
                  use_profiles=False,
+                 course_type=None,
                  variables=None):
         """
         Create a new BuildData object.
@@ -576,6 +578,7 @@ class BuildData(object, DefaultStrMixin):
         self.notebook_type_map = notebook_type_map
         self.variables = variables or {}
         self.use_profiles = use_profiles
+        self.course_type = course_type
 
         if top_dbc_folder_name is None:
             top_dbc_folder_name = '${course_name}'
@@ -974,6 +977,25 @@ def load_build_yaml(yaml_file):
                 )
         return res
 
+    def parse_course_type(data, section):
+        course_type = data.get('type')
+        if not course_type:
+            raise ConfigError(
+                'Missing required "{}.type" setting in "{}"'.format(
+                    section, yaml_file
+                )
+            )
+
+        if course_type.lower() == 'self-paced':
+            return master_parse.CourseType.SELF_PACED
+        if course_type.lower() == 'ilt':
+            return master_parse.CourseType.ILT
+
+        raise ConfigError(
+            ('Unknown value of "{}" for "{}.type". Legal values are ' +
+             '"ilt" and "self-paced".').format(course_type, course_type)
+        )
+
     # Main function logic
 
     verbose("Loading {0}...".format(yaml_file))
@@ -1005,6 +1027,7 @@ def load_build_yaml(yaml_file):
         class_setup=course_info_cfg.get('class_setup'),
         schedule=course_info_cfg.get('schedule'),
         instructor_prep=course_info_cfg.get('prep'),
+        type=parse_course_type(course_info_cfg, 'course_info'),
         deprecated=course_info_cfg.get('deprecated', False),
         copyright_year=course_info_cfg.get('copyright_year',
                                            str(datetime.now().year)),
@@ -1256,7 +1279,8 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
                 enable_verbosity=verbosity_is_enabled(),
                 copyright_year=build.course_info.copyright_year,
                 target_profile=master_profile,
-                enable_debug=master.debug
+                course_type=build.course_info.type,
+                enable_debug=master.debug,
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)

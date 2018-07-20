@@ -46,7 +46,8 @@ More than one option may be specified.
 
 * `-ct` or `--course-type`: Specifies the course type, ILT ("ilt") or
   Self-paced ("self-paced"). The value of this argument controls how
-  the `ILT_ONLY` and `SELF_PACED_ONLY` tags are processed.
+  the `ILT_ONLY` and `SELF_PACED_ONLY` tags are processed. If not specified,
+  "self-paced" is the default.
   
 * `-in` or `--instructor`: Generate instructor notebooks (notebooks ending
   with `_instructor`). Instructor notebooks contain all instructor note cells

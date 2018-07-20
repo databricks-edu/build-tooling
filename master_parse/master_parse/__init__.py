@@ -61,6 +61,11 @@ TARGET_PROFILE_TO_LABEL = {
     v: k for k, v in LABEL_TO_TARGET_PROFILE.items()
 }
 
+# NOTE: If you add a new label, be sure to look at:
+#
+# - Notebook.generate
+# - Notebook._get_keep_labels()
+# - self.remove in Notebook.__init__()
 class CommandLabel(Enum):
     IPYTHON_ONLY      = 'IPYTHON_ONLY'
     PYTHON_ONLY       = 'PYTHON_ONLY'
@@ -405,11 +410,14 @@ class NotebookGenerator(object):
                                                  notebook_kind,
                                                  notebook_user,
                                                  notebook_code)
-        # discard labels not explicitly kept
+        # Discard any cells with a label that is not explicitly kept
         self.discard_labels = base_keep - self.keep_labels
+
+        # In kept cells, remove the following labels from the content
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
                        _all_notebooks, _instructor_note, _video,
                        _azure_only, _amazon_only, _ilt_only, _self_paced_only]
+
         self.replace = [(_ipythonReplaceRemoveLine, ''),
                         _rename_public_test,
                         _rename_import_public_test]

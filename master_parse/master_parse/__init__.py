@@ -28,7 +28,7 @@ from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
 
-VERSION = "1.14.0"
+VERSION = "1.15.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -41,6 +41,12 @@ class TargetProfile(Enum):
     '''
     AZURE = 'azure'
     AMAZON = 'amazon'
+    NONE = 'none'
+
+class CourseType(Enum):
+    '''Type of course (ILT or self-paced)'''
+    SELF_PACED = 'self-paced'
+    ILT = 'ilt'
     NONE = 'none'
 
 # Strictly speaking, this is not an enum, but it's here for convenience.
@@ -72,6 +78,9 @@ class CommandLabel(Enum):
     ALL_NOTEBOOKS     = 'ALL_NOTEBOOKS'
     INSTRUCTOR_NOTE   = 'INSTRUCTOR_NOTE'
     VIDEO             = 'VIDEO'
+    SOURCE_ONLY       = 'SOURCE_ONLY'
+    ILT_ONLY          = 'ILT_ONLY'
+    SELF_PACED_ONLY   = 'SELF_PACED_ONLY'
 
 class CommandCode(Enum):
     SCALA             = 'scala'
@@ -138,12 +147,6 @@ INLINE_TOKENS = [
         image=_icon_image_url('icon-blue-ribbon.svg'),
         style='height:1.75em; top:0.3em'
     ),
-    #InlineToken(
-    #    tag=':KEYPOINT:',
-    #    title='Key Point',
-    #    image=_icon_image_url('icon-key.svg'),
-    #    style='height:1.3em; top:0.1.5em'
-    #),
     InlineToken(
         tag=':SIDENOTE:',
         title='Side Note',
@@ -165,6 +168,9 @@ CODE_CELL_TYPES = {
 VALID_CELL_TYPES_FOR_LABELS = {
     CommandLabel.IPYTHON_ONLY:    CODE_CELL_TYPES | {CommandCode.MARKDOWN,
                                                      CommandCode.MARKDOWN_SANDBOX},
+    CommandLabel.ILT_ONLY:        ALL_CELL_TYPES,
+    CommandLabel.SELF_PACED_ONLY: ALL_CELL_TYPES,
+    CommandLabel.SOURCE_ONLY:     ALL_CELL_TYPES,
     CommandLabel.DATABRICKS_ONLY: ALL_CELL_TYPES,
     CommandLabel.PYTHON_ONLY:     ALL_CELL_TYPES,
     CommandLabel.SCALA_ONLY:      ALL_CELL_TYPES,
@@ -264,6 +270,7 @@ class Params(object):
                  notebook_footer_path=None,
                  add_heading=False,
                  target_profile=TargetProfile.NONE,
+                 course_type=CourseType.NONE,
                  notebook_heading_path=None,
                  encoding_in=DEFAULT_ENCODING_IN,
                  encoding_out=DEFAULT_ENCODING_OUT,
@@ -293,6 +300,8 @@ class Params(object):
         self._notebook_footer = None
         self.notebook_footer_path = notebook_footer_path
         self.copyright_year = copyright_year or datetime.now().year
+        assert(course_type in set(CourseType))
+        self.course_type = course_type
         assert(target_profile in set(TargetProfile))
         self.target_profile = target_profile
 
@@ -560,7 +569,6 @@ class NotebookGenerator(object):
 
                     if CommandLabel.TODO in labels:
                         content = self._handle_todo_cell(cell_num, content)
-
 
                     if code in (CommandCode.MARKDOWN, CommandCode.MARKDOWN_SANDBOX):
                         # Expand inline callouts.
@@ -969,6 +977,9 @@ _python_only = or_magic(CommandLabel.PYTHON_ONLY.value)
 _scala_only = or_magic(CommandLabel.SCALA_ONLY.value)
 _amazon_only = or_magic(CommandLabel.AMAZON_ONLY.value)
 _azure_only = or_magic(CommandLabel.AZURE_ONLY.value)
+_ilt_only = or_magic(CommandLabel.ILT_ONLY.value)
+_self_paced_only = or_magic(CommandLabel.SELF_PACED_ONLY.value)
+_source_only = or_magic(CommandLabel.SOURCE_ONLY.value)
 _sql_only = or_magic(CommandLabel.SQL_ONLY.value)
 _r_only = or_magic(CommandLabel.R_ONLY.value)
 _new_part = or_magic(r'NEW_PART')
@@ -1163,6 +1174,9 @@ class Parser:
                         (_python_only, CommandLabel.PYTHON_ONLY),
                         (_amazon_only, CommandLabel.AMAZON_ONLY),
                         (_azure_only, CommandLabel.AZURE_ONLY),
+                        (_ilt_only, CommandLabel.ILT_ONLY),
+                        (_self_paced_only, CommandLabel.SELF_PACED_ONLY),
+                        (_source_only, CommandLabel.SOURCE_ONLY),
                         (_r_only, CommandLabel.R_ONLY),
                         (_all_notebooks, CommandLabel.ALL_NOTEBOOKS),
                         (_instructor_note, CommandLabel.INSTRUCTOR_NOTE),
@@ -1516,7 +1530,12 @@ def main():
                             metavar="<profile>",
                             choices=('amazon', 'azure'),
                             default=None)
-
+    arg_parser.add_argument('-ct', '--course-type',
+                            help='Course type, either "ilt" or "self-paced". ' +
+                                 'Default: "self-paced"',
+                            metavar="<coursetype>",
+                            choices=('ilt', 'self-paced'),
+                            default='self-paced')
     arg_parser.add_argument('--heading',
                             help='By default, even if you specify -nh, this ' +
                                  'tool does not add the notebook heading to ' +
@@ -1555,10 +1574,13 @@ def main():
         arg_parser.error('Missing notebook path.')
 
     if args.target_profile:
-        target_profiles = { t.value : t for t in TargetProfile }
+        target_profiles = { t.value : t for t in TargetProfile if t != TargetProfile.NONE }
         args.target_profile = target_profiles[args.target_profile]
     else:
         args.target_profile = TargetProfile.NONE
+
+    course_types = { c.value : c for c in CourseType if c != CourseType.NONE }
+    course_type = course_types[args.course_type]
 
     params = Params(
         path=args.filename,
@@ -1582,7 +1604,8 @@ def main():
         enable_verbosity=args.verbose,
         enable_debug=args.debug,
         copyright_year=args.copyright,
-        target_profile=args.target_profile
+        target_profile=args.target_profile,
+        course_type=course_type
     )
 
     try:

@@ -1,5 +1,9 @@
 # Change Log for Master Parse Tool
 
+Version 1.15.0:
+
+- Added `ILT_ONLY`, `SELF_PACED_ONLY` and `SOURCE_ONLY` tags.
+
 Version 1.14.0:
 
 * Added support for runnable TODO cells.

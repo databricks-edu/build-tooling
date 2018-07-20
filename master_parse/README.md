@@ -44,6 +44,10 @@ More than one option may be specified.
 
 ### Target audience group
 
+* `-ct` or `--course-type`: Specifies the course type, ILT ("ilt") or
+  Self-paced ("self-paced"). The value of this argument controls how
+  the `ILT_ONLY` and `SELF_PACED_ONLY` tags are processed.
+  
 * `-in` or `--instructor`: Generate instructor notebooks (notebooks ending
   with `_instructor`). Instructor notebooks contain all instructor note cells
   and all answer cells. Exercise cells (those marked `TODO`) are omitted.
@@ -328,6 +332,23 @@ will not contain a title.
 Valid only in Markdown cells, this command causes the cell to be copied into
 the answer, or instructor, notebook and omitted from the student notebook.
 An "Instructor Note" header will automatically be added to the cell.
+
+##### SOURCE_ONLY
+
+Valid in any cell, this tag marks a cell as a source-only cell. Source-only
+cells are _never_ copied to output notebooks. Source-only cells are useful 
+for many things, such as cells with credentials that are only to be used
+during curriculum development.
+
+##### ILT_ONLY
+
+An `ILT_ONLY` cell is only copied to output notebooks if the course type
+is "ilt". See the `-ct` (`--content-type`) command line parameter.
+
+##### SELF_PACED_ONLY
+
+An `SELF_PACED_ONLY` cell is only copied to output notebooks if the course type
+is "self-paced". See the `-ct` (`--content-type`) command line parameter.
 
 ##### ALL_NOTEBOOKS
 

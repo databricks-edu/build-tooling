@@ -1409,6 +1409,8 @@ def process_notebooks(params):
     global _show_debug
     _show_debug = params.enable_debug
 
+    if (params.course_type is None) or (params.course_type == CourseType.NONE):
+        raise UsageError('course_type must be set.')
     if not (params.databricks or params.ipython):
         raise UsageError("Specify at least one of databricks or ipython")
     if not (params.scala or params.python or params.r or params.sql):

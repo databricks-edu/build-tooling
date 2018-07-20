@@ -127,6 +127,13 @@ def _icon_image_url(image):
         image
     )
 
+def _label_for_course_type(course_type):
+    if course_type == CourseType.SELF_PACED:
+        return CommandLabel.SELF_PACED_ONLY
+    if course_type == CourseType.ILT:
+        return CommandLabel.ILT_ONLY
+    assert(False)
+
 INLINE_TOKENS = [
     InlineToken(
         title='Hint',
@@ -394,14 +401,15 @@ class NotebookGenerator(object):
         :param params:         parsed (usually command-line) parameters
         '''
         base_keep = set(CommandLabel.__members__.values())
-        self.keep_labels = self._get_keep_labels(notebook_kind,
+        self.keep_labels = self._get_keep_labels(params,
+                                                 notebook_kind,
                                                  notebook_user,
                                                  notebook_code)
         # discard labels not explicitly kept
         self.discard_labels = base_keep - self.keep_labels
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
                        _all_notebooks, _instructor_note, _video,
-                       _azure_only, _amazon_only]
+                       _azure_only, _amazon_only, _ilt_only, _self_paced_only]
         self.replace = [(_ipythonReplaceRemoveLine, ''),
                         _rename_public_test,
                         _rename_import_public_test]
@@ -412,11 +420,20 @@ class NotebookGenerator(object):
         self.base_comment = _code_to_comment[self.notebook_code]
         self.params = params
 
-    def _get_keep_labels(self, *params):
-        labels = {CommandLabel.TEST, CommandLabel.INLINE}
-        for param in params:
-            label = NotebookGenerator.param_to_label[param]
+    def _get_keep_labels(self, params, *args):
+        labels = {
+            CommandLabel.TEST,
+            CommandLabel.INLINE,
+        }
+        for arg in args:
+            label = NotebookGenerator.param_to_label[arg]
             labels.update(label)
+
+        # Keep the current content type:
+        if params.course_type == CourseType.SELF_PACED:
+            labels.add(CommandLabel.SELF_PACED_ONLY)
+        elif params.course_type == CourseType.ILT:
+            labels.add(CommandLabel.ILT_ONLY)
 
         # Don't discard the profile labels.
         for c in CommandLabel:
@@ -557,6 +574,13 @@ class NotebookGenerator(object):
                         elif part < i:  # earlier parts will be chained in %run
                             continue
 
+                    if CommandLabel.SOURCE_ONLY in labels:
+                        # Suppress this one. It's a source-only cell.
+                        _debug("Cell #{} is source-only. Suppressing it.".format(
+                            cell_num
+                        ))
+                        continue
+
                     if CommandLabel.INSTRUCTOR_NOTE in labels:
                         # Special case processing: Add instructor note heading,
                         # and force use of %md-sandbox
@@ -578,7 +602,6 @@ class NotebookGenerator(object):
                             code = CommandCode.MARKDOWN_SANDBOX
 
                     inline = CommandLabel.INLINE in labels
-
                     discard_labels = self.discard_labels
 
                     all_notebooks = CommandLabel.ALL_NOTEBOOKS in labels

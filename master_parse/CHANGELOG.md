@@ -1,5 +1,29 @@
 # Change Log for Master Parse Tool
 
+Version 1.15.2:
+
+- Fixed a runnable TODO cell bug: Using a label (e.g., `ALL_NOTEBOOKS`) in a 
+  runnable TODO cell did not work properly. The additional label was 
+  uncommented (e.g., `// ALL_NOTEBOOKS` became just `ALL_NOTEBOOKS`) and then 
+  wasn't removed from the generated output, because it no longer matched the 
+  label pattern. For example, a cell like this:
+  
+```
+%sql
+-- TODO
+-- ALL_NOTEBOOKS
+-- SELECT <FILL_IN> 
+```
+
+  was rendered as:
+
+```
+%sql
+-- TODO
+ALL_NOTEBOOKS
+SELECT <FILL_IN> 
+```
+  
 Version 1.15.1:
 
 - `VIDEO` didn't work in conjunction with `SELF_PACED_ONLY` and `ILT_ONLY`.

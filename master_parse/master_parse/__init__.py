@@ -28,7 +28,7 @@ from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
 
-VERSION = "1.15.1"
+VERSION = "1.15.2"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -66,6 +66,7 @@ TARGET_PROFILE_TO_LABEL = {
 # - Notebook.generate
 # - Notebook._get_keep_labels()
 # - self.remove in Notebook.__init__()
+# - the regular expressions for the tags (search for "CommandLabel regexes")
 class CommandLabel(Enum):
     IPYTHON_ONLY      = 'IPYTHON_ONLY'
     PYTHON_ONLY       = 'PYTHON_ONLY'
@@ -723,12 +724,19 @@ class NotebookGenerator(object):
             else:
                 return False
 
+        label_regexes = [t[0] for t in Parser.pattern_to_label]
+        def matches_label(line):
+            for r in label_regexes:
+                if r.match(line):
+                    return True
+            return False
+
         if all_pred(starts_with_comment, content):
             _debug("Cell #{} is a runnable TODO cell.".format(cell_num))
             new_content = []
             for s in content:
-                if _todo.match(s):
-                    # Don't edit the TODO line
+                if matches_label(s):
+                    # Don't edit labels.
                     new_content.append(s)
                 elif len(s.strip()) == 0:
                     new_content.append(s)
@@ -995,6 +1003,9 @@ def make_magic(regex_token, must_be_word=False):
 _databricks = make_re(r'Databricks')
 _command = make_re(r'COMMAND')
 
+# CommandLabel regexes
+#
+# See also the Parser class.
 _answer = or_magic(CommandLabel.ANSWER.value)
 _private_test = or_magic(CommandLabel.PRIVATE_TEST.value)
 _todo = or_magic(CommandLabel.TODO.value)

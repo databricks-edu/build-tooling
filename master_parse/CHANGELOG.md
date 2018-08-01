@@ -1,5 +1,10 @@
 # Change Log for Master Parse Tool
 
+Version 1.15.1:
+
+- `VIDEO` didn't work in conjunction with `SELF_PACED_ONLY` and `ILT_ONLY`.
+  Now it does.
+
 Version 1.15.0:
 
 - Added `ILT_ONLY`, `SELF_PACED_ONLY` and `SOURCE_ONLY` tags.

@@ -230,7 +230,7 @@ oallowfullscreen msallowfullscreen width="640" height="360" ></iframe>
 '''"/>&nbsp;Watch full-screen.</a>
 </div>''')
 
-VIDEO_CELL_MAGIC = '%md'
+VIDEO_CELL_CODE = CommandCode.MARKDOWN
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
@@ -432,6 +432,7 @@ class NotebookGenerator(object):
         labels = {
             CommandLabel.TEST,
             CommandLabel.INLINE,
+            CommandLabel.VIDEO
         }
         for arg in args:
             label = NotebookGenerator.param_to_label[arg]
@@ -662,6 +663,14 @@ class NotebookGenerator(object):
                         continue
 
                     # Process the cell.
+
+                    if CommandLabel.VIDEO in labels:
+                        # First, handle the video cell expansion. Then, handle
+                        # the updated cell normally.
+                        content = self._handle_video_cell(cell_num, content)
+                        code = VIDEO_CELL_CODE
+                        _debug('Preprocessing video cell {}'.format(cell_num))
+
                     # This thing just gets uglier and uglier.
                     if ( (not (discard_labels & labels)) and
                          (((inline and code != self.notebook_code) or
@@ -687,19 +696,6 @@ class NotebookGenerator(object):
                         is_first = self._write_command(output, cell_split,
                                                        content, is_first)
 
-                    elif CommandLabel.VIDEO in labels:
-                        # First, handle the video cell expansion. Then, do the
-                        # usual remove and replace stuff.
-                        video_content = self._handle_video_cell(cell_num, content)
-                        new_content = self.remove_and_replace(
-                            video_content, code, inline, all_notebooks, is_first
-                        )
-                        new_cell = [
-                            line for line in [VIDEO_CELL_MAGIC] + new_content
-                        ]
-                        is_first = self._write_command(
-                            output, command_cell, new_cell + ['\n'], is_first
-                        )
 
                 # Optionally add the footer.
                 if params.add_footer:

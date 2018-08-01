@@ -28,7 +28,7 @@ from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
 
-VERSION = "1.15.0"
+VERSION = "1.15.1"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional

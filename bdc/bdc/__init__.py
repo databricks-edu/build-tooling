@@ -1032,7 +1032,7 @@ def load_build_yaml(yaml_file):
             return mf
 
 
-    def parse_dataset(obj, extra_vars):
+    def parse_dataset(obj, extra_vars, build_yaml_dir):
         src = required(obj, 'src', 'notebooks')
         dest = required(obj, 'dest', 'notebooks')
         if bool_field(obj, 'skip'):
@@ -1040,11 +1040,32 @@ def load_build_yaml(yaml_file):
             return None
         else:
             src_dir = path.dirname(src)
+            license = joinpath(src_dir, 'LICENSE.md')
+            readme = joinpath(src_dir, 'README.md')
+            p = joinpath(build_yaml_dir, src)
+            if not path.exists(p):
+                raise ConfigError('Dataset file "{}" does not exist'.format(p))
+
+            for i in (license, readme):
+                p = joinpath(build_yaml_dir, i)
+                if not path.exists(p):
+                    raise ConfigError(
+                        'Dataset "{}": Required "{}" does not exist.'.format(
+                            src, p
+                        )
+                    )
+                if os.stat(p).st_size == 0:
+                    raise ConfigError(
+                        'Dataset "{}": "{}" is empty.'.format(
+                            src, p
+                        )
+                    )
+
             return DatasetData(
                 src=src,
                 dest=parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars),
-                license=joinpath(src_dir, 'LICENSE.md'),
-                readme=joinpath(src_dir, 'README.md')
+                license=license,
+                readme=readme
             )
 
     def parse_file_section(section, parse, *args):
@@ -1229,7 +1250,8 @@ def load_build_yaml(yaml_file):
         slides = None
 
     if datasets_cfg:
-        datasets = parse_file_section(datasets_cfg, parse_dataset, variables)
+        datasets = parse_file_section(datasets_cfg, parse_dataset, variables,
+                                      build_yaml_dir)
     else:
         datasets = None
 

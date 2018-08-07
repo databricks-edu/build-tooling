@@ -96,11 +96,9 @@ Options:
 """.format(PROG, VERSION, DEFAULT_BUILD_FILE))
 
 DEFAULT_INSTRUCTOR_FILES_SUBDIR = "InstructorFiles"
-INSTRUCTOR_LABS_SUBDIR = "Instructor-Labs"
-INSTRUCTOR_LABS_DBC = "Instructor-Labs.dbc"
+DEFAULT_INSTRUCTOR_LABS_DBC = "Instructor-Labs.dbc"
 DEFAULT_STUDENT_FILES_SUBDIR = "StudentFiles"
-STUDENT_LABS_DBC = "Labs.dbc"               # in the student directory
-STUDENT_LABS_SUBDIR = "Labs"                # in the student directory
+DEFAULT_STUDENT_LABS_DBC = "Labs.dbc"       # in the student directory
 SLIDES_SUBDIR = "Slides"                    # in the instructor directory
 DATASETS_SUBDIR = "Datasets"                # in the student directory
 INSTRUCTOR_NOTES_SUBDIR = "InstructorNotes" # in the instructor directory
@@ -227,6 +225,24 @@ MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
 BundleFile = namedtuple('BundleFileData', ('src', 'dest'))
+
+class OutputInfo(DefaultStrMixin):
+    def __init__(self, student_dir, student_dbc, instructor_dir, instructor_dbc):
+        self.student_dir = student_dir
+        self.student_dbc = student_dbc
+        self.instructor_dir = instructor_dir
+        self.instructor_dbc = instructor_dbc
+
+    @property
+    def student_labs_subdir(self):
+        (base, _) = path.splitext(self.student_dbc)
+        return joinpath(self.student_dir, base)
+
+    @property
+    def instructor_labs_subdir(self):
+        (base, _) = path.splitext(self.instructor_dbc)
+        return joinpath(self.instructor_dir, base)
+
 
 class CourseInfo(DefaultStrMixin):
     def __init__(self, name, version, class_setup, schedule, instructor_prep,
@@ -559,8 +575,7 @@ class BuildData(object, DefaultStrMixin):
                  build_file_path,
                  top_dbc_folder_name,
                  source_base,
-                 student_dir,
-                 instructor_dir,
+                 output_info,
                  course_info,
                  notebooks,
                  slides,
@@ -579,6 +594,7 @@ class BuildData(object, DefaultStrMixin):
         :param build_file_path:       path to the build file, for reference
         :param top_dbc_folder_name:   top-level directory in DBC, or None
         :param source_base:           value of source base field
+        :param output_info:           info about the output directories and DBCs
         :param course_info:           parsed CourseInfo object
         :param notebooks:             list of parsed Notebook objects
         :param slides:                parsed SlideInfo object
@@ -599,8 +615,7 @@ class BuildData(object, DefaultStrMixin):
         self.notebooks = notebooks
         self.course_info = course_info
         self.source_base = source_base
-        self.student_dir = student_dir
-        self.instructor_dir = instructor_dir
+        self.output_info = output_info
         self.slides = slides
         self.datasets = datasets
         self.markdown = markdown_cfg
@@ -930,7 +945,7 @@ def load_build_yaml(yaml_file):
                                       extra_vars=extra_vars)
             )
 
-    def parse_bundle(obj, build, extra_vars):
+    def parse_bundle(obj, output_info, extra_vars):
         if not obj:
             return None
 
@@ -940,6 +955,13 @@ def load_build_yaml(yaml_file):
 
         zipfile = obj.get('zipfile', course_info.course_id + '.zip')
         file_list = []
+        src_vars = {}
+        src_vars.update(extra_vars)
+        src_vars.update({
+            'student_dbc': output_info.student_dbc,
+            'instructor_dbc': output_info.instructor_dbc
+        })
+
         for d in files:
             src = d['src']
             dest = d['dest']
@@ -949,6 +971,8 @@ def load_build_yaml(yaml_file):
                 raise ConfigError('"bundle" has a file with no "src".')
             if not dest:
                 raise ConfigError('"bundle" has a file with no "dest".')
+
+            src = StringTemplate(src).substitute(src_vars)
             dest = parse_time_subst(dest, src, allow_lang=False,
                                     extra_vars=extra_vars)
             file_list.append(BundleFile(src=src, dest=dest))
@@ -1134,6 +1158,29 @@ def load_build_yaml(yaml_file):
             copyright_year=copyright_year
         )
 
+    def parse_output_info(contents):
+        student_dir = contents.get('student_dir', DEFAULT_STUDENT_FILES_SUBDIR)
+        instructor_dir = contents.get('instructor_dir',
+                                      DEFAULT_INSTRUCTOR_FILES_SUBDIR)
+        student_dbc = contents.get('student_dbc', DEFAULT_STUDENT_LABS_DBC)
+        instructor_dbc = contents.get('instructor_dbc',
+                                      DEFAULT_INSTRUCTOR_LABS_DBC)
+
+        if student_dir == instructor_dir:
+            raise ConfigError(
+                ('"student_dir" and "instructor_dir" cannot be the same. ' +
+                 '"student_dir" is "{0}". ' +
+                 '"instructor_dir" is "{1}".').format(
+                    student_dir, instructor_dir
+                )
+            )
+
+        return OutputInfo(student_dir=student_dir,
+                          instructor_dir=instructor_dir,
+                          student_dbc=student_dbc,
+                          instructor_dbc=instructor_dbc)
+
+
     # Main function logic
 
     verbose("Loading {0}...".format(yaml_file))
@@ -1220,29 +1267,18 @@ def load_build_yaml(yaml_file):
                 )
             )
 
-    student_dir = contents.get('student_dir', DEFAULT_STUDENT_FILES_SUBDIR)
-    instructor_dir = contents.get('instructor_dir',
-                                  DEFAULT_INSTRUCTOR_FILES_SUBDIR)
-
-    bundle_info = parse_bundle(contents.get('bundle'), course_info, variables)
-
-    if student_dir == instructor_dir:
-        raise ConfigError(
-            ('"student_dir" and "instructor_dir" cannot be the same. ' +
-             '"student_dir" is "{0}". ' +
-             '"instructor_dir" is "{1}".').format(student_dir, instructor_dir)
-        )
+    output_info = parse_output_info(contents)
+    bundle_info = parse_bundle(contents.get('bundle'), output_info, variables)
 
     data = BuildData(
         build_file_path=build_yaml_full,
         top_dbc_folder_name=contents.get('top_dbc_folder_name'),
         course_info=course_info,
+        output_info=output_info,
         notebooks=notebooks,
         slides=slides,
         datasets=datasets,
         source_base=src_base,
-        student_dir=student_dir,
-        instructor_dir=instructor_dir,
         misc_files=misc_files,
         keep_lab_dirs=bool_field(contents, 'keep_lab_dirs'),
         markdown_cfg=parse_markdown(contents.get('markdown')),
@@ -1424,9 +1460,8 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
     """
     verbose("notebook={0}\ndest_root={1}".format(notebook, dest_root))
     notebook_type_map = build.notebook_type_map
-    student_labs_subdir = joinpath(build.student_dir, STUDENT_LABS_SUBDIR)
-    instructor_labs_subdir = joinpath(build.instructor_dir,
-                                      INSTRUCTOR_LABS_SUBDIR)
+    student_labs_subdir = build.output_info.student_labs_subdir
+    instructor_labs_subdir = build.output_info.instructor_labs_subdir
     student_dir = joinpath(dest_root, student_labs_subdir)
     instructor_dir = joinpath(dest_root, instructor_labs_subdir)
 
@@ -1725,6 +1760,7 @@ def bundle_course(build, dest_dir):
     from zipfile import ZipFile
     zip_path = path.join(dest_dir, build.bundle_info.zipfile)
     print('Writing bundle {}'.format(zip_path))
+
     with ZipFile(zip_path, 'w') as z:
         for file in build.bundle_info.files:
             src = path.join(dest_dir, file.src)
@@ -1748,7 +1784,7 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
     else:
         dest_dir = base_dest_dir
 
-    for d in (build.instructor_dir, build.student_dir):
+    for d in (build.output_info.instructor_dir, build.output_info.student_dir):
         mkdirp(joinpath(dest_dir, d))
 
     version = build.course_info.version
@@ -1764,23 +1800,27 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
         fields
     )
 
-    labs_full_path = joinpath(dest_dir, build.student_dir, STUDENT_LABS_SUBDIR)
+    labs_full_path = joinpath(dest_dir, build.output_info.student_labs_subdir)
     copy_notebooks(build, labs_full_path, dest_dir, profile)
     copy_instructor_notes(build, dest_dir)
     write_version_notebook(labs_full_path, version_notebook, version)
 
+    student_dbc = joinpath(
+        dest_dir, build.output_info.student_dir, build.output_info.student_dbc
+    )
     make_dbc(gendbc=gendbc,
              build=build,
              labs_dir=labs_full_path,
-             dbc_path=joinpath(dest_dir, build.student_dir, STUDENT_LABS_DBC))
+             dbc_path=student_dbc)
 
-    instructor_labs = joinpath(dest_dir,
-                               build.instructor_dir,
-                               INSTRUCTOR_LABS_SUBDIR)
+    instructor_labs = joinpath(
+        dest_dir, build.output_info.instructor_labs_subdir
+    )
     if os.path.exists(instructor_labs):
-        instructor_dbc = joinpath(dest_dir,
-                                  build.instructor_dir,
-                                  INSTRUCTOR_LABS_DBC)
+        instructor_dbc = joinpath(
+            dest_dir, build.output_info.instructor_dir,
+            build.output_info.instructor_labs_dbc
+        )
         write_version_notebook(instructor_labs, version_notebook, version)
         make_dbc(gendbc, build, instructor_labs, instructor_dbc)
 

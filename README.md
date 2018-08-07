@@ -18,8 +18,8 @@ curriculum development within the Education department at Databricks.
   
 ## Quick Links
 
-* [Creating the virtual python environment](#virtual_python_environment)
-* [Installing the build tools](#installing_the_build_tools)
+* [Creating the virtual python environment](#virtual-python-environment)
+* [Installing the build tools](#installing-the-build-tools)
 
 ## Virtual Python Environment
 

@@ -8,7 +8,7 @@ external artifacts. See below for details.
 Quick links:
 
 * [Command line usage](#usage)
-* [Build file syntax](#build_file)
+* [Build file syntax](#build-file)
 * [Installation](#installation)
 
 For usage instructions, see . For a description of the
@@ -22,7 +22,7 @@ Once you've activated the appropriate Python virtual environment,
 see the [master README](../README.md) for a single command that will install
 all the build tools.
 
-## Configuration
+## Build File
 
 _bdc_ uses a per-course build file that describes the course being built. This
 file, conventionally called `build.yaml`, is a YAML file describing the files

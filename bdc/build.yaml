@@ -194,6 +194,15 @@ course_info:
   version: version
   #copyright_year: 2015
   deprecated: false
+  type: self-paced
+
+# use_profiles: Whether or not the "amazon" and "azure" build profiles are
+# to be used. OPTIONAL. Default: false
+#
+# If true, the course is generated twice, once for "amazon" and once for
+# "azure", which subdirectories for each in the output directory. If false,
+# the course is generated once.
+use_profiles: false
 
 # You can define your own build-wide variables in a "variables" section.
 # These variables cannot override built-in variables, such as ${course_id},
@@ -202,6 +211,43 @@ course_info:
 # You can override these variables on a per-notebook basis, as well.
 variables:
   foo: bar
+
+# Defines a bundle of files to be generated after the build is complete.
+# The bundle is a zip file consisting of the specified files. All files are
+# relative to the top-level build directory (that is, the directory specified
+# by the --dest (-d) command line option, or its default value) or to the
+# profile directory, depending on whether profiles are enabled or not.
+#
+# If profiles are used (see "use_profiles"), then the bundle is generated twice,
+# once for "amazon" and once for "azure", and files are relative to the
+# profile subdirectory (e.g., <dest>/amazon). If profiles are not used, then
+# the bundle is generated once, and files are relative to the top-level output
+# directory.
+#
+# There are two configuration items within "bundle":
+#
+# zipfile: The zip file for the bundle, relative to the build directory.
+#          OPTIONAL. Defaults to <course_name>-<course_version>.zip
+# files:   A YAML list, each element of which contains
+#   src:   the source file to copy, relative to the build or profile directory
+#   dest:  the target location in the zip file.
+#
+# Within <dest>, the following substitutions are permitted:
+#
+# ${basename}      - the base file name of the source, WITHOUT the extension
+# ${filename}      - the base file name of the source, WITH the extension
+# ${extension}     - the file extension
+# <your variables> - Any variables defined in the "variables" section can
+#                    also be substituted here.
+bundle:
+  zipfile: course.zip
+  files:
+    -
+      src: 00_README.pdf
+      dest: $filename
+    -
+      src: Labs.dbc
+      dest: Lessons.dbc
 
 # top_dbc_folder_name: The top-level folder in the DBC. Defaults to
 #                      course_info.name
@@ -312,15 +358,19 @@ src_base: /Users/bmc/src/databricks/training/modules
 #
 # FIELDS:
 #
-# src      - source path to the file to be copied, relative to the directory
-#            containing this build file. REQUIRED.
-# dest     - destination path, relative to the top course directory. REQUIRED.
-#            A value of "." means "top level directory".
-# template - true if the document is a template in which variables should be
-#            substituted, as described above. OPTIONAL. Default: false
-# skip     - true to skip this entry, false to keep it. This field is a convenient
-#            alternative to commenting the entire entry out.
-#            OPTIONAL. Default: false
+# src         - source path to the file to be copied, relative to the directory
+#               containing this build file. REQUIRED.
+# dest        - destination path, relative to the top course directory. REQUIRED.
+#               A value of "." means "top level directory". NOTE: This parameter
+#               can be a file name or a directory. If it is a directory, you MUST
+#               set dest_is_dir to true.
+# dest_is_dir - true if the destination should interpreted as a directory.
+#               OPTIONAL. Default: false
+# template    - true if the document is a template in which variables should be
+#               substituted, as described above. OPTIONAL. Default: false
+# skip        - true to skip this entry, false to keep it. This field is a convenient
+#               alternative to commenting the entire entry out.
+#               OPTIONAL. Default: false
 #
 # SUBSTITUTIONS:
 #
@@ -340,7 +390,8 @@ misc_files:
     dest: InstructorFiles/$filename
   -
     src: InstructorFiles/Preparation.md
-    dest: InstructorFiles/$filename
+    dest: InstructorFiles
+    dest_is_dir: true
   -
     src: ../../README_template.html
     dest: 00_README.pdf

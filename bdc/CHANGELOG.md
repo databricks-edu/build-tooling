@@ -1,5 +1,13 @@
 # Change Log for BDC
 
+### Version 1.22.0
+
+- Added ability for files in `misc_files` section to be templates, with
+  variables substituted in them. See the sample `build.yaml` for details.
+- Added ability to generate PDF from a Markdown or HTML miscellaneous file.
+- Added a `bundle` section, allowing a zip file of built materials to be
+  generated automatically. See the sample `build.yaml` for details.
+
 ### Version 1.21.0
 
 - Added `course_info.type` build setting, which can be `ilt` or `self-paced`.

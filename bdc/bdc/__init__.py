@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.21.0"
+VERSION = "1.22.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -219,16 +219,48 @@ class NotebookType(Enum):
         return 'NotebookType.{0}'.format(self.name)
 
 
-MiscFileData = namedtuple('MiscFileData', ('src', 'dest', 'is_template'))
+MiscFileData = namedtuple('MiscFileData', ('src', 'dest', 'is_template',
+                                           'dest_is_dir'))
 SlideData = namedtuple('SlideData', ('src', 'dest'))
 DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
-CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
-                                       'schedule', 'instructor_prep',
-                                       'copyright_year', 'deprecated',
-                                       'type'))
 MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
+BundleFile = namedtuple('BundleFileData', ('src', 'dest'))
+
+class CourseInfo(DefaultStrMixin):
+    def __init__(self, name, version, class_setup, schedule, instructor_prep,
+                 copyright_year, deprecated, type):
+        self.name = name
+        self.version = version
+        self.class_setup = class_setup
+        self.schedule = schedule
+        self.instructor_prep = instructor_prep
+        self.copyright_year = copyright_year
+        self.deprecated = deprecated
+        self.type = type
+
+    @property
+    def course_id(self):
+        """
+        The course ID, which is a combination of the course name and the
+        version.
+
+        :return: the course ID string
+        """
+        return '{0}-{1}'.format(self.name, self.version)
+
+
+class Bundle(DefaultStrMixin):
+    def __init__(self, zipfile, files=None):
+        '''
+        Parsed bundle information.
+
+        :param zipfile:  the zip file for the bundle
+        :param files:    a list of BundleFile objects
+        '''
+        self.files = files or []
+        self.zipfile = zipfile
 
 
 class NotebookDefaults(DefaultStrMixin):
@@ -539,7 +571,8 @@ class BuildData(object, DefaultStrMixin):
                  notebook_type_map,
                  use_profiles=False,
                  course_type=None,
-                 variables=None):
+                 variables=None,
+                 bundle_info=None):
         """
         Create a new BuildData object.
 
@@ -558,6 +591,7 @@ class BuildData(object, DefaultStrMixin):
                                       Keys are from the NotebookType enum.
         :param use_profiles:          whether to use Azure/Amazon build profiles
         :param variables:             a map of user-defined variables
+        :param bundle_info            Bundle data, if any
         """
         super(BuildData, self).__init__()
         self.build_file_path = build_file_path
@@ -576,6 +610,7 @@ class BuildData(object, DefaultStrMixin):
         self.variables = variables or {}
         self.use_profiles = use_profiles
         self.course_type = course_type
+        self.bundle_info = bundle_info
 
         if top_dbc_folder_name is None:
             top_dbc_folder_name = '${course_name}'
@@ -604,7 +639,7 @@ class BuildData(object, DefaultStrMixin):
 
         :return: the course ID string
         """
-        return '{0}-{1}'.format(self.name, self.course_info.version)
+        return self.course_info.course_id
 
 # ---------------------------------------------------------------------------
 # Class-dependent Constants
@@ -891,8 +926,34 @@ def load_build_yaml(yaml_file):
         else:
             return SlideData(
                 src=src,
-                dest=parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars)
+                dest=parse_time_subst(dest, src, allow_lang=False,
+                                      extra_vars=extra_vars)
             )
+
+    def parse_bundle(obj, build, extra_vars):
+        if not obj:
+            return None
+
+        files = obj.get('files')
+        if not files:
+            return None
+
+        zipfile = obj.get('zipfile', course_info.course_id + '.zip')
+        file_list = []
+        for d in files:
+            src = d['src']
+            dest = d['dest']
+            if not (dest or src):
+                raise ConfigError('"bundle" has a file with no "src" or "dest".')
+            if not src:
+                raise ConfigError('"bundle" has a file with no "src".')
+            if not dest:
+                raise ConfigError('"bundle" has a file with no "dest".')
+            dest = parse_time_subst(dest, src, allow_lang=False,
+                                    extra_vars=extra_vars)
+            file_list.append(BundleFile(src=src, dest=dest))
+
+        return Bundle(zipfile=zipfile, files=file_list)
 
     def parse_misc_file(obj, extra_vars):
         src = required(obj, 'src', 'misc_files')
@@ -906,37 +967,41 @@ def load_build_yaml(yaml_file):
             mf = MiscFileData(
                 src=src,
                 dest=dest,
+                dest_is_dir=obj.get('dest_is_dir', False),
                 is_template=obj.get('template', False)
             )
             # Sanity checks: A Markdown file can be translated to Markdown,
             # PDF or HTML. An HTML file can be translated to HTML or PDF.
             # is_template is disallowed for non-text files.
             if mf.is_template and (not is_text_file(src)):
-                raise BuildError(
-                    ("""Section misc_files: "{}" is marked as a template""" +
+                raise ConfigError(
+                    ('Section misc_files: "{}" is marked as a template' +
                      "but it is not a text file.").format(src)
                 )
 
             # We can't check to see whether the target is a directory, since
             # nothing exists yet. But if it has an extension, we can assume it
             # is not a directory.
-            if dest == '.':
+            if (dest == '.') and (not mf.dest_is_dir):
                 # It's the top-level directory. Nothing to check.
-                pass
+                raise ConfigError(
+                    ('Section misc_files: "{}" uses a "dest" of ".", but '
+                     '"dest_is_dir" is not set to true.').format(src)
+                )
             elif has_extension(dest):
                 # It's a file, not a directory.
                 if is_markdown(src):
                     if not (is_pdf(dest) or is_html(dest) or is_markdown(dest)):
-                        raise BuildError(
-                            ("""Section misc_files: "{}" is Markdown, the """ +
-                             """target ("{}") isn't a directory and isn't """ +
+                        raise ConfigError(
+                            ('Section misc_files: "{}" is Markdown, the ' +
+                             'target ("{}") is not a directory and is not ' +
                              "PDF, HTML or Markdown.").format(src, dest)
                         )
                 if is_html(src):
                     if not (is_pdf(dest) or is_html(dest)):
-                        raise BuildError(
-                            ("""Section misc_files: "{}" is HTML, the """ +
-                             """target ("{}") isn't a directory and isn't """ +
+                        raise ConfigError(
+                            ('Section misc_files: "{}" is HTML, the ' +
+                             'target ("{}") is not a directory and is not ' +
                              "PDF or HTML.").format(src, dest)
                         )
 
@@ -1131,6 +1196,8 @@ def load_build_yaml(yaml_file):
     instructor_dir = contents.get('instructor_dir',
                                   DEFAULT_INSTRUCTOR_FILES_SUBDIR)
 
+    bundle_info = parse_bundle(contents.get('bundle'), course_info, variables)
+
     if student_dir == instructor_dir:
         raise ConfigError(
             ('"student_dir" and "instructor_dir" cannot be the same. ' +
@@ -1153,7 +1220,8 @@ def load_build_yaml(yaml_file):
         markdown_cfg=parse_markdown(contents.get('markdown')),
         notebook_type_map=parse_notebook_types(contents),
         variables=variables,
-        use_profiles=use_profiles
+        use_profiles=use_profiles,
+        bundle_info=bundle_info
     )
 
     return data
@@ -1172,7 +1240,7 @@ def expand_template(src_template_file, build, tempdir):
         for k, v in build.variables.items():
             variables['variables.' + k] = str(v)
 
-    for k, v in build.course_info._asdict().items():
+    for k, v in build.course_info.__dict__.items():
         if v is None:
             continue
         if isinstance(v, Enum):
@@ -1283,19 +1351,14 @@ def copy_info_file(src_file, target, is_template, build):
         else:
             real_src = src_file
 
-        if has_extension(target):
+        # Okay to check for directory here. It should've been created already.
+        if not path.isdir(target):
             # Copy and/or generate one file.
             _convert_and_copy_info_file(real_src, target, build)
 
         else:
             # Is a directory. What we generate depends on the input.
             # By this point, it has to exist.
-            if not path.isdir(target):
-                raise BuildError(
-                    '(BUG: Target directory not there!) "{}" -> "{}"'.format(
-                        src_file, target
-                    )
-                )
             src_type = _get_type(src_file)
             if src_type is None:
                 # Just a copy.
@@ -1588,7 +1651,15 @@ def copy_misc_files(build, dest_root):
     if build.misc_files:
         for f in build.misc_files:
             s = joinpath(build.course_directory, f.src)
-            t = joinpath(dest_root, f.dest)
+
+            dest = f.dest
+            if dest == '.':
+                dest = dest_root
+
+            if f.dest_is_dir and (not path.isdir(dest)):
+                os.mkdir(dest)
+
+            t = joinpath(dest_root, dest)
             copy_info_file(s, t, f.is_template, build)
 
 
@@ -1620,6 +1691,27 @@ def write_version_notebook(dir, notebook_contents, version):
     ensure_parent_dir_exists(nb_path)
     with codecs.open(nb_path, 'w', encoding='UTF-8') as out:
         out.write(notebook_contents)
+
+
+def bundle_course(build, dest_dir):
+    from zipfile import ZipFile
+    zip_path = path.join(dest_dir, build.bundle_info.zipfile)
+    print('Writing bundle {}'.format(zip_path))
+    with ZipFile(zip_path, 'w') as z:
+        for file in build.bundle_info.files:
+            src = path.join(dest_dir, file.src)
+            if not (path.exists(src)):
+                raise BuildError(
+                    'While building bundle, cannot find "{}".'.format(src)
+                )
+            if path.isdir(src):
+                raise BuildError(
+                    'Cannot make bundle: Source "{}" is a directory'.format(
+                        src
+                    )
+                )
+
+            z.write(src, file.dest)
 
 
 def do_build(build, gendbc, base_dest_dir, profile=None):
@@ -1667,6 +1759,9 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
     copy_slides(build, dest_dir)
     copy_misc_files(build, dest_dir)
     copy_datasets(build, dest_dir)
+
+    if build.bundle_info:
+        bundle_course(build, dest_dir)
 
     # Finally, remove the instructor labs folder and the student labs
     # folder.

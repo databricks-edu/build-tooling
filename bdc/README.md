@@ -8,8 +8,8 @@ external artifacts. See below for details.
 Quick links:
 
 * [Command line usage](#usage)
-* [Build file syntax](#build-file)
 * [Installation](#installation)
+* [Build file syntax](#build-file)
 
 For usage instructions, see . For a description of the
 build file syntax, see [Build File](#build_file).
@@ -31,23 +31,155 @@ own build file.
 
 See [build.yaml][] in this directory for a fully-documented example.
 
-### A note about variable substitution in `build.yaml`
+This section describes each section and configuration item in the build file.
+
+### Tool versions
+
+Two **required** settings control the minimum versions of both `bdc` and
+the master parser are required for a given build file. Both tools use
+[semantic versioning](https://semver.org), so version numbers are of the
+form _major.minor.patch_ (e.g., 1.19.3). Since patch versions should
+always be backward-compatible, `bdc` only looks at the major and minor
+numbers. (Thus, the values "1.19.3", "1.19" and "1.19.0" are the same: They
+all set the minimum version to "1.19".)
+
+**NOTE**: These values _must_ be quoted, so they don't get interpreted as
+floating point numbers by the YAML parser!
+
+**`bdc_min_version`** sets the minimum version of `bdc` required to run the
+build. Using an older version of `bdc` will cause an automatic build failure.
+
+**`master_parse_min_version`** sets the minimum version of the master parser
+required to run the build. Using an older version of `master_parse` will cause 
+an automatic build failure.
+
+### Course info
+
+The `course_info` section defines information about the course. It contains
+the following fields:
+
+- `name`: (REQUIRED) The name of the course (e.g., "Databricks-Delta"). The 
+  name should not have any white space, as it is used to construct file names.
+- `version`: (REQUIRED) The (semantic) version number of the course (e.g., 
+  "1.0.1").
+- `type`: (REQUIRED) The course type. Legal values are "ilt" (for instructor-led
+  materials) and "self-paced".
+- `copyright_year`: (OPTIONAL) Copyright year of the course materials. Defaults
+  to the current year.
+- `class_setup`: (OPTIONAL) Path to the class setup instructions (for site
+  managers of a given training site) on how to prepare the classroom 
+  environment. For Databricks classes, a survey exists for this purpose. 
+  However, for partners, this document summarizes the minimum needs. The path
+  relative to the directory containing _build file_. If defined, this file will 
+  be copied to the top of the destination directory or directories. Only
+  meaningful for ILT classes.
+- `schedule`: (OPTIONAL) Path to a document that describes the recommended
+  teaching schedule for the class. Only meaningful for ILT classes.
+- `prep`: (OPTIONAL) Path to a Markdown document that outlines any instructor
+  preparation that must be done before teaching the class. The file, if
+  specified, is copied to `InstructorFiles/Preparation.md` under the target
+  directory. An HTML version is also generated there. Only meaningful for
+  ILT classes.
+- `deprecated`: (OPTIONAL) If present and true, this field marks the course
+  as deprecated (i.e., no longer used). Attempts to build the course will
+  fail. Default: false  
+
+Example sections:
+
+```yaml
+course_info:
+  name: Databricks-Delta
+  version: 1.0.0
+  type: self-paced
+```
+
+```yaml
+course_info:
+  name: Spark-ILT
+  version: 2.1.2-SNAPSHOT
+  type: ilt 
+```
+
+### Build Profiles
+
+Some courses need to be slightly different for AWS and Azure. The master
+parser already supports conditional tags (`AZURE_ONLY` and `AMAZON_ONLY`),
+but they must be enabled, and they're not appropriate for all courses.
+
+To enable AWS and Amazon build profiles, set `use_profiles` to `true`.
+
+If `use_profiles` is `true`:
+
+- The course is generated twice, once for Amazon (suppressing any notebook
+  cells marked `AZURE_ONLY`) and once for Azure (suppressing any cells marked
+  `AMAZON_ONLY`).
+- The two separate builds are written to `azure` and `amazon` subdirectories
+  underneath the build destination directory.
+- Two separate [bundles](#bundles) are generated, if bundles are enabled.
+
+If `use_profiles` is `false`, the course is generated once, into the
+destination directory.
+
+`use_profiles` is `false`, by default.
+
+See also `only_in_profile` in the [Notebooks][#notebooks] section.
+
+### Notebooks
+
+Source notebooks listed in the `build.yaml` are parsed, run through the master
+parser, converted into multiple output notebooks, and, ultimately, gathered
+into a single Databricks DBC file for easy import.
+
+This section discusses the various notebook-related settings in `build.yaml`.
+
+#### The top-most DBC folder
+
+A DBC file is a special kind of zip file containing JSON-encoded notebooks.
+By default, when `bdc` generates the final DBC file, it places all notebooks
+under a top-level directory named after the course. You can change that
+strategy by setting the `top_dbc_folder_name` variable.
+
+The following variables can be substituted into this value:
+
+| Variable            | Meaning
+| ------------------- | -------
+| `${course_name}`    | the course name, from `course_info.name`
+| `${course_version}` | the course version, from `course_info.version`
+| `${course_id}`      | convenience variable: same as `${course_name}-${course_version}`
+| `${profile}`        | the name of the current build profile ("amazon" or "azure"), if any
+| your variables      | any 
+
+
+### Bundles
+
+### Variable substitution
+
+Many (but not all) items in a `build.yaml` file support variable substitution.
+This section discusses that feature. 
 
 #### Where do variables come from?
 
-Many (but not all) items in a `build.yaml` file support variable substitution. 
 Variables currently come from several places:
 
 - There are variables that are built into `bdc`, such as `${notebook_type}`,
   `${basename}`, and others.
+
 - You can define build-wide variables of your own in the "variables" section
   in `build.yaml`. (These variables cannot override built-in variables.)
+  For example, if you define the following `variables` section, you can
+  substitute `${foo}` wherever custom variables are supported:
+```
+variables:
+  foo: This string will replace ${foo}
+```  
+  
 - You can define per-notebook variables in a "variables" section in each
   notebook. These variables can also override build-wide globals, on a
   per-notebook basis, though they cannot override `bdc` built-ins.
+
 - You can define variables for all notebooks in the `notebook_defaults`
   section.
-  
+
 See the sample [build.yaml][] for full details.
 
 #### Variable Substitution Syntax

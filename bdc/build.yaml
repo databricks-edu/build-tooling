@@ -661,8 +661,8 @@ slides:
 
 # datasets: Datasets to be included in the courseware. The files are copied
 #           to the destination directory's "StudentFiles" subdirectory, in
-#           a special subdirectory called "datasets". Each dataset will end
-#           up in its own subdirectory below "datasets".
+#           a special subdirectory called "Datasets". Each dataset will end
+#           up in its own subdirectory below "Datasets".
 #
 # FIELDS:
 #
@@ -679,11 +679,11 @@ slides:
 #   and licensing.
 #
 # These files must live in the same directory as the dataset and will be copied,
-# in both original Markdown and HTML formats, to the destination directory.
+# in original Markdown, HTML, and PDF formats, to the destination directory.
 datasets:
   -
     src: ../../datasets/tom-sawyer/tom-sawyer.txt
-    dest: datasets/tom-sawyer
+    dest: tom-sawyer
   -
     src: ../../datasets/bigrams/bigrams.zip
-    dest: datasets/bigrams
+    dest: bigrams

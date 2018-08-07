@@ -1730,7 +1730,7 @@ def copy_slides(build, dest_root):
         for f in build.slides:
             src = joinpath(build.source_base, f.src)
             dest = joinpath(dest_root,
-                             build.instructor_dir,
+                             build.output_info.instructor_dir,
                              SLIDES_SUBDIR,
                              f.dest)
             copy(src, dest)
@@ -1760,15 +1760,25 @@ def copy_datasets(build, dest_root):
     Copy the datasets (if any).
     """
     if build.datasets:
+        def target_for(file, dest):
+            return joinpath(dest_root,
+                            build.output_info.student_dir,
+                            DATASETS_SUBDIR,
+                            dest,
+                            file)
+
         for ds in build.datasets:
-            for i in (ds.src, ds.license, ds.readme):
+            source = joinpath(build.course_directory, ds.src)
+            copy(source, target_for(path.basename(source), ds.dest))
+
+            css = build.markdown.html_stylesheet
+            for i in (ds.license, ds.readme):
                 source = joinpath(build.course_directory, i)
-                target = joinpath(dest_root,
-                                   build.student_dir,
-                                   DATASETS_SUBDIR,
-                                   ds.dest,
-                                   path.basename(i))
-                copy(source, target)
+                (base, _) = path.splitext(path.basename(i))
+                pdf = target_for(base + ".pdf", ds.dest)
+                html = target_for(base + ".html", ds.dest)
+                markdown_to_html(source, html, stylesheet=css)
+                html_to_pdf(html, pdf)
 
 
 def remove_empty_subdirectories(directory):

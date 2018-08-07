@@ -11,6 +11,10 @@
   `student_dbc` build parameter; it defaults to `Labs.dbc`.
 - Similarly, it is now possible to specify the name of the student DBC, via a
   new `instructor_dbc` build parameter; it defaults to `Instructor-Labs.dbc`.
+- Added some parse-time validation of the source files (and required `README.md`
+  and `LICENSE.md`) for the `datasets` section.
+- The `README.md` and `LICENSE.md` files for each data set are also converted
+  to HTML and PDF and copied.  
 
 ### Version 1.21.0
 

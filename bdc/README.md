@@ -100,47 +100,70 @@ course_info:
   type: ilt 
 ```
 
-### Build Profiles
+### Documents
 
-Some courses need to be slightly different for AWS and Azure. The master
-parser already supports conditional tags (`AZURE_ONLY` and `AMAZON_ONLY`),
-but they must be enabled, and they're not appropriate for all courses.
+`bdc` can copy documents into the build output directory, optionally
+generating different kinds of output formats. This section describes
+document-related configuration items and sections within the `build.yaml`
+file.
 
-To enable AWS and Amazon build profiles, set `use_profiles` to `true`.
+#### Markdown, HTML and PDF
 
-If `use_profiles` is `true`:
+`bdc` can process Markdown files, producing both HTML and PDF output. It
+can also generate PDF output from HTML files or HTML templates.
 
-- The course is generated twice, once for Amazon (suppressing any notebook
-  cells marked `AZURE_ONLY`) and once for Azure (suppressing any cells marked
-  `AMAZON_ONLY`).
-- The two separate builds are written to `azure` and `amazon` subdirectories
-  underneath the build destination directory.
-- Two separate [bundles](#bundles) are generated, if bundles are enabled.
+When generating HTML and PDF from Markdown, `bdc` uses an internal HTML
+stylesheet, by default. However, you can override that stylesheet with
+the `markdown` section:
 
-If `use_profiles` is `false`, the course is generated once, into the
-destination directory.
+```
+markdown:
+  html_stylesheet: /path/to/my/stylesheet.css
+```
 
-`use_profiles` is `false`, by default.
-
-See also `only_in_profile` in the [Notebooks][#notebooks] section.
+If you specify `markdown.html_stylesheet`, the stylesheet you specify is
+inserting, inline, in each HTML file that is generated from Markdown source.
 
 ### Output Generation
 
 Several settings help define the layout of the final built course.
 
-- `student_dbc`:  
+- *`student_dbc`*: (OPTIONAL) The name of the DBC that contains student notebooks.
+  Defaults to `Labs.dbc`.
+- *`instructor_dbc`*: (OPTIONAL) The name of the DBC that contains instructor
+  notebooks. Defaults to `Instructor-Labs.dbc`. Note that this DBC is _only_
+  created if at least one instructor notebook is generated. See
+  [Notebooks](#notebooks) for details.
+- *`student_dir`*: (OPTIONAL) The name of the folder, relative to the top of
+  the output directory, in which to store student files such as the generated
+  student DBC. If explicitly set to the empty string (''), the student DBC
+  will be written to the top-level output directory. This value _must_ not
+  be the same as `instructor_dir`. Default: `StudentFiles`.
+- *`instructor_dir`*: (OPTIONAL) The name of the folder, relative to the top of
+  the output directory, in which to store instructor files such as the generated
+  instructor DBC. If explicitly set to the empty string (''), the instructor DBC
+  will be written to the top-level output directory. This value _must_ not
+  be the same as `student_dir`. Default: `StudentFiles`.
+- *`keep_labs_dir`*: (OPTIONAL) While generating output notebooks, the build
+  tools stash them in directories within the output directory. For example, if
+  the student DBC is called `Labs.dbc`, then the tools will stash the notebooks
+  in a `Labs` directory under `student_dir`. The DBC is then generated from that
+  directory. If `keep_labs_dir` is `false`, that directory is removed after the
+  corresponding DBC is built. If `keep_labs_dir` is `true`, that directory is
+  not removed (which can be useful for debugging).
 
-### Notebooks
+The default values are generally useful for an ILT class, where you want
+separate instructor and student areas and DBCs. A typical self-paced class
+might use these values:
 
-Source notebooks listed in the `build.yaml` are parsed, run through the master
-parser, converted into multiple output notebooks, and, ultimately, gathered
-into a single Databricks DBC file for easy import.
+```
+student_dir: ''   # DBC at the top level
+student_dbc: Lessons.dbc
 
-This section discusses the various notebook-related settings in `build.yaml`.
-
-#### DBC files
-
-`bdc` generates two 
+# instructor_dir and instructor_dbc are untouched, but the notebooks
+# are configured so that no instructor notebooks are generated. Thus, the
+# instructor DBC will never be written.
+``` 
 
 #### The top-most DBC folder
 
@@ -166,6 +189,134 @@ top_dbc_folder_name: Course-${course_name}-${course_version}
 top_dbc_folder_name: Lessons
 top_dbc_folder_name: ${course_name}  # same as the default
 ```
+
+#### Slides
+
+While we don't currently teach from slides, if you have some slides that
+accompany your course, you can include those slides via the `slides` section.
+`slides` consists of a series of (`src`, `dest` pairs), one for each file to be
+copied. The `src` path is relative to the location of the `build.yaml` file.
+The `dest` is relative to a `Slides` directory beneath the instructor directory. 
+See [Output Generation][#output-generation] for details on the instructor
+directory.
+
+Another field, `skip`, can be set to `true` to cause the file to be skipped.
+This is an alternative to commenting the section out.
+
+Within the `dest` field, the following [variable substitutions](#variable-substitution)
+are available:
+
+| VARIABLE       | DESCRIPTION
+| -------------- | -----------
+| `${basename}`  | the base file name of the `src`, WITHOUT the extension
+| `${filename}`  | the base file name of the `src`, WITH the extension
+| `${extension}` | the `src` file's extension
+
+For example:
+
+```
+slides:
+  -
+    src: Slides/Welcome.pptx
+    dest: Presentations/00-$filename
+  -
+    src: Slides/Architecture.pptx
+    dest: Presentations/01-$filename
+    skip: true
+```
+
+In this example, there are two slide decks, a "welcome" deck and an
+"architecture" deck. 
+
+The architecture deck is skipped, because `skip` is set to `true`. 
+
+The welcome deck is located at `Slides/Welcome.pptx` below the directory
+containing the `build.yaml`. If `instructor_dir` is set to its default file,
+that file will be copied to
+`<build_output_dir>/InstructorFiles/Slides/Welcome.pptx`.
+
+#### Data sets
+
+It's also possible to include data sets in the output directory. This section
+is very similar to the `slides` section. It consists of a series of (`src`,
+`dest` pairs), one for each file to be copied. The `src` path is relative to
+the location of the `build.yaml` file. The `dest` is relative to a generated
+`Datasets` directory under the build output directory.
+
+Another field, `skip`, can be set to `true` to cause the file to be skipped.
+This is an alternative to commenting the section out.
+
+Within the `dest` field, the following [variable substitutions](#variable-substitution)
+are available:
+
+**WARNING**: The directory that contains each dataset file must also contain
+a `LICENSE.md` file that describes the license for the data and a `README.md`
+file that briefly describes the data and where it came from. The build will
+abort if those files are not present and non-empty.
+
+| VARIABLE       | DESCRIPTION
+| -------------- | -----------
+| `${basename}`  | the base file name of the `src`, WITHOUT the extension
+| `${filename}`  | the base file name of the `src`, WITH the extension
+| `${extension}` | the `src` file's extension
+
+For example:
+
+```
+datasets:
+  -
+    src: datasets/pets.csv
+    dest: pets/$basename
+  - 
+    src: datasets/autos.csv
+    dest: autos/$basename
+    skip: true
+```
+
+In this example, there are two data sets, `autos.csv` and `pets.csv`,
+each of which resides under separate directories within the `datasets` directory
+that's right beneath `build.yaml`. 
+
+The `autos.csv` dataset is ignored, because `skip` is set to `true`.
+
+The `pets.csv` dataset is copied to `<build_output>/Datasets/pets/pets.csv`.
+Its `LICENSE.md` and `README.md` files are copied to the same directory,
+as are their (generated) HTML and PDF counterparts.
+
+### Build Profiles
+
+Some courses need to be slightly different for AWS and Azure. The master
+parser already supports conditional tags (`AZURE_ONLY` and `AMAZON_ONLY`),
+but they must be enabled, and they're not appropriate for all courses.
+
+To enable AWS and Amazon build profiles, set `use_profiles` to `true`.
+
+If `use_profiles` is `true`:
+
+- The course is generated twice, once for Amazon (suppressing any notebook
+  cells marked `AZURE_ONLY`) and once for Azure (suppressing any cells marked
+  `AMAZON_ONLY`).
+- The two separate builds are written to `azure` and `amazon` subdirectories
+  underneath the build destination directory.
+- Two separate [bundles](#bundles) are generated, if bundles are enabled.
+
+If `use_profiles` is `false`, the course is generated once, into the
+destination directory.
+
+`use_profiles` is `false`, by default.
+
+See also `only_in_profile` in the [Notebooks][#notebooks] section.
+
+### Notebooks
+
+Source notebooks listed in the `build.yaml` are parsed, run through the master
+parser, converted into multiple output notebooks, and, ultimately, gathered
+into a single Databricks DBC file for easy import.
+
+This section discusses the various notebook-related settings in `build.yaml`.
+
+Note that DBC file generation is discussed in [Output Generation](#output-generation).
+
 
 ### Bundles
 

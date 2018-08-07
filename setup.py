@@ -58,6 +58,9 @@ if (len(sys.argv) > 1 and
 setup(
     name='db-build-tooling',
     packages=[],
+    install_requires=[
+        'databricks-cli==0.8.0',
+    ],
     version=VERSION,
     description='Wrapper package for Databricks Training build tools',
     author='Databricks Education Team',

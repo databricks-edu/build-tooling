@@ -5,107 +5,22 @@ This directory contains courseware build tool. (_bdc_ stands for
 consolidate all aspects of the curriculum build process. It _does_ rely on some
 external artifacts. See below for details.
 
-For usage instructions, see [Usage](#usage).
+Quick links:
 
-## Preparing the environment
+* [Command line usage](#usage)
+* [Build file syntax](#build_file)
+* [Installation](#installation)
 
-_bdc_ only works on Python 2, because the `--upload` and `--download` features
-use the Databricks CLI, which is Python 2-only. 
+For usage instructions, see . For a description of the
+build file syntax, see [Build File](#build_file).
 
-### Create a Python virtual environment
+## Installation
 
-While it is possible to build the courseware by installing the necessary
-software in the system-installed (or Homebrew-installed) Python, **it is not
-recommended**. It's much better to run the build from a dedicated Python
-virtual environment. This document describes how to do that. If you want to
-use the system version of Python, you're on your own (because it's
-riskier).
+#### Install the build tools
 
-#### Install `pip`
-
-You'll have to install `pip`, if it isn't already installed. First,
-download `get-pip.py` from here:
-<https://pip.pypa.io/en/stable/installing/>
-
-Once you have `get-pip.py`, install `pip`.
-
-* If you're on Linux, run this command: `sudo /usr/bin/python get-pip.py`
-* If you're on a Mac and _not_ using Homebrew: `sudo /usr/bin/python get-pip.py`
-* If you're on a Mac and using a Homebrew-installed Python: `/usr/local/bin/python get-pip.py`
-* If you're on Windows and you used the standard installer: `C:\Python27\python get-pip.py`
-
-#### Install `virtualenv`
-
-* Linux: `sudo pip install virtualenv`
-* Mac and not using Homebrew: `sudo pip install virtualenv`
-* Mac with Homebrew-install Python: `/usr/local/bin/pip install virtualenv`
-* Windows: `C:\Python27\Scripts\pip install virtualenv`
-
-#### Create a virtual environment
-
-Create a virtual Python environment for the build. You can call it anything
-you want, and you can create it any where you want. Let's assume you'll
-call it `dbbuild` and put it in your home directory. Here's how to create
-the virtual environment.
-
-From a command window, assuming you're in your home directory:
-
-* Linux or Mac: `virtualenv dbbuild`
-* Windows: `C:\Python27\Scripts/virtualenv dbbuild`
-
-#### Activate the virtual environment
-
-Once you have the virtual Python environment installed, you'll need to
-activate it. **You have to activate the environment any time you create a
-new command window.**
-
-(For complete details on using `virtualenv`, see <https://github.com/pypa/virtualenv>.)
-
-* Linux or Mac: `. $HOME/dbbuild/bin/activate`
-* Windows: `dbbuild\bin\activate.bat`
-
-### Install _bdc_
-
-Once you've activated the appropriate Python virtual environment, just run
-the following commands in this directory:
-
-```
-python setup.py install
-```
-
-### Install the master parse tool
-
-_bdc_ depends on the
-[master parse tool](https://github.com/databricks-edu/build-tooling/tree/master/master_parse).
-See the
-[master_parse README](https://github.com/databricks-edu/build-tooling/blob/master/master_parse/README.md)
-for instructions on how to install that tool. 
-
-You need to tell _bdc_ which notebooks to pass through the master parse tool 
-on a per notebook basis in the `build.yaml` file for a course.
-
-### Install gendbc
-
-_bdc_ also depends on the [gendbc](../gendbc/README.md) tool, which is
-written in Scala. Follow the instructions in the _gendbc_ `README.md` file
-to install _gendbc_ in the build environment you'll be using.
-
-**NOTE**: `bdc` expects to find the `gendbc` binary by searching your PATH.
-`gendbc` is installed in `$HOME/local/bin` by default, so make sure that's in
-your PATH.
-
-### Install the Databricks CLI
-
-If you're using `bdc --upload` or `bdc --download` (see [Usage](#usage)), you
-also need the [Databricks Command Line Interface](https://docs.databricks.com/user-guide/databricks-cli.html).
-This tool _only_ supports Python 2; you can install it via:
-
-```
-pip install databricks-cli
-``` 
-
-See <https://docs.databricks.com/user-guide/databricks-cli.html> for complete
-installation and configuration details.
+Once you've activated the appropriate Python virtual environment,
+see the [master README](../README.md) for a single command that will install
+all the build tools.
 
 ## Configuration
 

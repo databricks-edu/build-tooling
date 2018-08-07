@@ -46,10 +46,9 @@ all set the minimum version to "1.19".)
 **NOTE**: These values _must_ be quoted, so they don't get interpreted as
 floating point numbers by the YAML parser!
 
-**`bdc_min_version`** sets the minimum version of `bdc` required to run the
+- **`bdc_min_version`** sets the minimum version of `bdc` required to run the
 build. Using an older version of `bdc` will cause an automatic build failure.
-
-**`master_parse_min_version`** sets the minimum version of the master parser
+- **`master_parse_min_version`** sets the minimum version of the master parser
 required to run the build. Using an older version of `master_parse` will cause 
 an automatic build failure.
 
@@ -58,29 +57,29 @@ an automatic build failure.
 The `course_info` section defines information about the course. It contains
 the following fields:
 
-- `name`: (REQUIRED) The name of the course (e.g., "Databricks-Delta"). The 
+- **`name`**: (REQUIRED) The name of the course (e.g., "Databricks-Delta"). The 
   name should not have any white space, as it is used to construct file names.
-- `version`: (REQUIRED) The (semantic) version number of the course (e.g., 
+- **`version`**: (REQUIRED) The (semantic) version number of the course (e.g., 
   "1.0.1").
-- `type`: (REQUIRED) The course type. Legal values are "ilt" (for instructor-led
+- **`type`**: (REQUIRED) The course type. Legal values are "ilt" (for instructor-led
   materials) and "self-paced".
-- `copyright_year`: (OPTIONAL) Copyright year of the course materials. Defaults
+- **`copyright_year`**: (OPTIONAL) Copyright year of the course materials. Defaults
   to the current year.
-- `class_setup`: (OPTIONAL) Path to the class setup instructions (for site
+- **`class_setup`**: (OPTIONAL) Path to the class setup instructions (for site
   managers of a given training site) on how to prepare the classroom 
   environment. For Databricks classes, a survey exists for this purpose. 
   However, for partners, this document summarizes the minimum needs. The path
   relative to the directory containing _build file_. If defined, this file will 
   be copied to the top of the destination directory or directories. Only
   meaningful for ILT classes.
-- `schedule`: (OPTIONAL) Path to a document that describes the recommended
+- **`schedule`**: (OPTIONAL) Path to a document that describes the recommended
   teaching schedule for the class. Only meaningful for ILT classes.
-- `prep`: (OPTIONAL) Path to a Markdown document that outlines any instructor
+- **`prep`**: (OPTIONAL) Path to a Markdown document that outlines any instructor
   preparation that must be done before teaching the class. The file, if
   specified, is copied to `InstructorFiles/Preparation.md` under the target
   directory. An HTML version is also generated there. Only meaningful for
   ILT classes.
-- `deprecated`: (OPTIONAL) If present and true, this field marks the course
+- **`deprecated`**: (OPTIONAL) If present and true, this field marks the course
   as deprecated (i.e., no longer used). Attempts to build the course will
   fail. Default: false  
 
@@ -128,23 +127,23 @@ inserting, inline, in each HTML file that is generated from Markdown source.
 
 Several settings help define the layout of the final built course.
 
-- *`student_dbc`*: (OPTIONAL) The name of the DBC that contains student notebooks.
+- **`student_dbc`**: (OPTIONAL) The name of the DBC that contains student notebooks.
   Defaults to `Labs.dbc`.
-- *`instructor_dbc`*: (OPTIONAL) The name of the DBC that contains instructor
+- **`instructor_dbc`**: (OPTIONAL) The name of the DBC that contains instructor
   notebooks. Defaults to `Instructor-Labs.dbc`. Note that this DBC is _only_
   created if at least one instructor notebook is generated. See
   [Notebooks](#notebooks) for details.
-- *`student_dir`*: (OPTIONAL) The name of the folder, relative to the top of
+- **`student_dir`**: (OPTIONAL) The name of the folder, relative to the top of
   the output directory, in which to store student files such as the generated
   student DBC. If explicitly set to the empty string (''), the student DBC
   will be written to the top-level output directory. This value _must_ not
   be the same as `instructor_dir`. Default: `StudentFiles`.
-- *`instructor_dir`*: (OPTIONAL) The name of the folder, relative to the top of
+- **`instructor_dir`**: (OPTIONAL) The name of the folder, relative to the top of
   the output directory, in which to store instructor files such as the generated
   instructor DBC. If explicitly set to the empty string (''), the instructor DBC
   will be written to the top-level output directory. This value _must_ not
   be the same as `student_dir`. Default: `StudentFiles`.
-- *`keep_labs_dir`*: (OPTIONAL) While generating output notebooks, the build
+- **`keep_labs_dir`**: (OPTIONAL) While generating output notebooks, the build
   tools stash them in directories within the output directory. For example, if
   the student DBC is called `Labs.dbc`, then the tools will stash the notebooks
   in a `Labs` directory under `student_dir`. The DBC is then generated from that
@@ -170,7 +169,7 @@ student_dbc: Lessons.dbc
 A DBC file is a special kind of zip file containing JSON-encoded notebooks.
 By default, when `bdc` generates the final DBC files, it places all notebooks
 under a top-level directory named after the course. You can change that
-strategy by setting the `top_dbc_folder_name` variable.
+strategy by setting the **`top_dbc_folder_name`** variable.
 
 The following variables can be substituted into this value:
 

@@ -52,6 +52,14 @@ build. Using an older version of `bdc` will cause an automatic build failure.
 required to run the build. Using an older version of `master_parse` will cause 
 an automatic build failure.
 
+The following example says that the `build.yaml` requires at least version
+1.21 of `bdc` and version 1.14 of `master_parse`:
+
+```
+bdc_min_version: "1.21"
+master_parse_min_version: "1.14"
+```
+
 ### Course info
 
 The `course_info` section defines information about the course. It contains

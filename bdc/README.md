@@ -55,7 +55,7 @@ an automatic build failure.
 The following example says that the `build.yaml` requires at least version
 1.21 of `bdc` and version 1.14 of `master_parse`:
 
-```
+```yaml
 bdc_min_version: "1.21"
 master_parse_min_version: "1.14"
 ```
@@ -123,7 +123,7 @@ When generating HTML and PDF from Markdown, `bdc` uses an internal HTML
 stylesheet, by default. However, you can override that stylesheet with
 the `markdown` section:
 
-```
+```yaml
 markdown:
   html_stylesheet: /path/to/my/stylesheet.css
 ```
@@ -163,7 +163,7 @@ The default values are generally useful for an ILT class, where you want
 separate instructor and student areas and DBCs. A typical self-paced class
 might use these values:
 
-```
+```yaml
 student_dir: ''   # DBC at the top level
 student_dbc: Lessons.dbc
 
@@ -191,7 +191,7 @@ The following variables can be substituted into this value:
 
 Examples:
 
-```
+```yaml
 top_dbc_folder_name: Course-${course_name}-${course_version}
 top_dbc_folder_name: Lessons
 top_dbc_folder_name: ${course_name}  # same as the default
@@ -221,7 +221,7 @@ are available:
 
 For example:
 
-```
+```yaml
 slides:
   -
     src: Slides/Welcome.pptx
@@ -269,7 +269,7 @@ abort if those files are not present and non-empty.
 
 For example:
 
-```
+```yaml
 datasets:
   -
     src: datasets/pets.csv

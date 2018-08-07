@@ -124,6 +124,12 @@ destination directory.
 
 See also `only_in_profile` in the [Notebooks][#notebooks] section.
 
+### Output Generation
+
+Several settings help define the layout of the final built course.
+
+- `student_dbc`:  
+
 ### Notebooks
 
 Source notebooks listed in the `build.yaml` are parsed, run through the master
@@ -132,10 +138,14 @@ into a single Databricks DBC file for easy import.
 
 This section discusses the various notebook-related settings in `build.yaml`.
 
+#### DBC files
+
+`bdc` generates two 
+
 #### The top-most DBC folder
 
 A DBC file is a special kind of zip file containing JSON-encoded notebooks.
-By default, when `bdc` generates the final DBC file, it places all notebooks
+By default, when `bdc` generates the final DBC files, it places all notebooks
 under a top-level directory named after the course. You can change that
 strategy by setting the `top_dbc_folder_name` variable.
 
@@ -147,8 +157,15 @@ The following variables can be substituted into this value:
 | `${course_version}` | the course version, from `course_info.version`
 | `${course_id}`      | convenience variable: same as `${course_name}-${course_version}`
 | `${profile}`        | the name of the current build profile ("amazon" or "azure"), if any
-| your variables      | any 
+| your variables      | any [custom variables you define](#where-do-variables-come-from)
 
+Examples:
+
+```
+top_dbc_folder_name: Course-${course_name}-${course_version}
+top_dbc_folder_name: Lessons
+top_dbc_folder_name: ${course_name}  # same as the default
+```
 
 ### Bundles
 

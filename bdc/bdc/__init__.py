@@ -1166,6 +1166,13 @@ def load_build_yaml(yaml_file):
         instructor_dbc = contents.get('instructor_dbc',
                                       DEFAULT_INSTRUCTOR_LABS_DBC)
 
+        for (k, v) in (('student_dbc', student_dbc),
+                       ('instructor_dbc', instructor_dbc)):
+            if path.dirname(v) != '':
+                raise ConfigError(
+                    '"{}" value "{}" is not a simple file name.'.format(k, v)
+                )
+
         if student_dir == instructor_dir:
             raise ConfigError(
                 ('"student_dir" and "instructor_dir" cannot be the same. ' +
@@ -1314,7 +1321,7 @@ def expand_template(src_template_file, build, tempdir):
     class DotTemplate(StringTemplate):
         idpattern = r'[_a-z][_a-z0-9.]*'
 
-    output = path.join(tempdir, path.basename(src_template_file))
+    output = joinpath(tempdir, path.basename(src_template_file))
     with codecs.open(src_template_file, mode='r', encoding='utf8') as i:
         s = DotTemplate(i.read())
 
@@ -1427,7 +1434,7 @@ def copy_info_file(src_file, target, is_template, build):
             if src_type is None:
                 # Just a copy.
                 base = path.basename(src_file)
-                copy(real_src, path.join(target, base))
+                copy(real_src, joinpath(target, base))
             else:
                 dest_map = INFO_PROCESSORS.get(src_type)
                 if dest_map is None:
@@ -1439,7 +1446,7 @@ def copy_info_file(src_file, target, is_template, build):
 
                 for dest_type in dest_map.keys():
                     (base, _) = path.splitext(path.basename(src_file))
-                    out = path.join(target, base + '.' + dest_type)
+                    out = joinpath(target, base + '.' + dest_type)
                     _convert_and_copy_info_file(real_src, out, build)
 
 
@@ -1758,12 +1765,12 @@ def write_version_notebook(dir, notebook_contents, version):
 
 def bundle_course(build, dest_dir):
     from zipfile import ZipFile
-    zip_path = path.join(dest_dir, build.bundle_info.zipfile)
+    zip_path = joinpath(dest_dir, build.bundle_info.zipfile)
     print('Writing bundle {}'.format(zip_path))
 
     with ZipFile(zip_path, 'w') as z:
         for file in build.bundle_info.files:
-            src = path.join(dest_dir, file.src)
+            src = joinpath(dest_dir, file.src)
             if not (path.exists(src)):
                 raise BuildError(
                     'While building bundle, cannot find "{}".'.format(src)
@@ -1780,7 +1787,7 @@ def bundle_course(build, dest_dir):
 
 def do_build(build, gendbc, base_dest_dir, profile=None):
     if profile:
-        dest_dir = path.join(base_dest_dir, profile)
+        dest_dir = joinpath(base_dest_dir, profile)
     else:
         dest_dir = base_dest_dir
 
@@ -2034,7 +2041,7 @@ def get_sources_and_targets(build):
                     m.group(1), PROFILE_ABBREVIATIONS[nb.only_in_profile],
                     m.group(2)
                 )
-            p = path.join(dir, new_file)
+            p = joinpath(dir, new_file)
 
         return p
 

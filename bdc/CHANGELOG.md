@@ -7,6 +7,10 @@
 - Added ability to generate PDF from a Markdown or HTML miscellaneous file.
 - Added a `bundle` section, allowing a zip file of built materials to be
   generated automatically. See the sample `build.yaml` for details.
+- It is now possible to specify the name of the student DBC, via a new
+  `student_dbc` build parameter; it defaults to `Labs.dbc`.
+- Similarly, it is now possible to specify the name of the student DBC, via a
+  new `instructor_dbc` build parameter; it defaults to `Instructor-Labs.dbc`.
 
 ### Version 1.21.0
 

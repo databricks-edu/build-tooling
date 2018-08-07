@@ -232,6 +232,14 @@ variables:
 #   src:   the source file to copy, relative to the build or profile directory
 #   dest:  the target location in the zip file.
 #
+# Within <src>, the following substitutions are permitted:
+#
+# ${student_dbc}    - the base name of the student DBC file
+# ${instructor_dbc} - the base name of the instructor DBC file
+# <your variables>  - Any variables defined in the "variables" section can
+#                     also be substituted here.
+#
+#
 # Within <dest>, the following substitutions are permitted:
 #
 # ${basename}      - the base file name of the source, WITHOUT the extension
@@ -475,8 +483,6 @@ misc_files:
 #
 #   answers          - whether or not to generate answer notebooks. True by
 #                      default.
-#   azure_only       - keep all cells marked AZURE_ONLY. False by default.
-#   amazon_only      - keep all cells marked AMAZON_ONLY. True by default.
 #   instructor       - whether or not to generate answer notebooks. True by
 #                      default.
 #   scala            - true to generate a Scala notebook. True by default.

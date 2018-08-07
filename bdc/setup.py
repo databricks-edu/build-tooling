@@ -37,6 +37,7 @@ setup(
         'enum34 >= 1.1.6',
         'PyYAML >= 3.12',
         'parsimonious==0.8.0',
+        'WeasyPrint >= 0.42.3'
     ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

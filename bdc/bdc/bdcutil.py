@@ -18,11 +18,17 @@ from parsimonious.grammar import Grammar
 from parsimonious import grammar, expressions
 from parsimonious.exceptions import ParseError, VisitationError
 from textwrap import TextWrapper
+import mimetypes
 
 from future import standard_library
 standard_library.install_aliases()
 
 from string import Template
+
+# We're using backports.tempfile, instead of tempfile, so we can use
+# TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
+# was added in Python 3.2.
+from backports.tempfile import TemporaryDirectory
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -539,6 +545,78 @@ def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     )
 
 
+def has_extension(path):
+    '''
+    Simple convenience function that uses os.path.splitext() to determine
+    whether a file has an extension or not.
+
+    :param path: the path
+
+    :return: True or False
+    '''
+    (_, ext) = os.path.splitext(path)
+    return (ext is not None) and (len(ext) > 0)
+
+
+def is_text_file(path):
+    '''
+    Determine whether a file is a text file or not. This determination is
+    based solely on its MIME type, which is based off the file extension.
+
+    :param path: the path to the file
+
+    :return: True or False
+    '''
+    is_text = False
+    if is_html(path) or is_markdown(path):
+        is_text = True
+    else:
+        (mime_type, _) = mimetypes.guess_type(path)
+
+        if (mime_type is not None) and ('/' in mime_type):
+            (major, _) = os.path.splitext(path)
+            is_text = major == 'text'
+    return is_text
+
+
+def is_pdf(path):
+    '''
+    Determine whether a file is a PDF file or not. This determination is made
+    solely on the MIME type, which is based off the file extension.
+
+    :param path: the path to the file
+
+    :return: True or False
+    '''
+    (mime_type, _) = mimetypes.guess_type(path)
+    return mime_type == 'application/pdf'
+
+
+def is_html(path):
+    '''
+    Determine whether a file is an HTML file or not.
+
+    :param path: the path to the file
+
+    :return: True or False
+    '''
+    import mimetypes
+    (mime_type, _) = mimetypes.guess_type(path)
+    return mime_type in ('application/xhtml+xml', 'text/html')
+
+
+def is_markdown(path):
+    '''
+    Determine whether a file is a Markdown file or not.
+
+    :param path: the path to the file
+
+    :return: True or False
+    '''
+    (_, extension) = os.path.splitext(path)
+    return extension.lower() in ['.md', '.markdown']
+
+
 def markdown_to_html(markdown, html_out, html_template=None, stylesheet=None):
     """
     Convert a Markdown file to HTML, writing it to the specified HTML file.
@@ -571,6 +649,36 @@ def markdown_to_html(markdown, html_out, html_template=None, stylesheet=None):
                     css=stylesheet
                 )
             )
+
+
+def html_to_pdf(html, pdf_out):
+    '''
+    Convert an HTML document to PDF, writing it to the specified PDF file.
+
+    :param html:     the path to the HTML file
+    :param pdf_out:  the output PDF file
+    '''
+    from weasyprint import HTML
+    dom = HTML(filename=html)
+    dom.write_pdf(pdf_out)
+
+
+def markdown_to_pdf(markdown, pdf_out, html_template=None, stylesheet=None):
+    """
+    Convert a Markdown file to PDF, writing it to the specified PDF file.
+    If the stylesheet is specified, it is inserted.
+
+    :param markdown:      The path to the Markdown file
+    :param pdf_out        The path to the desired PDF output file
+    :param html_template  A template for the full HTML, or None to use the
+                          default.
+    :param stylesheet     A string containing a stylesheet to inline, or None
+                          to use the default
+    """
+    with TemporaryDirectory() as tempdir:
+        html = os.path.join(tempdir, 'out.html')
+        markdown_to_html(markdown, html, html_template, stylesheet)
+        html_to_pdf(html, pdf_out)
 
 
 def dict_get_and_del(d, key, default=None):

@@ -243,6 +243,7 @@ notebook_type_name:
 #
 # html_stylesheet - path to an HTML stylesheet to include, inline, in any HTML
 #                   generated from Markdown. OPTIONAL.
+
 markdown:
   #html_stylesheet:
 
@@ -268,17 +269,58 @@ markdown:
 src_base: /Users/bmc/src/databricks/training/modules
 
 # misc_files: Files that should be copied to the course directory. Paths
-# are relative to THIS FILE (not to <src_base>). These files are copied to
-# the destination directory and, if Markdown, also converted to HTML.
+# are relative to THIS FILE (not to <src_base>).
+#
+# NOTE: The destination is assume to be a file if it has an extension;
+# otherwise, it is assumed to be a directory. See below for implications.
+#
+# If a file is marked as a template, then any variables within it are expanded
+# before the copy. The variables can come from the "course_info" and "variables"
+# sections (e.g., ${course_info.version}, ${variables.myVar})
+#
+# Specific processing for certain source types:
+# ---------------------------------------------
+#
+# Markdown
+#
+# If the target is a directory, and the source is Markdown, the Markdown
+# document is copied (possibly expanded, if it's a template). It is also
+# converted to HTML and PDF, and those files are copied, as well. The HTML and
+# PDF files will have the same base name as the source file.
+#
+# If the target is not a directory, then the only valid targets for a Markdown
+# source file are Markdown (".md" or ".markdown"), HTML (".htm" or ".html") or
+# PDF (".pdf").
+#
+# HTML
+#
+# If the source is HTML and the destination is a directory, the HTML document
+# is copied (possibly expanded, if it's a template). It is also converted to
+# PDF, and the PDF is copied, as well. The PDF file will have the same base
+# name as the source file.
+#
+# If the target is not a directory, then the only valid targets for an HTML
+# source file are HTML (".htm" or ".html") or PDF (".pdf").
+#
+# Non-text files
+#
+# is_template is disallowed for non-text files.
+#
+# Other file types
+#
+# No special checks are made on other files.
 #
 # FIELDS:
 #
-# src   - source path to the file to be copied, relative to the directory
-#         containing this build file. REQUIRED.
-# dest  - destination path, relative to the top course directory. REQUIRED.
-# skip  - true to skip this entry, false to keep it. This field is a convenient
-#         alternative to commenting the entire entry out.
-#         OPTIONAL. Default: false
+# src      - source path to the file to be copied, relative to the directory
+#            containing this build file. REQUIRED.
+# dest     - destination path, relative to the top course directory. REQUIRED.
+#            A value of "." means "top level directory".
+# template - true if the document is a template in which variables should be
+#            substituted, as described above. OPTIONAL. Default: false
+# skip     - true to skip this entry, false to keep it. This field is a convenient
+#            alternative to commenting the entire entry out.
+#            OPTIONAL. Default: false
 #
 # SUBSTITUTIONS:
 #
@@ -299,6 +341,10 @@ misc_files:
   -
     src: InstructorFiles/Preparation.md
     dest: InstructorFiles/$filename
+  -
+    src: ../../README_template.html
+    dest: 00_README.pdf
+    template: true
 
 
 # notebooks: The notebooks to be included in the courseware. These notebooks

@@ -31,14 +31,9 @@ from ConfigParser import SafeConfigParser, NoOptionError
 from enum import Enum
 import master_parse
 from grizzled.file import eglob
-from bdc.bdcutil import (merge_dicts, bool_value, bool_field, DefaultStrMixin,
-                         variable_ref_patterns, matches_variable_ref,
-                         working_directory, move, copy, mkdirp, markdown_to_html,
-                         warning, info, emit_error, verbose, set_verbosity,
-                         verbosity_is_enabled, ensure_parent_dir_exists,
-                         parse_version_string, find_in_path, rm_rf, joinpath,
-                         dict_get_and_del, VariableSubstituter,
-                         VariableSubstituterParseError)
+from bdc.bdcutil import *
+from string import Template as StringTemplate
+
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -114,14 +109,16 @@ INSTRUCTOR_NOTES_SUBDIR = "InstructorNotes" # in the instructor directory
 TARGET_LANG = 'target_lang'
 TARGET_EXTENSION = 'target_extension'
 NOTEBOOK_TYPE = 'notebook_type'
+OUTPUT_DIR = 'output_dir'
 
 VALID_PROFILES = {'amazon', 'azure'}
 PROFILE_ABBREVIATIONS = {'amazon' : 'am', 'azure': 'az'}
 
 POST_MASTER_PARSE_VARIABLES = {
-    TARGET_LANG:         variable_ref_patterns(TARGET_LANG),
-    TARGET_EXTENSION:    variable_ref_patterns(TARGET_EXTENSION),
-    NOTEBOOK_TYPE:       variable_ref_patterns(NOTEBOOK_TYPE),
+    TARGET_LANG:       variable_ref_patterns(TARGET_LANG),
+    TARGET_EXTENSION:  variable_ref_patterns(TARGET_EXTENSION),
+    NOTEBOOK_TYPE:     variable_ref_patterns(NOTEBOOK_TYPE),
+    OUTPUT_DIR:        variable_ref_patterns(OUTPUT_DIR),
 }
 
 # EXT_LANG is used when parsing the YAML file.
@@ -222,7 +219,7 @@ class NotebookType(Enum):
         return 'NotebookType.{0}'.format(self.name)
 
 
-MiscFileData = namedtuple('MiscFileData', ('src', 'dest'))
+MiscFileData = namedtuple('MiscFileData', ('src', 'dest', 'is_template'))
 SlideData = namedtuple('SlideData', ('src', 'dest'))
 DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
 CourseInfo = namedtuple('CourseInfo', ('name', 'version', 'class_setup',
@@ -659,7 +656,8 @@ def load_build_yaml(yaml_file):
     Load the YAML configuration file that defines the build for a particular
     class. Returns a BuildData object. Throws ConfigError on error.
 
-    :param yaml_file  the path to the build file to be parsed
+    :param yaml_file   the path to the build file to be parsed
+    :param output_dir  the top-level build output directory
 
     :return the Build object, representing the parsed build.yaml
     """
@@ -716,9 +714,9 @@ def load_build_yaml(yaml_file):
                     m = matches_variable_ref(pats, adj_dest)
 
         fields = {
-            'basename':        base_no_ext,
-            'extension':       ext[1:] if ext.startswith('') else ext,
-            'filename':        base_with_ext,
+            'basename':    base_no_ext,
+            'extension':   ext[1:] if ext.startswith('') else ext,
+            'filename':    base_with_ext,
         }
         if allow_lang:
             fields['lang'] = EXT_LANG.get(ext, "???")
@@ -899,14 +897,51 @@ def load_build_yaml(yaml_file):
     def parse_misc_file(obj, extra_vars):
         src = required(obj, 'src', 'misc_files')
         dest = required(obj, 'dest', 'misc_files')
+
         if bool_field(obj, 'skip'):
             verbose('Skipping file {0}'.format(src))
             return None
         else:
-            return MiscFileData(
+            dest = parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars)
+            mf = MiscFileData(
                 src=src,
-                dest=parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars)
+                dest=dest,
+                is_template=obj.get('template', False)
             )
+            # Sanity checks: A Markdown file can be translated to Markdown,
+            # PDF or HTML. An HTML file can be translated to HTML or PDF.
+            # is_template is disallowed for non-text files.
+            if mf.is_template and (not is_text_file(src)):
+                raise BuildError(
+                    ("""Section misc_files: "{}" is marked as a template""" +
+                     "but it is not a text file.").format(src)
+                )
+
+            # We can't check to see whether the target is a directory, since
+            # nothing exists yet. But if it has an extension, we can assume it
+            # is not a directory.
+            if dest == '.':
+                # It's the top-level directory. Nothing to check.
+                pass
+            elif has_extension(dest):
+                # It's a file, not a directory.
+                if is_markdown(src):
+                    if not (is_pdf(dest) or is_html(dest) or is_markdown(dest)):
+                        raise BuildError(
+                            ("""Section misc_files: "{}" is Markdown, the """ +
+                             """target ("{}") isn't a directory and isn't """ +
+                             "PDF, HTML or Markdown.").format(src, dest)
+                        )
+                if is_html(src):
+                    if not (is_pdf(dest) or is_html(dest)):
+                        raise BuildError(
+                            ("""Section misc_files: "{}" is HTML, the """ +
+                             """target ("{}") isn't a directory and isn't """ +
+                             "PDF or HTML.").format(src, dest)
+                        )
+
+            return mf
+
 
     def parse_dataset(obj, extra_vars):
         src = required(obj, 'src', 'notebooks')
@@ -1131,25 +1166,155 @@ def parse_args():
     from docopt import docopt
     return docopt(USAGE, version=VERSION)
 
+def expand_template(src_template_file, build, tempdir):
+    variables = {}
+    if build.variables:
+        for k, v in build.variables.items():
+            variables['variables.' + k] = str(v)
 
-def copy_info_file(src_file, target_file, build):
+    for k, v in build.course_info._asdict().items():
+        if v is None:
+            continue
+        if isinstance(v, Enum):
+            v = v.value
+        variables['course_info.' + k] = str(v)
+
+    class DotTemplate(StringTemplate):
+        idpattern = r'[_a-z][_a-z0-9.]*'
+
+    output = path.join(tempdir, path.basename(src_template_file))
+    with codecs.open(src_template_file, mode='r', encoding='utf8') as i:
+        s = DotTemplate(i.read())
+
+        with codecs.open(output, mode='w', encoding='utf8') as o:
+            o.write(s.substitute(variables))
+
+    return output
+
+# For copy_info_files and related logic:
+#
+# This is a table of special source file type to target file type
+# processors. If the source type has a key in this table, then it
+# is processed specially, and there MUST be an entry for the target type,
+# or an error occurs. If the source type has no key in this table, then
+# it is just copied as is. See _get_type().
+INFO_PROCESSORS = {
+    # Table that maps a source type and a target type to a consistent
+    # three-arg lambda (src, dest, build) for generating the target.
+
+    # src_type -> target_type -> lambda
+    # The type is also the extension
+    'md':
+        {
+            'html':
+                lambda src, dest, build: markdown_to_html(
+                    src, dest, stylesheet=build.markdown.html_stylesheet
+                ),
+            'pdf':
+                 lambda src, dest, build: markdown_to_pdf(
+                     src, dest, stylesheet=build.markdown.html_stylesheet
+                 ),
+             'md':
+                 lambda src, dest, build: copy(src, dest)
+         },
+    'html':
+        {
+            'pdf':
+                lambda src, dest, build: html_to_pdf(src, dest),
+            'html':
+                lambda src, dest, build: copy(src, dest)
+        }
+}
+
+def _get_type(f):
+    if is_markdown(f):
+        return 'md'
+    if is_pdf(f):
+        return 'pdf'
+    if is_html(f):
+        return 'html'
+    return None
+
+def _convert_and_copy_info_file(src, dest, build):
+    '''
+    Workhorse function: Takes the source and target, looks up how to process
+    them, and processes them.
+
+    :param src:    the source file
+    :param dest:   the destination file (not directory)
+    :param build:  the parsed build information
+
+    '''
+    src_type = _get_type(src)
+    dest_type = _get_type(dest)
+
+    if src_type is None:
+        # Not a special type that we have to convert. Just copy.
+        copy(src, dest)
+    elif dest_type is None:
+        # Source type is a special type (Markdown, HTML), but we don't know the
+        # destination type. This is a bug, since this error should've been
+        # caught during build file parsing..
+        raise BuildError(
+            '(BUG: Should have been caught earlier) "{}" -> "{}".'.format(
+                src, dest
+            )
+        )
+    else:
+        proc = INFO_PROCESSORS.get(src_type, {}).get(dest_type, None)
+        if proc is None:
+            raise BuildError(
+                '(BUG: No processor) "{}" -> "{}".'.format(
+                    src, dest
+                )
+            )
+        proc(src, dest, build)
+
+
+def copy_info_file(src_file, target, is_template, build):
     """
     Copy a file that contains some kind of readable information (e.g., a
     Markdown file, a PDF, etc.). If the file is a Markdown file, it is also
     converted to HTML and copied.
     """
-    copy(src_file, target_file)
-    src_base = path.basename(src_file)
-    (src_simple, ext) = path.splitext(src_base)
-    if (ext == '.md') or (ext == '.markdown'):
-        target_full = path.abspath(target_file)
-        html_out = joinpath(path.dirname(target_full),
-                                src_simple + '.html')
-        markdown_to_html(
-            markdown=src_file,
-            html_out=html_out,
-            html_template=None,
-            stylesheet=build.markdown.html_stylesheet)
+    with TemporaryDirectory() as tempdir:
+        if is_template:
+            real_src = expand_template(src_file, build, tempdir)
+        else:
+            real_src = src_file
+
+        if has_extension(target):
+            # Copy and/or generate one file.
+            _convert_and_copy_info_file(real_src, target, build)
+
+        else:
+            # Is a directory. What we generate depends on the input.
+            # By this point, it has to exist.
+            if not path.isdir(target):
+                raise BuildError(
+                    '(BUG: Target directory not there!) "{}" -> "{}"'.format(
+                        src_file, target
+                    )
+                )
+            src_type = _get_type(src_file)
+            if src_type is None:
+                # Just a copy.
+                base = path.basename(src_file)
+                copy(real_src, path.join(target, base))
+            else:
+                dest_map = INFO_PROCESSORS.get(src_type)
+                if dest_map is None:
+                    raise BuildError(
+                        '(BUG: Processor mismatch) "{}" -> "{}".'.format(
+                            src_file, target
+                        )
+                    )
+
+                for dest_type in dest_map.keys():
+                    (base, _) = path.splitext(path.basename(src_file))
+                    out = path.join(target, base + '.' + dest_type)
+                    _convert_and_copy_info_file(real_src, out, build)
+
 
 
 def process_master_notebook(dest_root, notebook, src_path, build, master_profile):
@@ -1374,7 +1539,7 @@ def copy_instructor_notes(build, dest_root):
                               rel_dir,
                               f)
                 verbose("Copying {0} to {1}".format(s, t))
-                copy_info_file(s, t, build)
+                copy_info_file(s, t, False, build)
                 continue
 
 
@@ -1424,7 +1589,7 @@ def copy_misc_files(build, dest_root):
         for f in build.misc_files:
             s = joinpath(build.course_directory, f.src)
             t = joinpath(dest_root, f.dest)
-            copy_info_file(s, t, build)
+            copy_info_file(s, t, f.is_template, build)
 
 
 def copy_datasets(build, dest_root):
@@ -1509,7 +1674,7 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
         rm_rf(labs_full_path)
         rm_rf(instructor_labs)
 
-def build_course(opts, build):
+def build_course(opts, build, dest_dir):
 
     if build.course_info.deprecated:
         die('{0} is deprecated and cannot be built.'.format(
@@ -1517,11 +1682,6 @@ def build_course(opts, build):
         ))
 
     gendbc = find_in_path('gendbc')
-
-    dest_dir = (
-        opts['--dest'] or
-        joinpath(os.getenv("HOME"), "tmp", "curriculum", build.course_id)
-    )
 
     verbose('Publishing to "{0}"'.format(dest_dir))
     if path.isdir(dest_dir):
@@ -1853,7 +2013,12 @@ def main():
         die('{} does not exist.'.format(course_config))
 
     try:
+
         build = load_build_yaml(course_config)
+        dest_dir = (
+                opts['--dest'] or
+                joinpath(os.getenv("HOME"), "tmp", "curriculum", build.course_id)
+        )
 
         if opts['--list-notebooks']:
             list_notebooks(build)
@@ -1864,7 +2029,7 @@ def main():
         elif opts['--download']:
             download_notebooks(build, opts['SHARD_PATH'], opts['--dprofile'])
         else:
-            build_course(opts, build)
+            build_course(opts, build, dest_dir)
 
     except ConfigError as e:
         die('Error in "{0}": {1}'.format(course_config, e.message))

@@ -1096,6 +1096,44 @@ def load_build_yaml(yaml_file):
              '"ilt" and "self-paced".').format(course_type, course_type)
         )
 
+    def parse_course_info(course_info_cfg, section_name):
+        ilt_only = {
+            'class_setup':     None,
+            'schedule':        None,
+            'instructor_prep': None
+        }
+
+        name = required(course_info_cfg, 'name', section_name)
+        version = required(course_info_cfg, 'version', section_name)
+        ilt_only['class_setup'] = course_info_cfg.get('class_setup')
+        ilt_only['schedule'] = course_info_cfg.get('schedule')
+        ilt_only['instructor_prep'] = course_info_cfg.get('prep')
+        type = parse_course_type(course_info_cfg, section_name)
+        deprecated = course_info_cfg.get('deprecated', False)
+        copyright_year = course_info_cfg.get('copyright_year',
+                                             str(datetime.now().year))
+
+        if type == master_parse.CourseType.SELF_PACED:
+            for k, v in ilt_only.items():
+                if v:
+                    warning(
+                      'course_info.{} is ignored for self-paced courses'.format(
+                          k
+                      )
+                )
+                ilt_only[k] = None
+
+        return CourseInfo(
+            name=name,
+            version=version,
+            class_setup=ilt_only['class_setup'],
+            schedule=ilt_only['schedule'],
+            instructor_prep=ilt_only['instructor_prep'],
+            type=type,
+            deprecated=deprecated,
+            copyright_year=copyright_year
+        )
+
     # Main function logic
 
     verbose("Loading {0}...".format(yaml_file))
@@ -1121,17 +1159,7 @@ def load_build_yaml(yaml_file):
     misc_files_cfg = contents.get('misc_files', [])
     datasets_cfg = contents.get('datasets', [])
     course_info_cfg = required(contents, 'course_info', 'build')
-    course_info = CourseInfo(
-        name=required(course_info_cfg, 'name', 'course_info'),
-        version=required(course_info_cfg, 'version', 'course_info'),
-        class_setup=course_info_cfg.get('class_setup'),
-        schedule=course_info_cfg.get('schedule'),
-        instructor_prep=course_info_cfg.get('prep'),
-        type=parse_course_type(course_info_cfg, 'course_info'),
-        deprecated=course_info_cfg.get('deprecated', False),
-        copyright_year=course_info_cfg.get('copyright_year',
-                                           str(datetime.now().year)),
-    )
+    course_info = parse_course_info(course_info_cfg, 'course_info')
 
     src_base = required(contents, 'src_base', 'build')
     build_yaml_full = path.abspath(yaml_file)

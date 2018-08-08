@@ -804,7 +804,7 @@ def load_build_yaml(yaml_file):
 
         return res
 
-    def parse_master_section(data, section_name):
+    def parse_master_section(data, section_name, build_yaml_dir):
         # Parse the master section, returning a (possibly partial)
         # dictionary (NOT a MasterParseInfo object).
         extra_keys = MasterParseInfo.extra_keys(data)
@@ -817,27 +817,51 @@ def load_build_yaml(yaml_file):
         if heading:
             heading = parse_dict(heading, MasterParseInfo.VALID_HEADING_FIELDS,
                                  section_name, 'master.heading')
-            if heading.get('path') == 'DEFAULT':
+            heading_path = heading.get('path')
+            if heading_path == 'DEFAULT':
                 heading['path'] = None
+            elif heading_path is not None:
+                # Resolve the path, relative to the build file.
+                if not path.isabs(heading_path):
+                    heading_path = path.abspath(joinpath(build_yaml_dir, heading_path))
+                if not path.exists(heading_path):
+                    raise ConfigError(
+                        'Footer file "{}" does not exist.'.format(heading_path)
+                    )
+                heading['path'] = heading_path
+
             master['heading'] = heading
 
         footer = master.get('footer')
         if footer:
             footer = parse_dict(footer, MasterParseInfo.VALID_FOOTER_FIELDS,
                                 section_name, 'master.footer')
-            if footer.get('path') == 'DEFAULT':
+            footer_path = footer.get('path')
+            if footer_path == 'DEFAULT':
                 footer['path'] = None
+            elif footer_path is not None:
+                # Resolve the path, relative to the build field.
+                if not path.isabs(footer_path):
+                    footer_path = path.abspath(joinpath(build_yaml_dir, footer_path))
+                if not path.exists(footer_path):
+                    raise ConfigError(
+                        'Footer file "{}" does not exist.'.format(footer_path)
+                    )
+                footer['path'] = footer_path
+
             master['footer'] = footer
+
+
 
         return master
 
-    def parse_notebook_defaults(contents, section_name):
+    def parse_notebook_defaults(contents, section_name, build_yaml_dir):
         cfg = contents.get(section_name)
         if not cfg:
             return NotebookDefaults(dest=None, master=None)
 
         master = parse_master_section(dict_get_and_del(cfg, 'master', {}),
-                                      'notebook_defaults')
+                                      'notebook_defaults', build_yaml_dir)
         variables = dict_get_and_del(cfg, 'variables', {})
 
         res = NotebookDefaults(dest=dict_get_and_del(cfg, 'dest', None),
@@ -848,7 +872,7 @@ def load_build_yaml(yaml_file):
 
         return res
 
-    def parse_notebook(obj, notebook_defaults, extra_vars):
+    def parse_notebook(obj, notebook_defaults, extra_vars, build_yaml_dir):
         bad_dest = re.compile('^\.\./*|^\./*')
         src = required(obj, 'src', 'notebooks section')
         section = 'Notebook "{0}"'.format(src)
@@ -869,7 +893,8 @@ def load_build_yaml(yaml_file):
 
         master = MasterParseInfo() # defaults
         master.update_from_dict(notebook_defaults.master)
-        nb_master = parse_master_section(obj.get('master', {}), section)
+        nb_master = parse_master_section(obj.get('master', {}), section,
+                                         build_yaml_dir)
         master.update_from_dict(nb_master)
 
         _, dest_ext = os.path.splitext(dest)
@@ -1242,7 +1267,8 @@ def load_build_yaml(yaml_file):
     src_base = path.abspath(joinpath(build_yaml_dir, src_base))
     use_profiles = bool_field(contents, 'use_profiles')
 
-    notebook_defaults = parse_notebook_defaults(contents, 'notebook_defaults')
+    notebook_defaults = parse_notebook_defaults(contents, 'notebook_defaults',
+                                                build_yaml_dir)
 
     if slides_cfg:
         slides = parse_file_section(slides_cfg, parse_slide, variables)
@@ -1263,7 +1289,8 @@ def load_build_yaml(yaml_file):
 
     if notebooks_cfg:
         notebooks = parse_file_section(notebooks_cfg, parse_notebook,
-                                       notebook_defaults, variables)
+                                       notebook_defaults, variables,
+                                       build_yaml_dir)
 
         # If there are any profiles in the notebooks, and use_profiles is off,
         # abort.

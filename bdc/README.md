@@ -373,6 +373,14 @@ Scala _and_ Python), then the pattern _must_ contain the `${target_lang}`
 substitution and should also contain the `${target_extension}` substitution,
 to differentiate the destination. 
 
+In short:
+
+- If you specify `${target_lang}` in the dest value, the target master parse
+  language is substituted, for each language-generated notebook.
+- If you don't specify `${target_lang}`, and there are multiple languages
+  selected in the "master" section, you'll get an error.
+
+
 For example, here's a sample entry for a master-parsed notebook:
 
 ```yaml
@@ -541,6 +549,130 @@ master:
   footer:
     path: misc_files/footer.md
 ```
+##### Complete `notebooks` example
+
+Here's an example of a notebooks section:
+
+```yaml
+notebooks:
+  - src: notebooks/Delta/01-Introduction.py
+    dest: '$target_lang/$notebook_type/$notebook_type/$basename.$target_extension'
+    master:
+      enabled: true
+      scala: true
+      python: true
+      answers: true
+      instructor: false
+
+  - src: notebooks/02-Architecture.py
+    dest: '$target_lang/$notebook_type/$notebook_type/$basename.$target_extension'
+    master:
+      enabled: true
+      scala: true
+      python: true
+      answers: true
+      instructor: false
+
+  - src: notebooks/03-Tuning.py
+    dest: '$target_lang/$notebook_type/$notebook_type/$basename.$target_extension'
+    master:
+      enabled: true
+      scala: true
+      python: true
+      answers: true
+      instructor: false
+
+  - src: notebooks/04-Debugging.py
+    dest: '$target_lang/$notebook_type/$notebook_type/$basename.$target_extension'
+    master:
+      enabled: true
+      scala: true
+      python: true
+      answers: true
+      instructor: false
+
+  - src: notebooks/05-Capstone-Project.py
+    dest: '$target_lang/$notebook_type/$notebook_type/$basename.$target_extension'
+    master:
+      enabled: true
+      scala: true
+      python: true
+      answers: true
+      instructor: false
+```
+
+There's a lot of repetition in that configuration. In the next section, we'll
+see how to factor that out.
+
+#### Notebook Defaults
+
+If you find yourself repeating a lot of configuration data in your `notebooks`
+section, you can pull the repeated elements out and put them in a special
+`notebook_defaults` section. `notebook_defaults` defines default values
+for any notebook. You can override those values, if you want, on a
+per-notebook basis. `notebook_defaults` can contain default values for
+the `master` section, the `heading` section, the `footer` section, and the
+`dest` value.
+
+This time, let's start with an example. Let's see how a `notebook_defaults`
+section can simplify the
+[complete notebooks section example](#complete-notebooks-example),
+above.
+
+```yaml
+notebook_defaults:
+  dest: '$target_lang/$notebook_type/$notebook_type/$basename.$target_extension'
+  master:
+    enabled: true
+    scala: true
+    python: true
+    answers: true
+    instructor: false
+
+notebooks:
+  - src: notebooks/Delta/01-Introduction.py
+
+  - src: notebooks/02-Architecture.py
+
+  - src: notebooks/03-Tuning.py
+
+  - src: notebooks/04-Debugging.py
+
+  - src: notebooks/05-Capstone-Project.py
+```
+
+Notice how the `dest` and `master` items are now specified once, in the
+`notebook_defaults` section, vastly simplifying the list of notebooks.
+You can also choose to override the settings, on a per notebook basis.
+For example, suppose we want to enable instructor for everything _but_ the
+last notebook (the "capstone project"). We can do that by adjusting the
+`notebook_defaults` to enable instructor notebooks, then overriding that
+default for just the last notebook:
+
+```yaml
+notebook_defaults:
+  dest: '$target_lang/$notebook_type/$notebook_type/$basename.$target_extension'
+  master:
+    enabled: true
+    scala: true
+    python: true
+    answers: true
+    instructor: true
+
+notebooks:
+  - src: notebooks/Delta/01-Introduction.py
+
+  - src: notebooks/02-Architecture.py
+
+  - src: notebooks/03-Tuning.py
+
+  - src: notebooks/04-Debugging.py
+
+  - src: notebooks/05-Capstone-Project.py
+    master:
+      instructor: false
+```
+
 
 ### Bundles
 

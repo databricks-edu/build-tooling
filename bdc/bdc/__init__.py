@@ -888,7 +888,7 @@ def load_build_yaml(yaml_file):
                         ('Notebook "{0}": When multiple master parser languages ' +
                          'are used, you must substitute ${1} in the ' +
                          'destination.').format(
-                            src, TARGET_LANG, TARGET_EXTENSION
+                            src, TARGET_LANG
                         )
                     )
         else:

@@ -324,6 +324,70 @@ This section discusses the various notebook-related settings in `build.yaml`.
 
 Note that DBC file generation is discussed in [Output Generation](#output-generation).
 
+#### The `src_base` configuration item
+
+`src_base` defines the root location of the notebooks. Use `.` if the notebook
+locations are relative to the directory containing `build.yaml`. Otherwise,
+specify the location as a relative path. Each notebook's `src` attribute
+will be appended to the value of `src_base` to locate the notebook file.
+
+Examples:
+
+```yaml
+src_base: .              # notebooks are under the directory containing the build file
+src_base: ../../modules  # notebooks are under the "modules" directory
+```
+
+#### The `notebooks` section
+
+The `notebooks` section is a list of notebooks to be processed and included
+in the course. Each notebook is parsed and stored in the output DBC file(s).
+Optionally, source notebooks can be processed by the
+[master parser](../master_parse/README.md), producing multiple output notebooks.
+
+The notebooks are assumed to be in source-export format.
+
+**WARNING**: The notebooks should be encoded in ASCII or UTF-8. Other encodings
+(e.g., ISO-8859.1 or CP-1252) might cause the build to abort.
+
+Each notebook in the `notebooks` section can have the following fields.
+
+**`src`**: (REQUIRED) The path to the notebook, relative to `src_base`.
+
+**`dest`**: (REQUIRED) The destination path within the DBC file and within the
+student lab directory. (See [Output Generation](#output-generation).) For
+notebooks _not_ processed by the master parser, this destination is the path
+to which to copy the source notebook.
+
+For notebooks that are to be run through the master parser (see below), the
+destination format depends on how many different output languages are being
+generated. If the master parser is generate output for just a single target
+language (such as Python), the destination should be a directory.
+
+If the master parser is generating output for multiple target languages (e.g., 
+Scala _and_ Python), then the pattern _must_ contain the `${target_lang}` 
+substitution and should also contain the `${target_extension}` substitution,
+to differentiate the destination. 
+
+For example, here's a sample entry for a master-parsed notebook:
+
+```yaml
+-
+  src: Introduction.py
+  dest: ${target_lang}/Introduction.${target_extension}
+  master:
+   enabled: true
+   scala: true
+   python: true
+```
+
+Here's one for a non-master parsed notebook (i.e., one that is just copied):
+
+```yaml
+-
+  src: Introduction.py
+  dest: $filename
+```
 
 ### Bundles
 

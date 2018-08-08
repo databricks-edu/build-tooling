@@ -14,6 +14,8 @@ Quick links:
 For usage instructions, see . For a description of the
 build file syntax, see [Build File](#build_file).
 
+---
+
 ## Installation
 
 #### Install the build tools
@@ -21,6 +23,8 @@ build file syntax, see [Build File](#build_file).
 Once you've activated the appropriate Python virtual environment,
 see the [master README](../README.md) for a single command that will install
 all the build tools.
+
+---
 
 ## Build File
 
@@ -731,8 +735,67 @@ notebooks:
       instructor: false
 ```
 
-
 ### Bundles
+
+For some courses (e.g., self-paced), it's useful to be able to generate an
+_output bundle_ once the build is complete. `bdc` will do that for you, if you
+include a `bundle` section in `build.yaml`.
+
+A _bundle_ is just a zip file containing other files. Currently, a bundle
+_cannot_ contain a directory; it can only contain files. (That restriction may
+be lifted in the future, if the need arises.)
+
+The `bundle` section consists of a series of (`src`, `dest`) pairs. The `src`
+is a file _from the build output directory_ that is to be copied into the
+zip file. The `dest` is the name (and, if desired, path) _within_ the zip
+file.
+
+If [build profiles](#build-profiles) are being used, `bdc` will generate one
+bundle for each profile—that is, one bundle for "amazon" and another bundle
+for "azure". If build profiles are not being used, then `bdc` will generate
+just one bundle.
+
+Formally, a bundle has the following fields:
+
+**`zipfile`**: (OPTIONAL) The name of the zip file to be generated. This is
+not a path; it's a simple file name. It is generated in the top build
+directory (if build profiles aren't being used) or in each profile directory
+(if build profiles are used). If not defined, `bdc` will use
+`${course_info.name}-${course_info.version}.zip`.
+
+**`files`**: The list of (`src`/`dest`) pairs to be zipped up. If empty, then
+no bundle is generated. `src` is relative to the top-level build directory (if
+build profiles aren't being used) or to the profile directory (if profiles are
+being used).
+
+Within `dest`, the following substitutions are permitted:
+
+| VARIABLE       | DESCRIPTION
+| -------------- | -----------
+| `${basename}`  | the base file name of the `src`, _without_ the extension
+| `${filename}`  | the base file name of the `src`, _with_ the extension
+| `${extension}` | the `src` file's extension
+| your variables | variables from the `variables` section.
+
+An example will help clarify this section:
+
+```yaml
+bundle:
+  zipfile: course.zip
+  files:
+    -
+      src: 00_README.pdf
+      dest: $filename
+    -
+      src: Labs.dbc
+      dest: Lessons.dbc
+```
+
+In this example, the file `00_README.pdf` will be copied into the zip file
+(using the same name), and the `Labs.dbc` file will be copied into the zip
+file (but as `Lessons.dbc`). Instead of the default zip file name, `bdc` will
+use `course.zip`.
+
 
 ### Variable substitution
 
@@ -938,6 +1001,8 @@ basename: 01-Why-Spark
 * `${filename/\d/X/g}` yields "XX-Why-Spark.py"
 * `${basename/(\d+)(-.*)$/$1s$2/` yields "01s-Why-Spark"
 * `${filename/\.py//}` yields "01-Why-Spark"
+
+---
 
 ## Usage
 

@@ -107,7 +107,7 @@ course_info:
   type: ilt 
 ```
 
-### Documents
+### A Note about Documents
 
 `bdc` can copy documents into the build output directory, optionally
 generating different kinds of output formats. This section describes
@@ -289,6 +289,64 @@ The `autos.csv` dataset is ignored, because `skip` is set to `true`.
 The `pets.csv` dataset is copied to `<build_output>/Datasets/pets/pets.csv`.
 Its `LICENSE.md` and `README.md` files are copied to the same directory,
 as are their (generated) HTML and PDF counterparts.
+
+#### Miscellaneous files and templates
+
+The `misc_files` section provides the mechanism for copying any other kind of
+non-notebook file into the build directory. ([Notebooks](#notebooks) are
+handled specially.)
+
+`misc_files` consists of a list of source documents, along with instructions
+on how to copy them. Each file section can have the following fields:
+
+**`src`**: (REQUIRED) The path to the source file, relative to the directory
+containing `build.yaml`.
+  
+**`dest`** (REQUIRED) The destination path, relative to the top of the
+build output directory (or the profile subdirectory, if
+[Build Profiles](#build-profiles) are enabled). A value of "." means
+"top-level directory". This parameter can be a file or a directory. If
+it is a directory, you _must_ set `dest_is_dir` to true.
+  
+The following substitutions are permitted within `dest`:
+
+| SUBSTITUTION   | DESCRIPTION
+| -------------- | -----------
+| `${basename}`  | the base file name of the source, _without_ the extension
+| `${filename}`  | the base file name of the source, _with_ the extension
+| `${extension}` | the file extension
+| your variables | Any variables defined in the `variables` section, without prefix. 
+
+
+**`dest_is_dir`**: (OPTIONAL) `true` indicates that `dest` is intended to
+be a directory; `false` indicates that it is a file. Defaults to `false`.
+  
+**`template`**: (OPTIONAL) `true` indicates that the source file is actually
+a template, containing `$` substitutions to be made. If the file is not a
+text file (as determined by its extension), then `template` cannot be set
+to `true`.
+
+The following substitutions are permitted within template files:
+
+| SUBSTITUTION           | DESCRIPTION
+| ---------------------- | -----------
+| `${course_info.<var>}` | Any variable from the `course_info` section. e.g., `${course_info.name}`
+| `${variables.<var>}`   | Any variable from the `variables` section. e.g., `${variables.myVar}`
+
+
+In addition to template processing, `bdc` performs other processing when
+copying miscellaneous files.
+
+- If `src` is an HTML file and `dest` is a directory, the HTML file is copied
+  to the destination (after optionally being expanded from a template). Then, 
+  a PDF is generated from the HTML and placed in the same `dest` directory.
+
+- If `src` is a Markdown file (that is, it has extension `.md` or `.markdown`)
+  and `dest` is a directory, the Markdown file is copied to the destination
+  (after optionally being expanded from a template). Then, an HTML version
+  is generated and copied to `dest`. Finally, a PDF is generated from the HTML
+  and copied to `dest`.
+
 
 ### Build Profiles
 

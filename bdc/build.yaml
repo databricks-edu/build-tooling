@@ -358,7 +358,7 @@ src_base: /Users/bmc/src/databricks/training/modules
 #
 # Non-text files
 #
-# is_template is disallowed for non-text files.
+# template is disallowed for non-text files.
 #
 # Other file types
 #

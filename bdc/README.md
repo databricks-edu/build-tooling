@@ -263,8 +263,8 @@ abort if those files are not present and non-empty.
 
 | VARIABLE       | DESCRIPTION
 | -------------- | -----------
-| `${basename}`  | the base file name of the `src`, WITHOUT the extension
-| `${filename}`  | the base file name of the `src`, WITH the extension
+| `${basename}`  | the base file name of the `src`, _without_ the extension
+| `${filename}`  | the base file name of the `src`, _with_ the extension
 | `${extension}` | the `src` file's extension
 
 For example:
@@ -342,8 +342,8 @@ src_base: ../../modules  # notebooks are under the "modules" directory
 
 The `notebooks` section is a list of notebooks to be processed and included
 in the course. Each notebook is parsed and stored in the output DBC file(s).
-Optionally, source notebooks can be processed by the
-[master parser](../master_parse/README.md), producing multiple output notebooks.
+Optionally, source notebooks can be processed by the [master parser][],
+producing multiple output notebooks.
 
 The notebooks are assumed to be in source-export format.
 
@@ -352,9 +352,13 @@ The notebooks are assumed to be in source-export format.
 
 Each notebook in the `notebooks` section can have the following fields.
 
-**`src`**: (REQUIRED) The path to the notebook, relative to `src_base`.
+##### `src`
+ 
+REQUIRED: The path to the notebook, relative to `src_base`.
 
-**`dest`**: (REQUIRED) The destination path within the DBC file and within the
+##### `dest`
+
+REQUIRED: The destination path within the DBC file and within the
 student lab directory. (See [Output Generation](#output-generation).) For
 notebooks _not_ processed by the master parser, this destination is the path
 to which to copy the source notebook.
@@ -372,21 +376,170 @@ to differentiate the destination.
 For example, here's a sample entry for a master-parsed notebook:
 
 ```yaml
--
-  src: Introduction.py
-  dest: ${target_lang}/Introduction.${target_extension}
-  master:
-   enabled: true
-   scala: true
-   python: true
+src: Introduction.py
+dest: ${target_lang}/Introduction.${target_extension}
+master:
+  enabled: true
+  scala: true
+  python: true
 ```
 
-Here's one for a non-master parsed notebook (i.e., one that is just copied):
+Here is one for a non-master parsed notebook (i.e., one that is just copied):
 
 ```yaml
--
-  src: Introduction.py
-  dest: $filename
+src: Introduction.py
+dest: $filename
+```
+
+(If this seems confusing, just try different variations, set `keep_labs_dir`
+to `true`, and examine the output directory after running a build. The behavior
+will become clear.)
+
+Within the `dest` field, the following substitutions are always honored:
+
+| VARIABLE       | DESCRIPTION
+| -------------- | -----------
+| `${basename}`  | the base file name of the `src`, _without_ the extension
+| `${filename}`  | the base file name of the `src`, _with_ the extension
+| `${extension}` | the `src` file's extension
+
+In addition, if master parsing is enabled for the notebook, the following
+substitutions are also permitted: 
+
+| VARIABLE              | DESCRIPTION
+| --------------------- | -----------
+| `${target_lang}`      | the output notebook's language (e.g, "Scala", "Python", etc.) 
+| `${target_extension}` | the output notebook's extension, which may differ from the source extension
+| `${notebook_type}`    | the notebook type ("exercises", "answers", "instructor"). Also see `notebook_type_name`, below.
+
+
+##### `skip`
+
+OPTIONAL: If set to `true`, the notebook is skipped. Defaults to `false`.
+Setting `skip` to `true` is a convenient way to ignore a notebook without
+commenting it out. (You can also comment it out, if you prefer.)
+
+##### `upload_download`
+
+OPTIONAL: `true` if this notebook should be uploaded and downloaded with the
+`bdc` upload (`--upload`) or download (`--download`) commands are specified.
+Defaults to `true`.
+
+Setting this value to `false` is useful (and, often, necessary) if you're
+double-processing a notebook for some reason.
+
+##### `only_in_profile`
+
+Mark the notebook as either 'amazon' or 'azure', indicating that it is 
+Amazon-only or Azure-only.  If this value is set, the master parser must be 
+enabled _and_ `use_profiles` must be `true`. (See [Build Profiles](#build-profiles).)
+
+##### The `master` subsection
+
+The `master` subsection, if present and enabled within a notebook, marks the 
+notebook as a master notebook to be run through the [master parser][]. This
+section contains the configuration parameters for the master parser, telling it
+how to process the notebook.
+
+If the `master` section is missing or disabled, the source notebook is just
+copied to the output directory.
+
+The following parameters are supported.
+
+**NOTE**: There's no option to enable or disable generation of exercises
+notebooks. Those notebooks are _always_ generated, if master parsing is
+enabled.
+
+###### `enabled`
+
+OPTIONAL: `true` to enable master parsing, `false` to disable it. Default:
+`false`.
+
+The easiest way to enable master parsing with all the defaults is:
+
+```yaml
+master:
+  enabled: true
+```
+
+###### `answers`
+
+OPTIONAL: `true` to enabled generation of the answers notebooks, `false`
+to disable generation of answers notebooks. Default: `true`.
+
+###### `instructor`
+
+OPTIONAL: `true` to enabled generation of the instructor notebooks, `false`
+to disable generation of instructor notebooks. Default: `true`.
+
+###### `scala`
+
+OPTIONAL: `true` to enable generation of Scala notebooks, `false`
+to disable generation of Scala notebooks. Default: `true`.
+
+###### `python`
+
+OPTIONAL: `true` to enable generation of Python notebooks, `false`
+to disable generation of Scala notebooks. Default: `true`.
+
+###### `r`
+
+OPTIONAL: `true` to enable generation of R notebooks, `false`
+to disable generation of R notebooks. Default: `false`.
+
+###### `sql`
+
+OPTIONAL: `true` to enable generation of SQL notebooks, `false`
+to disable generation of SQL notebooks. Default: `false`.
+
+###### `encoding_in`
+
+OPTIONAL: The encoding to use when reading the master notebook. Default: UTF-8.
+
+###### `encoding_out`
+
+OPTIONAL: The encoding to use when writing the output notebooks. Default: UTF-8.
+
+###### `heading`
+
+`heading` is an OPTIONAL subsection that defines whether to generate a notebook
+heading cell in each output notebook. Heading supports two fields:
+
+| FIELD     | MEANING
+| --------- | -------
+| `path`    | Path to a notebook heading file. The path is relative to the build file directory. The file must be HTML or Markdown and is inserted into a `%md-sandbox` cell at the top of each notebook. If not specified, or if set to "DEFAULT", an internal "Databricks Academy" default is used.
+| `enabled` | Whether or not to insert the heading. `true` by default. One use case for `false` is to override [notebook defaults](#notebook-defaults) (see below) for a notebook.
+
+Example:
+
+```yaml
+src: Foo.scala
+dest: ${target_lang}/Foo.${target_extension}
+master:
+  enabled: true
+  heading:
+    path: misc_files/heading.md
+```
+
+###### `footer`
+
+`footer` is an OPTIONAL subsection that defines whether to generate a notebook
+footer cell in each output notebook. Heading supports two fields:
+
+| FIELD     | MEANING
+| --------- | -------
+| `path`    | Path to a notebook footer file. The path is relative to the build file directory. The file must be HTML or Markdown and is inserted into a `%md-sandbox` cell at the bottom of each notebook. If not specified, or if set to "DEFAULT", an internal default (a copyright cell) is used.
+| `enabled` | Whether or not to insert the heading. `true` by default. One use case for `false` is to override [notebook defaults](#notebook-defaults) (see below) for a notebook.
+
+Example:
+
+```yaml
+src: Foo.scala
+dest: ${target_lang}/Foo.${target_extension}
+master:
+  enabled: true
+  footer:
+    path: misc_files/footer.md
 ```
 
 ### Bundles
@@ -786,3 +939,4 @@ home = /Users/user@example.net
 ```
 
 [build.yaml]: build.yaml
+[master parser]: ../master_parse/README.md

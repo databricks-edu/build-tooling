@@ -457,9 +457,8 @@ misc_files:
 #              double-processing a notebook.)
 #
 # only_in_profile - Mark the notebook as either 'amazon' or 'azure', indicating
-#              that it is Amazon-only or Azure-only. The presence of profiles
-#              in any notebook settings causes a multi-profile build. If this
-#              value is set, the master parser must be enabled.
+#              that it is Amazon-only or Azure-only. If this value is set,
+#              master parsing must be enabled AND use_profiles must be true.
 #
 # master     - If this section is present, it marks the notebook as a master
 #              notebook to be processed by the master parse tool, and it
@@ -468,9 +467,6 @@ misc_files:
 #              the master parse tool; false otherwise. OPTIONAL.
 #
 #              The following parameters are supported.
-#
-#              Note: When master parsing is enabled, instructor, exercises
-#              and answer notebooks are ALWAYS generated.
 #
 #   enabled          - true to enable master processing, false to disable.
 #                      Default: false.
@@ -483,7 +479,7 @@ misc_files:
 #
 #   answers          - whether or not to generate answer notebooks. True by
 #                      default.
-#   instructor       - whether or not to generate answer notebooks. True by
+#   instructor       - whether or not to generate instructor notebooks. True by
 #                      default.
 #   scala            - true to generate a Scala notebook. True by default.
 #   python           - true to generate a Python notebook. True by default.
@@ -499,6 +495,7 @@ misc_files:
 #                      Markdown and is inserted into a "%md-sandbox" cell.
 #                      Default: An internal default is used. You can explicitly
 #                      force the default by setting the path to "DEFAULT".
+#                      The path is relative to the build file.
 #     enabled        - Whether or not to add a heading to the notebook. True
 #                      by default. One use case for setting it to false:
 #                      Notebooks that are only intended to be run via "%run"
@@ -508,7 +505,8 @@ misc_files:
 #                      internal default copyright footer is used. The copyright
 #                      year is taken from the "course_info.copyright_year"
 #                      setting. You can explicitly force the default by setting
-#                      the path to "DEFAULT".
+#                      the path to "DEFAULT".  The path is relative to the build
+#                      file.
 #     enabled        - Whether or not to add a footer to the notebook. True by
 #                      default.
 #

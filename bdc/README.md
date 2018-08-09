@@ -1390,36 +1390,6 @@ the above string will render as:
 This is A Very Cool Course, version 1.0.0
 ```
 
-#### Example
-
-For a more complete example, consider this Markdown cell:
-
-```
-%md
-
-In this {{notebook_language}} notebook,
-you can access your data by mounting your
-{{#amazon}}
-S3 bucket
-{{/amazon}}
-{{#azure}}
-Azure blob store
-{{/azure}}
-to DBFS.
-```
-
-When generated with an Amazon profile, in a Scala output notebook, this
-cell would become:
-
-
-```
-%md
-
-In this Scala notebook,
-you can access your data by mounting your
-S3 bucket
-to DBFS.
-```
 
 [Mustache]: http://mustache.github.io/mustache.5.html
 [build.yaml]: build.yaml

@@ -1348,13 +1348,17 @@ Here's an example of conditional content:
 
 ```
 {{#amazon}}
-Rendered if amazon is defined.
+Please run this course in Databricks, using the Amazon AWS cloud.
 {{/amazon}}
+{{#azure}}
+Please run this course using Azure Databricks.
+{{/azure}}
 ```
 
 If the variable "amazon" has a non-empty value (or is `true`), then the
-string "Rendered if amazon is defined" is included in the cell. Otherwise,
-the entire construct is omitted.
+first string will be included; otherwise, it'll be suppressed. Likewise, if
+the variable "azure" has a non-empty value (or is `true`), then the
+second string will be included; otherwise, it'll be suppressed.
 
 This is Mustache's form of an _if_ statement. There is no _else_ statement.
 There's a kind of _if not_, however: Simply replace the `#` with a `^`.
@@ -1376,13 +1380,14 @@ Variable substitution is quite simple: Just enclose the variable's name in
 `{{` and `}}`. For example:
 
 ```
-This is a {{notebook_language}} notebook.
+This is {{course_info.title}}, version {{course_info.version}}
 ```
 
-If `notebook_language` is set to "Scala", that line will render as:
+If the course title is "A Very Cool Course", and the course version is 1.0.0,
+the above string will render as:
 
 ```
-This is a Scala notebook.
+This is A Very Cool Course, version 1.0.0
 ```
 
 #### Example

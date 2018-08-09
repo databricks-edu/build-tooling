@@ -976,7 +976,7 @@ def load_build_yaml(yaml_file):
                                       extra_vars=extra_vars)
             )
 
-    def parse_bundle(obj, output_info, extra_vars):
+    def parse_bundle(obj, output_info, course_info, extra_vars):
         if not obj:
             return None
 
@@ -984,7 +984,16 @@ def load_build_yaml(yaml_file):
         if not files:
             return None
 
-        zipfile = obj.get('zipfile', course_info.course_id + '.zip')
+        zip_vars = {
+            'course_name': course_info.name,
+            'course_version': course_info.version
+        }
+        zipfile = obj.get('zipfile')
+        if zipfile:
+            zipfile = StringTemplate(zipfile).substitute(zip_vars)
+        else:
+            zipfile = course_info.course_id + '.zip'
+
         file_list = []
         src_vars = {}
         src_vars.update(extra_vars)
@@ -1331,7 +1340,8 @@ def load_build_yaml(yaml_file):
             )
 
     output_info = parse_output_info(contents)
-    bundle_info = parse_bundle(contents.get('bundle'), output_info, variables)
+    bundle_info = parse_bundle(contents.get('bundle'), output_info,
+                               course_info, variables)
 
     data = BuildData(
         build_file_path=build_yaml_full,

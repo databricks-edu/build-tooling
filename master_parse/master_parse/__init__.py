@@ -410,7 +410,6 @@ class NotebookGenerator(object):
         :param notebook_code:  the code type of the notebook (Scala, R, etc.)
         :param params:         parsed (usually command-line) parameters
         '''
-        print("NotebookGenerator: code={}".format(notebook_code))
         base_keep = set(CommandLabel.__members__.values())
         self.keep_labels = self._get_keep_labels(params,
                                                  notebook_kind,

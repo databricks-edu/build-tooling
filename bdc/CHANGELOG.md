@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.23.1
+
+- Fixed to pass `notebook_defaults.variables` variables into the master
+  parser, making them available to Markdown cell templates.
+  
 ### Version 1.23.0
 
 - Fixed a (newly introduced) bug that caused an abort when copying instructor

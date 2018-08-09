@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.23.0"
+VERSION = "1.23.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -539,7 +539,7 @@ class NotebookData(object, DefaultStrMixin):
         self.dest = dest
         self.master = master
         self.upload_download = upload_download
-        self.variables = variables
+        self.variables = variables or {}
         self.only_in_profile = only_in_profile
 
     def master_enabled(self):
@@ -1624,6 +1624,9 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
 
     verbose("Running master parse on {0}".format(src_path))
     master = notebook.master
+    extra_template_vars = {}
+    extra_template_vars.update(build.variables)
+    extra_template_vars.update(notebook.variables)
     with TemporaryDirectory() as tempdir:
         try:
             params = master_parse.Params(
@@ -1650,6 +1653,7 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
                 course_type=build.course_info.type,
                 enable_debug=master.debug,
                 enable_templates=master.enable_templates,
+                extra_template_vars=extra_template_vars
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)

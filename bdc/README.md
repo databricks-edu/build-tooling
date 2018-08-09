@@ -111,6 +111,8 @@ the following fields:
 
 - **`name`**: (REQUIRED) The name of the course (e.g., "Databricks-Delta"). The 
   name should not have any white space, as it is used to construct file names.
+- **`title`**: (OPTIONAL) A human-readable title for the course, which can
+  contain white space (unlike `name`). Default: The value of `name`.
 - **`version`**: (REQUIRED) The (semantic) version number of the course (e.g., 
   "1.0.1").
 - **`type`**: (REQUIRED) The course type. Legal values are "ilt" (for instructor-led
@@ -140,6 +142,7 @@ Example sections:
 ```yaml
 course_info:
   name: Databricks-Delta
+  title: Databricks Delta
   version: 1.0.0
   type: self-paced
 ```
@@ -891,8 +894,16 @@ Formally, a bundle has the following fields:
 **`zipfile`**: (OPTIONAL) The name of the zip file to be generated. This is
 not a path; it's a simple file name. It is generated in the top build
 directory (if build profiles aren't being used) or in each profile directory
-(if build profiles are used). If not defined, `bdc` will use
-`${course_info.name}-${course_info.version}.zip`.
+(if build profiles are used).
+
+The following variables are available for substitution within this value:
+
+| VARIABLE            | DESCRIPTION
+| ------------------- | -----------
+| `${course_name}`    | the name of the course, from `course_info.name`
+| `${course_version}` | the course version, from `course_info.version`
+
+If `zipfile` is not defined, `bdc` will use `${course_name}-${course_version}.zip`.
 
 **`files`**: The list of (`src`/`dest`) pairs to be zipped up. If empty, then
 no bundle is generated. `src` is relative to the top-level build directory (if

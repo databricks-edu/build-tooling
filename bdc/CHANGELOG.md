@@ -21,6 +21,7 @@
   to HTML and PDF and copied.  
 - HTML generated from Markdown now gets anchor links for each generated HTML
   header.
+- `course_info` now supports a `title` attribute.
 
 ### Version 1.21.0
 

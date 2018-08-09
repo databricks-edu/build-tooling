@@ -246,7 +246,7 @@ class OutputInfo(DefaultStrMixin):
 
 class CourseInfo(DefaultStrMixin):
     def __init__(self, name, version, class_setup, schedule, instructor_prep,
-                 copyright_year, deprecated, type):
+                 copyright_year, deprecated, type, title=None):
         self.name = name
         self.version = version
         self.class_setup = class_setup
@@ -255,6 +255,7 @@ class CourseInfo(DefaultStrMixin):
         self.copyright_year = copyright_year
         self.deprecated = deprecated
         self.type = type
+        self.title = title or name
 
     @property
     def course_id(self):
@@ -1200,6 +1201,7 @@ def load_build_yaml(yaml_file):
 
         return CourseInfo(
             name=name,
+            title=course_info_cfg.get('title', name),
             version=version,
             class_setup=ilt_only['class_setup'],
             schedule=ilt_only['schedule'],

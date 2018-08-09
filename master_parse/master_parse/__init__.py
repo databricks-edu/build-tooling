@@ -28,7 +28,7 @@ from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
 
-VERSION = "1.15.2"
+VERSION = "1.16.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -289,7 +289,9 @@ class Params(object):
                  encoding_out=DEFAULT_ENCODING_OUT,
                  enable_verbosity=False,
                  enable_debug=False,
-                 copyright_year=None):
+                 copyright_year=None,
+                 enable_templates=False,
+                 extra_template_vars=None):
         self.path = path
         self.output_dir = output_dir or DEFAULT_OUTPUT_DIR
         self.databricks = databricks
@@ -317,6 +319,8 @@ class Params(object):
         self.course_type = course_type
         assert(target_profile in set(TargetProfile))
         self.target_profile = target_profile
+        self.enable_templates = enable_templates
+        self.extra_template_vars = extra_template_vars or {}
 
         for purpose, file in (('Notebook footer', notebook_footer_path),
                               ('Notebook header', notebook_heading_path)):
@@ -403,9 +407,10 @@ class NotebookGenerator(object):
 
         :param notebook_kind:  the NotebookKind
         :param notebook_user:  the NotebookUser
-        :param notebook_code:  the parsed notebook code
+        :param notebook_code:  the code type of the notebook (Scala, R, etc.)
         :param params:         parsed (usually command-line) parameters
         '''
+        print("NotebookGenerator: code={}".format(notebook_code))
         base_keep = set(CommandLabel.__members__.values())
         self.keep_labels = self._get_keep_labels(params,
                                                  notebook_kind,
@@ -471,10 +476,42 @@ class NotebookGenerator(object):
                 )
 
     def generate(self, header, commands, input_name, params, parts=True):
+        '''
+        Generate output notebook.
+
+        :param header:      the notebook header
+        :param commands:    the array of Command objects
+        :param input_name:  the source notebook name
+        :param params:      parsed command line parameters
+        :param parts:       whether to honor parts or not
+        '''
 
         _verbose('Generating {0} notebook(s) for "{1}"'.format(
             str(self.notebook_user), input_name
         ))
+
+        if params.enable_templates:
+            # Process the cell as a template.
+            new_commands = []
+            for cmd in commands:
+                if cmd.code.is_markdown():
+                    new_content = _process_cell_template(
+                        cmd.content, self.notebook_code, params,
+                    )
+                    new_commands.append(Command(
+                        part=cmd.part,
+                        code=cmd.code,
+                        labels=cmd.labels,
+                        content=new_content
+                    ))
+                else:
+                    new_commands.append(cmd)
+            commands= new_commands
+
+        #if params.enable_templates and cell_state.command_code.is_markdown():
+        #    cell_state.command_content = self._process_template(
+        #        cell_state.command_content, params
+        #    )
 
         is_IPython = self.notebook_kind == NotebookKind.IPYTHON
         is_instructor_nb = self.notebook_user == NotebookUser.INSTRUCTOR
@@ -999,6 +1036,46 @@ def make_magic(regex_token, must_be_word=False):
     regex_text = r'\s*' + adj_token + r'\s*(.*)$'
     return re.compile(make_magic_text(regex_text))
 
+def _process_cell_template(contents, language, params):
+    '''
+    Runs a cell's content through the template processor.
+
+    :param contents: the contents, a list of lines with no trailing newline
+    :param language: output language (as a CommandCode) of the notebook being
+                     generated
+    :param params:   the parsed command line parameters
+
+    :return: the new content, as a list of lines with no trailing newline
+    '''
+    import pystache
+    s = '\n'.join(contents)
+    if params.target_profile == TargetProfile.NONE:
+        amazon = ''
+        azure = ''
+    elif params.target_profile == TargetProfile.AMAZON:
+        amazon = 'Amazon'
+        azure = ''
+    else:
+        amazon = ''
+        azure = 'Azure'
+
+    if language == CommandCode.SQL:
+        lang_string = "SQL"
+    else:
+        lang_string = language.value.capitalize()
+
+    vars = {
+        'amazon': amazon,
+        'azure': azure,
+        'copyright_year': params.copyright_year,
+        'notebook_language': lang_string
+    }
+
+    vars.update(params.extra_template_vars)
+    new_content = pystache.render(s, vars)
+    return new_content.split('\n')
+
+
 
 _databricks = make_re(r'Databricks')
 _command = make_re(r'COMMAND')
@@ -1266,7 +1343,7 @@ class Parser:
         self.part = 0
         self.header = None
 
-    def generate_commands(self, file_name):
+    def generate_commands(self, file_name, params):
         """Generates file content for DBC and ipynb use.
 
         Note:
@@ -1311,6 +1388,7 @@ class Parser:
                           cell_state.command_code,
                           cell_state.command_labels,
                           cell_state.command_content)
+
             commands.append(cmd)
 
         _, file_extension = os.path.splitext(file_name)
@@ -1475,7 +1553,7 @@ def process_notebooks(params):
 
     parser = Parser()
     for db_src in files:
-        header, commands = parser.generate_commands(db_src)
+        header, commands = parser.generate_commands(db_src, params)
         for notebook in notebooks:
             notebook.generate(header, commands, db_src, params)
 
@@ -1500,31 +1578,55 @@ def main():
     targetGroup.add_argument('-ip', '--ipython',
                              help='generate ipython notebook(s)',
                              action='store_true')
+
     codeGroup = arg_parser.add_argument_group('code')
-    codeGroup.add_argument('-sc', '--scala',
-                           help='generate scala notebook(s)',
-                           action='store_true')
     codeGroup.add_argument('-py', '--python',
                            help='generate python notebook(s)',
                            action='store_true')
     codeGroup.add_argument('-r', '--rproject',
                            help='generate r notebook(s)',
                            action='store_true')
+    codeGroup.add_argument('-sc', '--scala',
+                           help='generate scala notebook(s)',
+                           action='store_true')
     codeGroup.add_argument('-sq', '--sql',
                            help='generate sql notebook(s)',
                            action='store_true')
+
     userGroup = arg_parser.add_argument_group('user')
-    userGroup.add_argument('-in', '--instructor',
-                           help='generate instructor notebook(s)',
+    userGroup.add_argument('-an', '--answers',
+                           help='generate answers notebook(s)',
                            action='store_true')
     userGroup.add_argument('-ex', '--exercises',
                            help='generate exercises notebook(s)',
                            action='store_true')
-    userGroup.add_argument('-an', '--answers',
-                           help='generate answers notebook(s)',
+    userGroup.add_argument('-in', '--instructor',
+                           help='generate instructor notebook(s)',
                            action='store_true')
+
     arg_parser.add_argument('-cc', '--creativecommons',
                             help='add by-nc-nd cc 4.0 license',
+                            action='store_true')
+    arg_parser.add_argument('--copyright',
+                            help='Set the copyright year for any generated ' +
+                                 'copyright notices. Default is current year.',
+                            default=datetime.now().year,
+                            action='store',
+                            metavar='YEAR')
+    arg_parser.add_argument('-ct', '--course-type',
+                            help='Course type, either "ilt" or "self-paced". ' +
+                                 'Default: "self-paced"',
+                            metavar="<coursetype>",
+                            choices=('ilt', 'self-paced'),
+                            default='self-paced')
+    arg_parser.add_argument('-d', '--dir',
+                            help="Base output directory. Default: {0}".format(
+                                DEFAULT_OUTPUT_DIR),
+                            action='store',
+                            dest='output_dir',
+                            metavar="OUTPUT_DIR")
+    arg_parser.add_argument('-D', '--debug',
+                            help="Enable debug messages",
                             action='store_true')
     arg_parser.add_argument('-ei', '--encoding-in',
                             help="input file encoding",
@@ -1536,12 +1638,18 @@ def main():
                             action='store',
                             default=DEFAULT_ENCODING_OUT,
                             metavar="ENCODING")
-    arg_parser.add_argument('--copyright',
-                            help='Set the copyright year for any generated ' +
-                                 'copyright notices. Default is current year.',
-                            default=datetime.now().year,
-                            action='store',
-                            metavar='YEAR')
+    arg_parser.add_argument('--footer',
+                            help='By default, even if you specify -nf, this ' +
+                                 'tool does not add the notebook footer to ' +
+                                 'bottom of generated notebooks. If you ' +
+                                 'specify this option, it will do so.',
+                            action='store_true')
+    arg_parser.add_argument('--heading',
+                            help='By default, even if you specify -nh, this ' +
+                                 'tool does not add the notebook heading to ' +
+                                 'top of generated notebooks. If you specify ' +
+                                 'this option, it will do so.',
+                            action='store_true')
     arg_parser.add_argument('-nf', '--notebook-footer',
                             help='A file containing Markdown and/or HTML, to ' +
                                  'be used as the bottom-of-notebook footer, ' +
@@ -1550,12 +1658,6 @@ def main():
                                  'is used. See also --footer and --copyright.',
                             default=None,
                             metavar="<file>")
-    arg_parser.add_argument('--footer',
-                            help='By default, even if you specify -nf, this ' +
-                                 'tool does not add the notebook footer to ' +
-                                 'bottom of generated notebooks. If you ' +
-                                 'specify this option, it will do so.',
-                            action='store_true')
     arg_parser.add_argument('-nh', '--notebook-heading',
                             help='A file containing Markdown and/or HTML, ' +
                                  'to be used as the top-of-notebook heading, ' +
@@ -1564,42 +1666,70 @@ def main():
                                  '--heading.',
                             default=None,
                             metavar="<file>")
+    arg_parser.add_argument('--templates',
+                            help='Enable cell templates. If enabled, each ' +
+                                 'cell is run through a Mustache template ' +
+                                 'parser, and internal variables (plus ' +
+                                 'passed via --variables) are available).',
+                            action='store_true')
     arg_parser.add_argument('-tp', '--target-profile',
                             help="Target output profile, if any. Valid " +
                                  "values: amazon, azure",
                             metavar="<profile>",
                             choices=('amazon', 'azure'),
                             default=None)
-    arg_parser.add_argument('-ct', '--course-type',
-                            help='Course type, either "ilt" or "self-paced". ' +
-                                 'Default: "self-paced"',
-                            metavar="<coursetype>",
-                            choices=('ilt', 'self-paced'),
-                            default='self-paced')
-    arg_parser.add_argument('--heading',
-                            help='By default, even if you specify -nh, this ' +
-                                 'tool does not add the notebook heading to ' +
-                                 'top of generated notebooks. If you specify ' +
-                                 'this option, it will do so.',
-                            action='store_true')
-    arg_parser.add_argument('-d', '--dir',
-                            help="Base output directory. Default: {0}".format(
-                                DEFAULT_OUTPUT_DIR),
-                            action='store',
-                            dest='output_dir',
-                            metavar="OUTPUT_DIR")
-    arg_parser.add_argument('-D', '--debug',
-                            help="Enable debug messages",
-                            action='store_true')
     arg_parser.add_argument('-v', '--verbose',
                             help="Enable verbose messages.",
                             action='store_true')
+    arg_parser.add_argument('--variable',
+                            help='Specify an additional variable for the ' +
+                                 'cell template processor. Ignored unless ' +
+                                 '--template is specified. Can be specified ' +
+                                 'multiple times. Format: "var=value", "var", '+
+                                 'or "!var". "var=value" defines key "var" ' +
+                                 'with string value "value". "var" defines ' +
+                                 'key "var" with value True. "!var" defines ' +
+                                 'key "var" with value False.',
+                            metavar="<var:value>",
+                            action='append',
+                            default=None)
+
 
     args = arg_parser.parse_args()
 
     if args.version:
         print(VERSION)
         sys.exit(0)
+
+    if (not args.templates) and args.variable:
+        print("WARNING: --variable is ignored unless --template is specified.")
+
+    extra_template_vars = None
+    if args.templates:
+        if args.variable:
+            extra_template_vars = {}
+            valid_key = re.compile('^[a-zA-Z][a-zA-Z0-9_]*$')
+            for s in args.variable:
+                kv = s.split('=')
+                key = value = None
+                length = len(kv)
+                if length == 2:
+                    key, value = kv
+                elif (length == 1):
+                    k = kv[0].strip()
+                    if len(k) == 0:
+                        arg_parser.error('Badly formatted variable: "{}"'.format(kv))
+                    elif k[0] == '!':
+                        key, value = k[1:], False
+                    else:
+                        key, value = k, True
+                else:
+                    arg_parser.error('Badly formatted variable: "{}"'.format(kv))
+
+                if not valid_key.search(key):
+                    arg_parser.error('Invalid variable key: {}'.format(key))
+
+                extra_template_vars[key] = value
 
     if not (args.databricks or args.ipython):
         arg_parser.error('at least one of -db or -ip is required')
@@ -1645,7 +1775,9 @@ def main():
         enable_debug=args.debug,
         copyright_year=args.copyright,
         target_profile=args.target_profile,
-        course_type=course_type
+        course_type=course_type,
+        enable_templates=args.templates,
+        extra_template_vars=extra_template_vars
     )
 
     try:

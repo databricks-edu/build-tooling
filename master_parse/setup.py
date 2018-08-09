@@ -28,7 +28,10 @@ setup(
     packages=['master_parse'],
     version=version,
     description='Master parse tool',
-    install_requires=['enum34 >= 1.1.6'],
+    install_requires=[
+        'enum34 >= 1.1.6',
+        'pystache >= 0.5.4',
+    ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',
     license="Creative Commons Attribution-NonCommercial 4.0 International",

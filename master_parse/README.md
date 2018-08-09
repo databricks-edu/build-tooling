@@ -10,6 +10,8 @@ It can be used as a command or as a library.
 
 The tool is usable from either Python 2 or Python 3.
 
+---
+
 ## Installation
 
 To install, run
@@ -19,6 +21,8 @@ python setup.py install
 ```
 
 The setup file installs all required packages, as well as `master_parse`.
+
+---
 
 ## Command line use
 
@@ -92,6 +96,8 @@ More than one option may be specified.
   This option is mutually exclusive with `<filename>`.
 
 
+---
+
 ## Library use
 
 ```python
@@ -102,7 +108,9 @@ master_parse.process_notebooks(args)
 The arguments correspond to the command line parameters. See the source for
 details.
 
-## Notebook metadata
+---
+
+## Notebook Processing
 
 The tool looks for various labels, as well as language-specific tokens, within
 notebook cells.
@@ -438,3 +446,114 @@ We're talking about life here, people. This is some important stuff. Pay attenti
 Currently, these tokens render as follows, in a `%md-sandbox` cell:
 
 ![](https://raw.githubusercontent.com/bmc/build-tooling/master/master_parse/images/tokens-rendered.png)
+
+### Cells as templates
+
+The master parser supports treating Markdown cells (`%md` and `%md-sandbox`
+cells) as _templates_. This feature is off by default, but it can be enabled
+via the `--templates` command line option or via a parameter setting to the
+API.
+
+When templates are enabled, Markdown cells are treated as 
+[Mustache][] templates. Mustache is a simple template language. Its use, in 
+notebook cells, allows you to:
+ 
+- **do conditional substitution**. For instance, insert this sentence if
+  building for Azure, but use this other sentence if building for Amazon.
+- **do token substitution**. For instance, substitute the current value of
+  this parameter here.
+
+The master parser defines four variables automatically:
+
+- `amazon`: Set to "Amazon" (which also evaluates as `true` in a template),
+  if building for Amazon. Otherwise, set to an empty string (which also 
+  evaluates as `false` in a template).
+- `azure`: Set to "Azure" (which also evaluates as `true` in a template),
+  if building for Azure. Otherwise, set to an empty string (which also 
+  evaluates as `false` in a template).
+- `copyright_year`: The value of the copyright year parameter.
+- `notebook_language`: The programming language of the notebook being
+  generated (e.g., "Scala", "Python", "R", "SQL".)
+
+In addition, any variables defined in the `bdc` build file's
+[`variables` section](../bdc/README.md#variables-and-cell-templates).
+
+#### Basic Mustache Syntax
+
+Mustache is a very simple templating language. For full details, see
+the [Mustache][] manual page. For our purposes, two most useful constructs
+are conditional content and variable substitution.
+
+Here's an example of conditional content:
+
+```
+{{#amazon}}
+Rendered if amazon is defined.
+{{/amazon}}
+```
+
+If the variable "amazon" has a non-empty value (or is `true`), then the
+string "Rendered if amazon is defined" is included in the cell. Otherwise,
+the entire construct is omitted.
+
+This is Mustache's form of an _if_ statement. There is no _else_ statement.
+There's a kind of _if not_, however: Simply replace the `#` with a `^`.
+
+```
+{{^amazon}}
+Rendered if amazon is not defined.
+{{/amazon}}
+```
+
+This construct also works inline:
+
+```
+Mount your {{#amazon}}S3 bucket{{/amazon}}{{#azure}}blob store{{/azure}}
+to DBFS.
+```
+
+Variable substitution is quite simple: Just enclose the variable's name in
+`{{` and `}}`. For example:
+
+```
+This is a {{notebook_language}} notebook.
+```
+
+If `notebook_language` is set to "Scala", that line will render as:
+
+```
+This is a Scala notebook.
+```
+
+#### Example
+
+For a more complete example, consider this Markdown cell:
+
+```
+%md
+
+In this {{notebook_language}} notebook,
+you can access your data by mounting your
+{{#amazon}}
+S3 bucket
+{{/amazon}}
+{{#azure}}
+Azure blob store
+{{/azure}}
+to DBFS.
+```
+
+When generated with an Amazon profile, in a Scala output notebook, this
+cell would become:
+
+
+```
+%md
+
+In this Scala notebook,
+you can access your data by mounting your
+S3 bucket
+to DBFS.
+```
+
+[Mustache]: http://mustache.github.io/mustache.5.html

@@ -1,5 +1,12 @@
 # Change Log for Master Parse Tool
 
+**Version 1.16.0**
+
+If templates are enabled (the `--template` command line parameter, or an
+option in the `Params` object for the API call), Markdown cells are run through
+a [Mustache](http://mustache.github.io/mustache.5.html) template processor.
+This step allows conditional text and variable substitution.
+
 **Version 1.15.2:**
 
 Fixed a runnable TODO cell bug: Using a label (e.g., `ALL_NOTEBOOKS`) in a 

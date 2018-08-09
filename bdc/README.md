@@ -1147,6 +1147,58 @@ basename: 01-Why-Spark
 * `${basename/(\d+)(-.*)$/$1s$2/` yields "01s-Why-Spark"
 * `${filename/\.py//}` yields "01-Why-Spark"
 
+### Basic Mustache Syntax
+
+Mustache is a very simple template language. For full details, see
+the [Mustache][] manual page. For our purposes, two most useful constructs
+are conditional content and variable substitution.
+
+Here's an example of conditional content:
+
+```
+{{#amazon}}
+Please run this course in Databricks, using the Amazon AWS cloud.
+{{/amazon}}
+{{#azure}}
+Please run this course using Azure Databricks.
+{{/azure}}
+```
+
+If the variable "amazon" has a non-empty value (or is `true`), then the
+first string will be included; otherwise, it'll be suppressed. Likewise, if
+the variable "azure" has a non-empty value (or is `true`), then the
+second string will be included; otherwise, it'll be suppressed.
+
+This is Mustache's form of an _if_ statement. There is no _else_ statement.
+There's a kind of _if not_, however: Simply replace the `#` with a `^`.
+
+```
+{{^amazon}}
+Rendered if amazon is not defined.
+{{/amazon}}
+```
+
+This construct also works inline:
+
+```
+Mount your {{#amazon}}S3 bucket{{/amazon}}{{#azure}}blob store{{/azure}}
+to DBFS.
+```
+
+Variable substitution is quite simple: Just enclose the variable's name in
+`{{` and `}}`. For example:
+
+```
+This is {{course_info.title}}, version {{course_info.version}}
+```
+
+If the course title is "A Very Cool Course", and the course version is 1.0.0,
+the above string will render as:
+
+```
+This is A Very Cool Course, version 1.0.0
+```
+
 ---
 
 ## Usage
@@ -1336,58 +1388,6 @@ For example:
 host = https://trainers.cloud.databricks.com
 token = lsakdjfaksjhasdfkjhaslku89iuyhasdkfhjasd
 home = /Users/user@example.net
-```
-
-## Basic Mustache Syntax
-
-Mustache is a very simple template language. For full details, see
-the [Mustache][] manual page. For our purposes, two most useful constructs
-are conditional content and variable substitution.
-
-Here's an example of conditional content:
-
-```
-{{#amazon}}
-Please run this course in Databricks, using the Amazon AWS cloud.
-{{/amazon}}
-{{#azure}}
-Please run this course using Azure Databricks.
-{{/azure}}
-```
-
-If the variable "amazon" has a non-empty value (or is `true`), then the
-first string will be included; otherwise, it'll be suppressed. Likewise, if
-the variable "azure" has a non-empty value (or is `true`), then the
-second string will be included; otherwise, it'll be suppressed.
-
-This is Mustache's form of an _if_ statement. There is no _else_ statement.
-There's a kind of _if not_, however: Simply replace the `#` with a `^`.
-
-```
-{{^amazon}}
-Rendered if amazon is not defined.
-{{/amazon}}
-```
-
-This construct also works inline:
-
-```
-Mount your {{#amazon}}S3 bucket{{/amazon}}{{#azure}}blob store{{/azure}}
-to DBFS.
-```
-
-Variable substitution is quite simple: Just enclose the variable's name in
-`{{` and `}}`. For example:
-
-```
-This is {{course_info.title}}, version {{course_info.version}}
-```
-
-If the course title is "A Very Cool Course", and the course version is 1.0.0,
-the above string will render as:
-
-```
-This is A Very Cool Course, version 1.0.0
 ```
 
 

@@ -64,6 +64,46 @@ bdc_min_version: "1.21"
 master_parse_min_version: "1.14"
 ```
 
+### Introduction to variable substitution, plus the `variables` section
+
+Certain `build.yaml` parameters permit _variable substitution_, using the
+Python [template string](https://docs.python.org/2.7/library/string.html#template-strings)
+syntax. `bdc` supports certain hard-coded variables, as noted in the various
+sections, below.
+
+You can also supply your own custom variables, which can be substituted in most
+places that support variables. Custom variables are also passed into the
+master parser, if [master parsing is enabled](#the-master-subsection).
+
+The variable substitution syntax is powerful. See
+[Variable Substitution](#variable-substitution) for complete details.
+
+#### The `variables` section
+
+To define your own variables, just include a `variables` section in your
+`build.yaml`. Each field within that section defines a name/value pair,
+available for substitution.
+
+For example:
+
+```yaml
+variables:
+  author: Databricks
+  revised: 2018-09-30
+```
+
+That section defines two substitutions: `${author}`, which will be replaced
+with the string "Databricks", and `${revised}`, which will be replaced with
+the string "2018-09-30".
+
+#### Variables and Cell Templates
+
+The [master parser][] allows Markdown cells to be
+[processed as templates][cell templates].
+Any variables you define in your `variables` section will be passed to the
+master parser and will be available for substitution in your Markdown
+cells—provided you [enable Markdown cell templates](#enable-templates).
+
 ### Course info
 
 The `course_info` section defines information about the course. It contains
@@ -480,7 +520,7 @@ substitutions are also permitted:
 | --------------------- | -----------
 | `${target_lang}`      | the output notebook's language (e.g, "Scala", "Python", etc.) 
 | `${target_extension}` | the output notebook's extension, which may differ from the source extension
-| `${notebook_type}`    | the notebook type ("exercises", "answers", "instructor"). Also see `notebook_type_name`, below.
+| `${notebook_type}`    | the notebook type ("exercises", "answers", "instructor"). Also see [`notebook_type_name`](#notebook-type-name), below.
 
 
 ##### `skip`
@@ -562,6 +602,12 @@ to disable generation of R notebooks. Default: `false`.
 OPTIONAL: `true` to enable generation of SQL notebooks, `false`
 to disable generation of SQL notebooks. Default: `false`.
 
+###### `enable_templates`
+
+OPTIONAL: If `true`, then
+[Markdown cells will be processed as templates][cell templates]. Otherwise,
+they won't. Default: `false`.
+
 ###### `encoding_in`
 
 OPTIONAL: The encoding to use when reading the master notebook. Default: UTF-8.
@@ -611,6 +657,91 @@ master:
   footer:
     path: misc_files/footer.md
 ```
+
+##### `notebook_type_name`
+
+This section defines the value of the built-in `${notebook_type}` variable.
+As the master parser processes a notebook, it can generate three basic types
+of notebooks: exercises, answers and instructor notebooks. In some places,
+notably `dest` values, you can use`${notebook_type}` to substitute the
+current value. For example, consider this `notebook` definition:
+
+```yaml
+notebooks:
+  -
+    src: 01-Intro.py
+    dest: $target_lang/01-Intro-$notebook_type.$target_extension
+    master:
+      enabled: true
+```
+
+With that definition, the master parser will create six notebooks:
+
+- A Scala exercises notebook
+- A Python exercises notebook
+- A Scala answers notebook
+- A Python answers notebook
+- A Scala instructor notebook
+- A Python instructor notebook
+
+As it generates each of those notebooks, it will expand the `dest` pattern
+accordingly. It will generate the following output notebooks:
+
+| OUTPUT NOTEBOOK            | GENERATED PARTIAL PATH
+| -------------------------- | ----------------------
+| Scala exercises notebook   | `Scala/01-Intro-exercises.scala` (in student directory)
+| Python exercises notebook  | `Python/01-Intro-exercises.py` (in student directory)
+| Scala answers notebook     | `Scala/01-Intro-exercises.scala` (in student directory)
+| Python answers notebook    | `Python/01-Intro-exercises.py` (in student directory)
+| Scala instructor notebook  | `Scala/01-Intro.scala` (in instructor directory)
+| Python instructor notebook | `Python/01-Intro.py` (in instructor directory)
+
+From that example, we can see that the default values for `${notebook_type}`
+are:
+
+| NOTEBOOK TYPE  | GENERATED PARTIAL PATH
+| -------------- | ----------------------
+| exercises      | "exercises"
+| answers        | "answers"
+| instructor     | ""
+
+The `notebook_type_name` section lets you change one or all of those
+values. For instance, suppose we wanted a layout where the exercises notebooks
+are at the top level of the labs directory and the answers notebooks
+are below them, in a "Solutions" subdirectory. But we still want the
+instructor notebooks at the top-level of the instructor labs directory.
+We can achieve that by changing our notebook destination and by adjusting
+the notebook type names, as shown:
+
+```yaml
+notebook_type_name:
+  answers: Solutions
+  instructor: ''
+  exercises: ''
+
+notebooks:
+  -
+    src: 01-Intro.py
+    dest: $target_lang/$notebook_type/01-Intro.$target_extension
+    master:
+      enabled: true
+
+```
+
+
+With this change, we'll get the following layout for our generated notebooks:
+
+
+| OUTPUT NOTEBOOK            | GENERATED PARTIAL PATH
+| -------------------------- | ----------------------
+| Scala exercises notebook   | `Scala/01-Intro.scala` (in student directory)
+| Python exercises notebook  | `Python/01-Intro.py` (in student directory)
+| Scala answers notebook     | `Scala/Solutions/01-Intro.scala` (in student directory)
+| Python answers notebook    | `Python/Solutions/01-Intro.py` (in student directory)
+| Scala instructor notebook  | `Scala/01-Intro.scala` (in instructor directory)
+| Python instructor notebook | `Python/01-Intro.py` (in instructor directory)
+
+
 ##### Complete `notebooks` example
 
 Here's an example of a notebooks section:
@@ -796,8 +927,7 @@ In this example, the file `00_README.pdf` will be copied into the zip file
 file (but as `Lessons.dbc`). Instead of the default zip file name, `bdc` will
 use `course.zip`.
 
-
-### Variable substitution
+### Variable Substitution
 
 Many (but not all) items in a `build.yaml` file support variable substitution.
 This section discusses that feature. 
@@ -1195,3 +1325,4 @@ home = /Users/user@example.net
 
 [build.yaml]: build.yaml
 [master parser]: ../master_parse/README.md
+[cell templates](../master_parse/README.md#cells-as-templates).

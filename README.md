@@ -7,6 +7,9 @@ curriculum development within the Education department at Databricks.
 * `gendbc`: Create Databricks DBC files from the command line.
 * `master_parse`: The master notebook parse tool and module.
 
+Unless you're actually developing the build tools, you'll probably never run
+`master_parse` or `gendbc` manually; `bdc` will do that for you.
+
 ## Prerequisites
 
 * Ensure that you have a Python 2 environment (preferably, an activated virtual
@@ -20,6 +23,10 @@ curriculum development within the Education department at Databricks.
 
 * [Creating the virtual python environment](#virtual-python-environment)
 * [Installing the build tools](#installing-the-build-tools)
+* [`bdc` Documentation](bdc/README.md), which includes documentation of the build
+  file format
+* [`master_parse` Documentation](master_parse/README.md), which tells you all
+  the cool things the master parser supports within your notebooks.
 
 ## Virtual Python Environment
 

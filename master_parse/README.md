@@ -450,18 +450,29 @@ Currently, these tokens render as follows, in a `%md-sandbox` cell:
 ### Cells as templates
 
 The master parser supports treating Markdown cells (`%md` and `%md-sandbox`
-cells) as _templates_. This feature is off by default, but it can be enabled
-via the `--templates` command line option or via a parameter setting to the
-API.
+cells) as _templates_. This feature is disabled by default, but it can be 
+enabled:
+
+- on a per-notebook basis in `build.yaml`, by setting the 
+  [`enable_templates`](../bdc/README.md#enable_templates) field in the
+  `master` section;
+- via the `--templates` command line option, if you're calling the master
+  parser from the command line; or
+- via a parameter setting to the API, if you're calling the master parser
+  programmatically.
 
 When templates are enabled, Markdown cells are treated as 
-[Mustache][] templates. Mustache is a simple template language. Its use, in 
-notebook cells, allows you to:
+[Mustache][] templates. Its use, in notebook cells, allows you to:
  
 - **do conditional substitution**. For instance, insert this sentence if
   building for Azure, but use this other sentence if building for Amazon.
 - **do token substitution**. For instance, substitute the current value of
   this parameter here.
+  
+See [below](#basic_mustache_syntax) for a brief introduction to Mustache
+syntax.
+
+#### Variables you can test or substitute
 
 The master parser defines four variables automatically:
 
@@ -480,7 +491,7 @@ In addition, any variables defined in the `bdc` build file's
 
 #### Basic Mustache Syntax
 
-Mustache is a very simple templating language. For full details, see
+Mustache is a very simple template language. For full details, see
 the [Mustache][] manual page. For our purposes, two most useful constructs
 are conditional content and variable substitution.
 

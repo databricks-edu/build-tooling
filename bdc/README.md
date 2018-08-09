@@ -102,7 +102,7 @@ The [master parser][] allows Markdown cells to be
 [processed as templates][cell templates].
 Any variables you define in your `variables` section will be passed to the
 master parser and will be available for substitution in your Markdown
-cells—provided you [enable Markdown cell templates](#enable-templates).
+cells—provided you [enable Markdown cell templates](#enable_templates).
 
 ### Course info
 

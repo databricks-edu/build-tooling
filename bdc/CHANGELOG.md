@@ -7,6 +7,10 @@
 - Added ability to generate PDF from a Markdown or HTML miscellaneous file.
 - Added a `bundle` section, allowing a zip file of built materials to be
   generated automatically. See the sample `build.yaml` for details.
+- The `master` (for a notebook or in `notebook_defaults`) now supports
+  an `enable_templates` flag. If set to `true`, Markdown cells in the
+  notebook are treated as [Mustache](http://mustache.github.io/mustache.5.html)
+  templates by the master parser. (The flag is `false` by default.)
 - It is now possible to specify the name of the student DBC, via a new
   `student_dbc` build parameter; it defaults to `Labs.dbc`.
 - Similarly, it is now possible to specify the name of the student DBC, via a

@@ -312,7 +312,8 @@ class MasterParseInfo(DefaultStrMixin):
         'footer': NotebookFooter.__class__,
         'encoding_in': str,
         'encoding_out': str,
-        'debug': bool
+        'debug': bool,
+        'enable_templates': bool
     }
 
     VALID_HEADING_FIELDS = {
@@ -339,40 +340,44 @@ class MasterParseInfo(DefaultStrMixin):
                  encoding_in='UTF-8',
                  encoding_out='UTF-8',
                  target_profile=master_parse.TargetProfile.NONE,
+                 enable_templates=False,
                  debug=False):
         """
         Create a new parsed master parse data object
 
-        :param enabled:        whether master parsing is enabled for the notebook
-        :param python:         whether Python notebook generation is enabled
-        :param scala:          whether Scala notebook generation is enabled
-        :param r:              whether R notebook generation is enabled
-        :param sql:            whether SQL notebook generation is enabled
-        :param answers:        whether to generate answer notebooks
-        :param exercises:      whether to generate exercises notebook
-        :param instructor:     whether to generate instructor notebooks
-        :param heading:        heading information (a NotebookHeading object)
-        :param footer:         footer information (a NotebookFooter object)
-        :param encoding_in:    the encoding of the source notebooks
-        :param encoding_out:   the encoding to use when writing notebooks
-        :param target_profile: the target profile, if any
-        :param debug:          enable/disable debug messages for the master
-                               parse phase
+        :param enabled:          whether master parsing is enabled
+        :param python:           whether Python notebook generation is enabled
+        :param scala:            whether Scala notebook generation is enabled
+        :param r:                whether R notebook generation is enabled
+        :param sql:              whether SQL notebook generation is enabled
+        :param answers:          whether to generate answer notebooks
+        :param exercises:        whether to generate exercises notebook
+        :param instructor:       whether to generate instructor notebooks
+        :param heading:          heading information (a NotebookHeading object)
+        :param footer:           footer information (a NotebookFooter object)
+        :param encoding_in:      the encoding of the source notebooks
+        :param encoding_out:     the encoding to use when writing notebooks
+        :param target_profile:   the target profile, if any
+        :param enable_templates: whether to treat Markdown cells as Mustache
+                                 templates
+        :param debug:            enable/disable debug messages for the master
+                                 parse phase
         """
-        self.enabled        = enabled
-        self.python         = python
-        self.scala          = scala
-        self.r              = r
-        self.sql            = sql
-        self.answers        = answers
-        self.exercises      = exercises
-        self.instructor     = instructor
-        self.heading        = heading
-        self.footer         = footer
-        self.encoding_in    = encoding_in
-        self.encoding_out   = encoding_out
-        self.target_profile = target_profile
-        self.debug          = debug
+        self.enabled          = enabled
+        self.python           = python
+        self.scala            = scala
+        self.r                = r
+        self.sql              = sql
+        self.answers          = answers
+        self.exercises        = exercises
+        self.instructor       = instructor
+        self.heading          = heading
+        self.footer           = footer
+        self.encoding_in      = encoding_in
+        self.encoding_out     = encoding_out
+        self.target_profile   = target_profile
+        self.enable_templates = enable_templates
+        self.debug            = debug
 
     def lang_is_enabled(self, lang):
         """
@@ -1628,6 +1633,7 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
                 target_profile=master_profile,
                 course_type=build.course_info.type,
                 enable_debug=master.debug,
+                enable_templates=master.enable_templates,
             )
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)

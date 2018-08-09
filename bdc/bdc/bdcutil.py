@@ -632,7 +632,8 @@ def markdown_to_html(markdown, html_out, html_template=None, stylesheet=None):
     with codecs.open(markdown, mode='r', encoding='UTF-8') as input:
         text = input.read()
         body = markdown2.markdown(text, extras=['fenced-code-blocks',
-                                                'tables'])
+                                                'tables',
+                                                'header-ids'])
         if stylesheet is None:
             stylesheet = DEFAULT_CSS
 

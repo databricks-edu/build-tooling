@@ -1885,7 +1885,7 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
     if os.path.exists(instructor_labs):
         instructor_dbc = joinpath(
             dest_dir, build.output_info.instructor_dir,
-            build.output_info.instructor_labs_dbc
+            build.output_info.instructor_dbc
         )
         write_version_notebook(instructor_labs, version_notebook, version)
         make_dbc(gendbc, build, instructor_labs, instructor_dbc)

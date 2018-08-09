@@ -15,6 +15,8 @@
   and `LICENSE.md`) for the `datasets` section.
 - The `README.md` and `LICENSE.md` files for each data set are also converted
   to HTML and PDF and copied.  
+- HTML generated from Markdown now gets anchor links for each generated HTML
+  header.
 
 ### Version 1.21.0
 

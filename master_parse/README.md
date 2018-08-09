@@ -469,7 +469,7 @@ When templates are enabled, Markdown cells are treated as
 - **do token substitution**. For instance, substitute the current value of
   this parameter here.
   
-See [below](#basic_mustache_syntax) for a brief introduction to Mustache
+See [below](#basic-mustache-syntax) for a brief introduction to Mustache
 syntax.
 
 #### Variables you can test or substitute

@@ -369,17 +369,21 @@ The following substitutions are permitted within `dest`:
 be a directory; `false` indicates that it is a file. Defaults to `false`.
   
 **`template`**: (OPTIONAL) `true` indicates that the source file is actually
-a template, containing `$` substitutions to be made. If the file is not a
-text file (as determined by its extension), then `template` cannot be set
-to `true`.
+a [Mustache][] template, which allows you to use variable substitution and
+conditional text based on variables. For a brief overview of Mustache,
+see [Basic Mustache Syntax](#basic-mustache-syntax), below.
 
-The following substitutions are permitted within template files:
+If the file is not a text file (as determined by its extension), then
+`template` cannot be set to `true`.
 
-| SUBSTITUTION           | DESCRIPTION
-| ---------------------- | -----------
-| `${course_info.<var>}` | Any variable from the `course_info` section. e.g., `${course_info.name}`
-| `${variables.<var>}`   | Any variable from the `variables` section. e.g., `${variables.myVar}`
+The following variables are made available to templates:
 
+| SUBSTITUTION        | DESCRIPTION
+| ------------------- | -----------
+| `course_info.<var>` | Any variable from the `course_info` section. e.g., `{{course_info.name}}`
+| `variables.<var>`   | Any variable from the `variables` section. e.g., `{{variables.myVar}}`
+| `amazon`            | Set to "Amazon" (which also evaluates as true for conditional template logic) if the current build profile is "amazon". Set to '' (which also evaluates as false for conditional template logic) if the current build profile is not "amazon" or if build profiles are disabled.
+| `azure`             | Set to "Azure (which also evaluates as true for conditional template logic) if the current build profile is "amazon". Set to '' (which also evaluates as false for conditional template logic) if the current build profile is not "azure" or if build profiles are disabled.
 
 In addition to template processing, `bdc` performs other processing when
 copying miscellaneous files.
@@ -1334,6 +1338,85 @@ token = lsakdjfaksjhasdfkjhaslku89iuyhasdkfhjasd
 home = /Users/user@example.net
 ```
 
+## Basic Mustache Syntax
+
+Mustache is a very simple template language. For full details, see
+the [Mustache][] manual page. For our purposes, two most useful constructs
+are conditional content and variable substitution.
+
+Here's an example of conditional content:
+
+```
+{{#amazon}}
+Rendered if amazon is defined.
+{{/amazon}}
+```
+
+If the variable "amazon" has a non-empty value (or is `true`), then the
+string "Rendered if amazon is defined" is included in the cell. Otherwise,
+the entire construct is omitted.
+
+This is Mustache's form of an _if_ statement. There is no _else_ statement.
+There's a kind of _if not_, however: Simply replace the `#` with a `^`.
+
+```
+{{^amazon}}
+Rendered if amazon is not defined.
+{{/amazon}}
+```
+
+This construct also works inline:
+
+```
+Mount your {{#amazon}}S3 bucket{{/amazon}}{{#azure}}blob store{{/azure}}
+to DBFS.
+```
+
+Variable substitution is quite simple: Just enclose the variable's name in
+`{{` and `}}`. For example:
+
+```
+This is a {{notebook_language}} notebook.
+```
+
+If `notebook_language` is set to "Scala", that line will render as:
+
+```
+This is a Scala notebook.
+```
+
+#### Example
+
+For a more complete example, consider this Markdown cell:
+
+```
+%md
+
+In this {{notebook_language}} notebook,
+you can access your data by mounting your
+{{#amazon}}
+S3 bucket
+{{/amazon}}
+{{#azure}}
+Azure blob store
+{{/azure}}
+to DBFS.
+```
+
+When generated with an Amazon profile, in a Scala output notebook, this
+cell would become:
+
+
+```
+%md
+
+In this Scala notebook,
+you can access your data by mounting your
+S3 bucket
+to DBFS.
+```
+
+[Mustache]: http://mustache.github.io/mustache.5.html
 [build.yaml]: build.yaml
 [master parser]: ../master_parse/README.md
 [cell templates]: ../master_parse/README.md#cells-as-templates

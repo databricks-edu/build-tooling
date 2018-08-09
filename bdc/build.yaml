@@ -1,8 +1,8 @@
 # Template for bdc build YAML file. See the bdc README.md for documentation.
 
 bdc_min_version: "1.22"
-master_parse_min_version: "1.15"
-               course will fail.
+master_parse_min_version: "1.16"
+
 course_info:
   name: coursename
   title: "A Readable Title for this Course" # defaults to <name>

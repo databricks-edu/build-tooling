@@ -1,5 +1,13 @@
 # Change Log for BDC
 
+### Version 1.23.0
+
+- Fixed a (newly introduced) bug that caused an abort when copying instructor
+  notes.
+- `misc_files` templates are now Mustache templates, not Python string templates.
+- Instructor notes and guides are now converted to HTML and PDF, where
+  appropriate, just like other docs. 
+
 ### Version 1.22.0
 
 - Added ability for files in `misc_files` section to be templates, with

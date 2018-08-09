@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.22.0"
+VERSION = "1.23.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1371,28 +1371,32 @@ def parse_args():
     from docopt import docopt
     return docopt(USAGE, version=VERSION)
 
-def expand_template(src_template_file, build, tempdir):
+def expand_template(src_template_file, build, tempdir, profile):
+    import pystache
+
     variables = {}
     if build.variables:
-        for k, v in build.variables.items():
-            variables['variables.' + k] = str(v)
+        variables['variables'] = build.variables
 
+    for p in VALID_PROFILES:
+        if profile == p:
+            variables[p] = p.capitalize()
+        else:
+            variables[p] = ''
+
+    course_info_vars = {}
     for k, v in build.course_info.__dict__.items():
         if v is None:
             continue
         if isinstance(v, Enum):
             v = v.value
-        variables['course_info.' + k] = str(v)
-
-    class DotTemplate(StringTemplate):
-        idpattern = r'[_a-z][_a-z0-9.]*'
+        course_info_vars[k] = str(v)
+    variables['course_info'] = course_info_vars
 
     output = joinpath(tempdir, path.basename(src_template_file))
     with codecs.open(src_template_file, mode='r', encoding='utf8') as i:
-        s = DotTemplate(i.read())
-
         with codecs.open(output, mode='w', encoding='utf8') as o:
-            o.write(s.substitute(variables))
+            o.write(pystache.render(i.read(), variables))
 
     return output
 
@@ -1476,7 +1480,7 @@ def _convert_and_copy_info_file(src, dest, build):
         proc(src, dest, build)
 
 
-def copy_info_file(src_file, target, is_template, build):
+def copy_info_file(src_file, target, is_template, build, profile):
     """
     Copy a file that contains some kind of readable information (e.g., a
     Markdown file, a PDF, etc.). If the file is a Markdown file, it is also
@@ -1484,7 +1488,7 @@ def copy_info_file(src_file, target, is_template, build):
     """
     with TemporaryDirectory() as tempdir:
         if is_template:
-            real_src = expand_template(src_file, build, tempdir)
+            real_src = expand_template(src_file, build, tempdir, profile)
         else:
             real_src = src_file
 
@@ -1694,9 +1698,10 @@ def copy_notebooks(build, labs_dir, dest_root, profile):
         remove_empty_subdirectories(dest_root)
 
 
-def copy_instructor_notes(build, dest_root):
+def copy_instructor_notes(build, dest_root, profile):
     # Starting at build.source_base, look for instructor notes and course
     # guides. Only keep the ones for the labs and slides we're using.
+
     if build.notebooks:
         notebook_dirs = set([path.dirname(n.src) for n in build.notebooks])
     else:
@@ -1713,7 +1718,7 @@ def copy_instructor_notes(build, dest_root):
                 return True
         return False
 
-    notes_re = re.compile(r'^instructor[-_]notes[-._]', re.IGNORECASE)
+    notes_re = re.compile(r'^instructor[-_]?notes[-._]', re.IGNORECASE)
     guide_re = re.compile(r'^guide\.', re.IGNORECASE)
     full_source_base = path.abspath(build.source_base)
     for (dirpath, _, filenames) in os.walk(build.source_base):
@@ -1734,12 +1739,36 @@ def copy_instructor_notes(build, dest_root):
             if keep:
                 s = joinpath(dirpath, f)
                 t = joinpath(dest_root,
-                              build.instructor_dir,
-                              INSTRUCTOR_NOTES_SUBDIR,
-                              rel_dir,
-                              f)
+                             build.output_info.instructor_dir,
+                             INSTRUCTOR_NOTES_SUBDIR,
+                             rel_dir,
+                             f)
+                (base, _) = path.splitext(path.basename(f))
                 verbose("Copying {0} to {1}".format(s, t))
-                copy_info_file(s, t, False, build)
+                copy_info_file(s, t, False, build, profile)
+                if is_html(s):
+                    html = s
+                else:
+                    html = None
+
+                if is_markdown(s):
+                    t = joinpath(dest_root,
+                                 build.output_info.instructor_dir,
+                                 INSTRUCTOR_NOTES_SUBDIR,
+                                 rel_dir,
+                                 base + '.html')
+                    html = t
+                    markdown_to_html(s, t,
+                                     stylesheet=build.markdown.html_stylesheet)
+
+                if html:
+                    t = joinpath(dest_root,
+                                 build.output_info.instructor_dir,
+                                 INSTRUCTOR_NOTES_SUBDIR,
+                                 rel_dir,
+                                 base + '.pdf')
+                    html_to_pdf(html, t)
+
                 continue
 
 
@@ -1781,7 +1810,7 @@ def copy_slides(build, dest_root):
             copy(src, dest)
 
 
-def copy_misc_files(build, dest_root):
+def copy_misc_files(build, dest_root, profile):
     """
     Copy the miscellaneous files (if any).
     """
@@ -1797,7 +1826,7 @@ def copy_misc_files(build, dest_root):
                 os.mkdir(dest)
 
             t = joinpath(dest_root, dest)
-            copy_info_file(s, t, f.is_template, build)
+            copy_info_file(s, t, f.is_template, build, profile)
 
 
 def copy_datasets(build, dest_root):
@@ -1886,7 +1915,7 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
 
     labs_full_path = joinpath(dest_dir, build.output_info.student_labs_subdir)
     copy_notebooks(build, labs_full_path, dest_dir, profile)
-    copy_instructor_notes(build, dest_dir)
+    copy_instructor_notes(build, dest_dir, profile)
     write_version_notebook(labs_full_path, version_notebook, version)
 
     student_dbc = joinpath(
@@ -1909,7 +1938,7 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
         make_dbc(gendbc, build, instructor_labs, instructor_dbc)
 
     copy_slides(build, dest_dir)
-    copy_misc_files(build, dest_dir)
+    copy_misc_files(build, dest_dir, profile)
     copy_datasets(build, dest_dir)
 
     if build.bundle_info:

@@ -1325,4 +1325,4 @@ home = /Users/user@example.net
 
 [build.yaml]: build.yaml
 [master parser]: ../master_parse/README.md
-[cell templates](../master_parse/README.md#cells-as-templates).
+[cell templates]: ../master_parse/README.md#cells-as-templates

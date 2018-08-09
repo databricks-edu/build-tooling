@@ -870,6 +870,28 @@ notebooks:
       instructor: false
 ```
 
+`notebook_defaults` can also contain a `variables` section. For instance:
+
+```yaml
+notebook_defaults:
+  dest: '$target_lang/$notebook_type/$notebook_type/$basename.$target_extension'
+  master:
+    enabled: true
+    scala: true
+    python: true
+    answers: true
+    instructor: true
+  variables:
+    suffix: ${notebook_type[0]}
+```
+
+Variables defined in `notebook_defaults` are evaluated when each output
+notebook is generated and are also passed to the master parser if templates
+are enabled. Variables defined here override any variables defined in the
+global [`variables`](#the-variables-section) section. However, they cannot
+override built-in variables (such as `${notebook_type}` or `${course_id}`).
+Any attempt to do so is just ignored.
+
 ### Bundles
 
 For some courses (e.g., self-paced), it's useful to be able to generate an

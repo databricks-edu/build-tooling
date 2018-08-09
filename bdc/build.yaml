@@ -29,122 +29,21 @@ bundle:
 #top_dbc_folder_name: ${course_name}
 
 notebook_type_name:
-  # Specify the substitution names for ${notebook_type}. Only meaningful
-  # with master-parsed output notebooks. There are three notebook types:
-  # See the section on notebooks, below.
-  #
-  # - exercises
-  # - answers
-  # - instructor
-  #
-  # You can use this section to map those types to different strings.
-  # If you don't map a particular type, then it is used as is to replace
-  # references to ${notebook_type}
   exercises: ""
   answers: Solutions
   #instructor: instructor
 
-# By default, the directories containing the notebooks are deleted once the
-# corresponding DBC files are created. You can set this field to "true"
-# to override that behavior.
 #keep_lab_dirs: false
-
-# Markdown configuration
-#
-# html_stylesheet - path to an HTML stylesheet to include, inline, in any HTML
-#                   generated from Markdown. OPTIONAL.
 
 markdown:
   #html_stylesheet:
 
-# The folder (relative to the top of the DBC) in which to store student files,
-# such as the generated Labs.dbc. OPTIONAL. Defaults to "StudentFiles". Can
-# be empty, to store all files at the top level.
-#
-# WARNING: This setting MUST NOT match the instructor_dir setting.
-
 #student_dir: StudentFiles
-
-# The folder (relative to the top of the DBC) in which to store instructor
-# files, such as the generated Instructor-Labs.dbc. OPTIONAL. Defaults to
-# "InstructorFiles". Can be empty, to store all files at the top level.
-#
-# WARNING: This setting MUST NOT match the student_dir setting.
 
 #instructor_dir: InstructorFiles
 
-# src_base: Location of the base directory for the source curriculum
-# material, relative to the location of THIS FILE. This will almost always
-# be "../../modules". REQUIRED.
 src_base: /Users/bmc/src/databricks/training/modules
 
-# misc_files: Files that should be copied to the course directory. Paths
-# are relative to THIS FILE (not to <src_base>).
-#
-# NOTE: The destination is assume to be a file if it has an extension;
-# otherwise, it is assumed to be a directory. See below for implications.
-#
-# If a file is marked as a template, then any variables within it are expanded
-# before the copy. The variables can come from the "course_info" and "variables"
-# sections (e.g., ${course_info.version}, ${variables.myVar})
-#
-# Specific processing for certain source types:
-# ---------------------------------------------
-#
-# Markdown
-#
-# If the target is a directory, and the source is Markdown, the Markdown
-# document is copied (possibly expanded, if it's a template). It is also
-# converted to HTML and PDF, and those files are copied, as well. The HTML and
-# PDF files will have the same base name as the source file.
-#
-# If the target is not a directory, then the only valid targets for a Markdown
-# source file are Markdown (".md" or ".markdown"), HTML (".htm" or ".html") or
-# PDF (".pdf").
-#
-# HTML
-#
-# If the source is HTML and the destination is a directory, the HTML document
-# is copied (possibly expanded, if it's a template). It is also converted to
-# PDF, and the PDF is copied, as well. The PDF file will have the same base
-# name as the source file.
-#
-# If the target is not a directory, then the only valid targets for an HTML
-# source file are HTML (".htm" or ".html") or PDF (".pdf").
-#
-# Non-text files
-#
-# template is disallowed for non-text files.
-#
-# Other file types
-#
-# No special checks are made on other files.
-#
-# FIELDS:
-#
-# src         - source path to the file to be copied, relative to the directory
-#               containing this build file. REQUIRED.
-# dest        - destination path, relative to the top course directory. REQUIRED.
-#               A value of "." means "top level directory". NOTE: This parameter
-#               can be a file name or a directory. If it is a directory, you MUST
-#               set dest_is_dir to true.
-# dest_is_dir - true if the destination should interpreted as a directory.
-#               OPTIONAL. Default: false
-# template    - true if the document is a template in which variables should be
-#               substituted, as described above. OPTIONAL. Default: false
-# skip        - true to skip this entry, false to keep it. This field is a convenient
-#               alternative to commenting the entire entry out.
-#               OPTIONAL. Default: false
-#
-# SUBSTITUTIONS:
-#
-# In the <dest> value, the following substitution tokens are permitted:
-#
-# ${basename}      - the base file name of the source, WITHOUT the extension
-# ${filename}      - the base file name of the source, WITH the extension
-# ${extension}     - the file extension
-# <your variables> - Any variables defined in the "variables" section can
-#                    also be substituted here.
 misc_files:
   -
     src: ClassSetup.pdf
@@ -161,148 +60,7 @@ misc_files:
     dest: 00_README.pdf
     template: true
 
-
-# notebooks: The notebooks to be included in the courseware. These notebooks
-# will be parsed and stored in a DBC file. In addition, any files within
-# the notebook directories that start with "Instructor-Notes" will be copied,
-# as well.
-#
-# WARNING: The notebooks should be encoded in ASCII or UTF-8. Other encodings
-# (e.g., ISO-8859.1) will cause the build to abort.
-#
-# FIELDS:
-#
-# src        - path to the notebook, relative to <src_base>. REQUIRED.
-#
-# dest       - the destination path within the DBC file and within the
-#              StudentFiles/Labs directory.
-#
-#              For a non-master notebook, this destination is the path to the
-#              notebook's destination (relative to StudentFiles/Labs) and must
-#              be a file.
-#
-#              For a master notebook, this value must be a directory and
-#              specifies the base directory for the output notebooks (relative
-#              to the top of the DBC file and StudentFiles/Labs). Individual
-#              language notebook destinations can be further controlled within
-#              the "master" section. (Note that answer notebooks, if enabled,
-#              are always moved to InstructorFiles/Answer-Labs and placed in
-#              the instructor's DBC file, not the students' DBC file.)
-#
-#              For master notebooks, ${target_lang} can be used to substitute
-#              post-parsed final (target) language into the path. If missing,
-#              ${target_lang} is inserted at the BEGINNING of the path. For
-#              instance:
-#
-#              dest: "overview/${target_lang}/nb-01"  # explicit
-#              dest: "overview/nb-01"  # same as "${target_lang}/overview/notebook-01"
-#
-#              If you want to suppress the target language entirely (e.g.,
-#              because you're only using one language), start the
-#              path with a "/" (meaning "starting from the top of the DBC")
-#              and don't include ${target_lang}.
-#
-#              REQUIRED.
-#
-# skip       - true to skip this entry, false to keep it. This field is a
-#              convenient alternative to commenting the entire entry out.
-#              OPTIONAL. Default: false
-#
-# upload_download - True if this notebook should be transferred during upload
-#              or download operations, false otherwise. (False is useful when
-#              double-processing a notebook.)
-#
-# only_in_profile - Mark the notebook as either 'amazon' or 'azure', indicating
-#              that it is Amazon-only or Azure-only. If this value is set,
-#              master parsing must be enabled AND use_profiles must be true.
-#
-# master     - If this section is present, it marks the notebook as a master
-#              notebook to be processed by the master parse tool, and it
-#              contain master parse parameters. If this section is missing,
-#              then the notebook is not preprocessed; it's simply copied.
-#              the master parse tool; false otherwise. OPTIONAL.
-#
-#              The following parameters are supported.
-#
-#   enabled          - true to enable master processing, false to disable.
-#                      Default: false.
-#
-#                      The easiest way to enable master processing with all the
-#                      defaults is:
-#
-#                      master:
-#                        enabled: true
-#
-#   answers          - whether or not to generate answer notebooks. True by
-#                      default.
-#   instructor       - whether or not to generate instructor notebooks. True by
-#                      default.
-#   scala            - true to generate a Scala notebook. True by default.
-#   python           - true to generate a Python notebook. True by default.
-#   r                - true to generate an R notebook. False by default.
-#   sql              - true to generate an SQL notebook. False by default.
-#   encoding_in      - the encoding to use when reading the master notebook.
-#                      Defaults to UTF-8
-#   encoding_out     - the encoding to use when writing the output notebooks.
-#                      Defaults to UTF-8
-#   heading          - a subsection defining notebook heading settings for this
-#                      notebook.
-#     path           - the path to the notebook heading. Must be HTML or
-#                      Markdown and is inserted into a "%md-sandbox" cell.
-#                      Default: An internal default is used. You can explicitly
-#                      force the default by setting the path to "DEFAULT".
-#                      The path is relative to the build file.
-#     enabled        - Whether or not to add a heading to the notebook. True
-#                      by default. One use case for setting it to false:
-#                      Notebooks that are only intended to be run via "%run"
-#   footer           - a subsection defining footer settings for this notebook.
-#     path           - the path to the notebook footer. Must be HTML or Markdown
-#                      and is inserted into a "%md-sandbox" cell. Default: An
-#                      internal default copyright footer is used. The copyright
-#                      year is taken from the "course_info.copyright_year"
-#                      setting. You can explicitly force the default by setting
-#                      the path to "DEFAULT".  The path is relative to the build
-#                      file.
-#     enabled        - Whether or not to add a footer to the notebook. True by
-#                      default.
-#
-# SUBSTITUTIONS:
-#
-# In the <dest> value, the following substitution tokens are always permitted:
-#
-# ${basename}         - the base file name of the source, WITHOUT the extension
-# ${filename}         - the base file name of the source, WITH the extension
-# ${extension}        - the file extension, without any leading "."
-# ${profile}          - the name of the build profile, if any, or "" if none.
-# <your variables>    - Any variables defined in the "variables" section can
-#                       also be substituted.
-#
-# In addition, if master parsing is enabled for a notebook, the following
-# tokens are also permitted.
-#
-# ${target_lang}      - substitute the output notebook language (Scala, R,
-#                       Python, SQL).
-# ${target_extension} - substitute the output notebook extension, without any
-#                       leading "." (e.g., "scala", "py", "r", "sql")
-# ${notebook_type}    - The output notebook type (exercises, answers, or
-#                       instructor). If you've included a "notebook_type_name"
-#                       mapping, then those strings will be used. Otherwise,
-#                       "exercises", "answers" and "instructor" will be used,
-#                       as appropriate.
-#
-# Notes on ${target_lang}:
-#
-# - If you specify ${target_lang} in the dest value, the target master parse
-#   language is substituted, for each language-generated notebook.
-# - If you don't specify ${target_lang}, and there are multiple languages
-#   selected in the "master" section, you'll get an error.
-
 notebook_defaults:
-  # Here, you can set default values for the "master" section, the
-  # "heading" section, the "footer" section and the "dest" value. These defaults
-  # are applied to all notebooks that don't have explicit values for them.
-  # Expansions in "dest" are deferred until runtime (i.e., they're not expanded
-  # here).
   master:
     enabled: true
     scala: false
@@ -314,25 +72,14 @@ notebook_defaults:
       #path: /path/to/alternate/notebook/footer
       #enabled: false
   dest: $basename.$target_extension
-  # You can define notebook-specific variables that are evaluated when the
-  # notebook is generated, after master parsing is done. They're permitted
-  # in individual notebook sections, as well as in the notebook_defaults
-  # section.
-  #
-  # Variables defined here override any variables defined in the global
-  # "variables" section. However, they cannot override built-in variables,
-  # such as ${course_id}, ${notebook_type}, etc. Attempts to do so are
-  # simply ignored.
+
   variables:
     suffix: ${notebook_type[0]} # expanded during processing
 
 notebooks:
-  # List of notebooks in the course.
   -
     src: Overview-History/Introductions.py
-    # With this dest, you'll get an error, because the output location is
-    # ambiguous.
-    dest: Overview-History
+    dest: $filename
     master:
       enabled: true
       r: false
@@ -341,41 +88,13 @@ notebooks:
       python: true
   -
     src: Module1/Notebook1.scala
-    # With this dest, the output ends up in:
-    #     Module1/Scala/Notebook1_exercises.scala
-    #     Module1/Scala/Notebook1_answers.scala
-    #     Module1/Python/Notebook1_exercises.py
-    #     Module1/PYthon/Notebook1_answers.py
-    dest: Module1/${target_lang}
+    dest: Module1/${target_lang}/01-Intro-$notebook_type.$target_extension
     master:
       enabled: true
       r: false
       scala: true
       sql: false
       python: true
-  -
-    src: Module1/Notebook2.py
-    # With this dest, the output ends up in:
-    #     Notebook1_exercises.py
-    #     Notebook1_answers.py
-    # You don't get an error because there's only a single output language.
-    dest: Notebook1
-    master:
-      enabled: true
-      r: false
-      scala: false
-      sql: false
-      python: true
-
-  -
-    src: Module2/Foo.py
-    #dest: $target_lang/Module2/$notebook_type/$basename.$target_extension
-    dest: $common_dest
-    master:
-      enabled: true
-      python: true
-      scala: true
-
   -
     src: Module2/Includes/Shared.py
     dest: $target_lang/Module2/Includes/$basename.$target_extension
@@ -385,26 +104,6 @@ notebooks:
       scala: false
       add_heading: false
 
-# slides: PowerPoint slides to be included in the courseware. The slides are
-#         copied to the destination directory's "InstructorFiles" subdirectory.
-#
-# The format is similar to the <notebooks> section.
-#
-# FIELDS:
-#
-# src  - path to the slide deck, relative to <src_base>
-# dest - the destination path within the "InstructorFiles" target directory
-#
-# SUBSTITUTIONS:
-#
-# In the <dest> value, the following substitution tokens are permitted:
-#
-# ${basename}  - the base file name of the source, WITHOUT the extension
-# ${filename}  - the base file name of the source, WITH the extension
-# ${extension} - the file extension
-#
-# This section may eventually be deprecated or removed, as we move toward 100%
-# notebook-driven courseware.
 slides:
   -
     src: Overview-History/Welcome-Overview.pptx
@@ -413,27 +112,6 @@ slides:
     src: RDD-Fundamentals/RDD-Fundamentals.pptx
     dest: 02-${filename}
 
-# datasets: Datasets to be included in the courseware. The files are copied
-#           to the destination directory's "StudentFiles" subdirectory, in
-#           a special subdirectory called "Datasets". Each dataset will end
-#           up in its own subdirectory below "Datasets".
-#
-# FIELDS:
-#
-# src     - Path to the data set file, relative to this file. If the data set
-#           comprises multiple files (e.g., a Parquet file, which is really a
-#           directory), it should be zipped into one file. REQUIRED.
-# dest    - Name of the target subdirectory within the "StudentFiles/datasets"
-#           directory. REQUIRED.'
-#
-# Each dataset MUST have:
-#
-# - a README.md file associated with it, describing the datset
-# - a LICENSE.md file associated with it, describing the dataset's provenance
-#   and licensing.
-#
-# These files must live in the same directory as the dataset and will be copied,
-# in original Markdown, HTML, and PDF formats, to the destination directory.
 datasets:
   -
     src: ../../datasets/tom-sawyer/tom-sawyer.txt

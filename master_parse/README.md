@@ -88,6 +88,13 @@ More than one option may be specified.
   tool does _not_ add the notebook heading at the top of the generated
   notebooks. You need to specify `--heading` to force that behavior.
   (This preserves historical behavior better.)
+* `--templates`: Enable cell templates. See [below](#cells-as-templates)
+  for details.
+* `--variable <var>`: Supply an initial variable for template substitution.
+  Can be used multiple times. `<var>` can be one of:
+    - `var=value`: define `var` to substitute the string "value"
+    - `var`: define `var` as `True`
+    - `!var`: define `var` as `False`
 
 ### Filename group
 
@@ -486,8 +493,11 @@ The master parser defines four variables automatically:
 - `notebook_language`: The programming language of the notebook being
   generated (e.g., "Scala", "Python", "R", "SQL".)
 
-In addition, any variables defined in the `bdc` build file's
+In addition, you can substitute any variables defined in the `bdc` build file's
 [`variables` section](../bdc/README.md#variables-and-cell-templates).
+
+If calling the master parser from the command line, there's a `--variable`
+parameter that allows you to pass additional variables.
 
 #### Basic Mustache Syntax
 

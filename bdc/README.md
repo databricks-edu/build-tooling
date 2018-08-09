@@ -11,9 +11,6 @@ Quick links:
 * [Installation](#installation)
 * [Build file syntax](#build-file)
 
-For usage instructions, see . For a description of the
-build file syntax, see [Build File](#build_file).
-
 ---
 
 ## Installation

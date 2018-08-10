@@ -23,10 +23,11 @@ import re
 import codecs
 from enum import Enum
 from collections import namedtuple
-from string import Template
+from string import Template as StringTemplate
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
+from random import SystemRandom
 
 VERSION = "1.16.0"
 
@@ -229,6 +230,22 @@ oallowfullscreen msallowfullscreen width="640" height="360" ></iframe>
 <a target="_blank" href="https://fast.wistia.net/embed/iframe/${id}?seo=false">
   <img alt="Opens in new tab" src="''' + _icon_image_url('external-link-icon-16x16.png') +
 '''"/>&nbsp;Watch full-screen.</a>
+</div>''')
+
+HINT_TEMPLATE = (
+'''<div style="margin-top: 1em">
+  <span id="hint-${id_num}" style="display: none">${text}</span>
+  <button class="btn btn-primary" id="hint-button-${id_num}">Click here for a hint</button>
+  <script type="text/javascript">
+    window.onload = function() {
+      var button = document.getElementById("hint-button-${id_num}");
+      var hint = document.getElementById("hint-${id_num}");
+      button.onclick = function() {
+        hint.style.display = 'inline';
+        button.style.display = 'none';
+      };
+    };
+  </script>
 </div>''')
 
 VIDEO_CELL_CODE = CommandCode.MARKDOWN
@@ -494,23 +511,18 @@ class NotebookGenerator(object):
             new_commands = []
             for cmd in commands:
                 if cmd.code.is_markdown():
-                    new_content = _process_cell_template(
-                        cmd.content, self.notebook_code, params,
+                    (new_code, new_content) = _process_cell_template(
+                        cmd.content, cmd.code, self.notebook_code, params,
                     )
                     new_commands.append(Command(
                         part=cmd.part,
-                        code=cmd.code,
+                        code=new_code,
                         labels=cmd.labels,
                         content=new_content
                     ))
                 else:
                     new_commands.append(cmd)
             commands= new_commands
-
-        #if params.enable_templates and cell_state.command_code.is_markdown():
-        #    cell_state.command_content = self._process_template(
-        #        cell_state.command_content, params
-        #    )
 
         is_IPython = self.notebook_kind == NotebookKind.IPYTHON
         is_instructor_nb = self.notebook_user == NotebookUser.INSTRUCTOR
@@ -824,7 +836,7 @@ class NotebookGenerator(object):
 
             args = arg_string.split(None, 1)
             (id, title) = args if len(args) == 2 else (args[0], "video")
-            expanded = Template(VIDEO_TEMPLATE).safe_substitute({
+            expanded = StringTemplate(VIDEO_TEMPLATE).safe_substitute({
                 'title': title,
                 'id':    id
             })
@@ -922,6 +934,7 @@ _file_encoding_errors = 'strict'
 _output_dir = DEFAULT_OUTPUT_DIR
 _be_verbose = False
 _show_debug = False
+_rng = SystemRandom()
 
 COLUMNS = int(os.getenv('COLUMNS', '79'))
 DEBUG_PREFIX = "master_parse (DEBUG) "
@@ -1035,16 +1048,20 @@ def make_magic(regex_token, must_be_word=False):
     regex_text = r'\s*' + adj_token + r'\s*(.*)$'
     return re.compile(make_magic_text(regex_text))
 
-def _process_cell_template(contents, language, params):
+def _process_cell_template(contents, cell_code, language, params):
     '''
     Runs a cell's content through the template processor.
 
-    :param contents: the contents, a list of lines with no trailing newline
-    :param language: output language (as a CommandCode) of the notebook being
-                     generated
-    :param params:   the parsed command line parameters
+    :param contents:  the contents, a list of lines with no trailing newline
+    :param cell_code: the cell code (CommandCode.MARKDOWN,
+                      CommandCode.MARKDOWN_SANDBOX)
+    :param language:  output language (as a CommandCode) of the notebook being
+                      generated
+    :param params:    the parsed command line parameters
 
-    :return: the new content, as a list of lines with no trailing newline
+    :return: a tuple with two elements: the possibly-changed command code
+             (because certain expansions only work in %md-sandbox) and the new
+             content as a list of lines with no trailing newline
     '''
     import pystache
     s = '\n'.join(contents)
@@ -1063,16 +1080,29 @@ def _process_cell_template(contents, language, params):
     else:
         lang_string = language.value.capitalize()
 
+    found_hint = [False]
+    def handle_hint(text):
+        id_num = _rng.randint(0, 1000)
+        found_hint[0] = True
+        template = StringTemplate(HINT_TEMPLATE)
+        return template.safe_substitute({'text': text, 'id_num': str(id_num)})
+
     vars = {
         'amazon': amazon,
         'azure': azure,
         'copyright_year': params.copyright_year,
-        'notebook_language': lang_string
+        'notebook_language': lang_string,
+        'HINT': handle_hint
     }
+
+    if found_hint[0]:
+        new_cell_code = CommandCode.MARKDOWN_SANDBOX
+    else:
+        new_cell_code = cell_code
 
     vars.update(params.extra_template_vars)
     new_content = pystache.render(s, vars)
-    return new_content.split('\n')
+    return (new_cell_code, new_content.split('\n'))
 
 
 

@@ -232,22 +232,6 @@ oallowfullscreen msallowfullscreen width="640" height="360" ></iframe>
 '''"/>&nbsp;Watch full-screen.</a>
 </div>''')
 
-HINT_TEMPLATE = (
-'''<div style="margin-top: 1em">
-  <span id="hint-${id_num}" style="display: none">${text}</span>
-  <button class="btn btn-primary" id="hint-button-${id_num}">Click here for a hint</button>
-  <script type="text/javascript">
-    window.onload = function() {
-      var button = document.getElementById("hint-button-${id_num}");
-      var hint = document.getElementById("hint-${id_num}");
-      button.onclick = function() {
-        hint.style.display = 'inline';
-        button.style.display = 'none';
-      };
-    };
-  </script>
-</div>''')
-
 VIDEO_CELL_CODE = CommandCode.MARKDOWN
 
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
@@ -449,6 +433,7 @@ class NotebookGenerator(object):
         self.file_ext = self._get_extension()
         self.base_comment = _code_to_comment[self.notebook_code]
         self.params = params
+        self.cell_template_processor = CellTemplateProcessor()
 
     def _get_keep_labels(self, params, *args):
         labels = {
@@ -511,7 +496,7 @@ class NotebookGenerator(object):
             new_commands = []
             for cmd in commands:
                 if cmd.code.is_markdown():
-                    (new_code, new_content) = _process_cell_template(
+                    (new_code, new_content) = self.cell_template_processor.process(
                         cmd.content, cmd.code, self.notebook_code, params,
                     )
                     new_commands.append(Command(
@@ -522,7 +507,7 @@ class NotebookGenerator(object):
                     ))
                 else:
                     new_commands.append(cmd)
-            commands= new_commands
+            commands = new_commands
 
         is_IPython = self.notebook_kind == NotebookKind.IPYTHON
         is_instructor_nb = self.notebook_user == NotebookUser.INSTRUCTOR
@@ -924,6 +909,205 @@ class NotebookGenerator(object):
 
         return modified_content
 
+
+class CellTemplateProcessor(object):
+    '''
+    Used to process cell Mustache templates.
+    '''
+
+    # The template for the JavaScript and the initial button that
+    # precedes an expanded hints cell. This is a Mustache template.
+    #
+    # Expected variables:
+    #
+    # id_prefix - HTML ID prefix to use (string). Must correspond to the
+    #             ID prefix used in the hints and the answer.
+    HINTS_PRELUDE_TEMPLATE = \
+'''<script type="text/javascript">
+  window.onload = function() {
+    var allHints = document.getElementsByClassName("hint-{{id_prefix}}");
+    var totalHints = allHints.length;
+    var nextHint = 0;
+    var hasAnswer = true;
+    var items = new Array();
+    for (var i = 0; i < totalHints; i++) {
+      var elem = allHints[i];
+      var label = "";
+      if ((i + 1) == totalHints)
+        label = "Click here for the answer";
+      else
+        label = "Click here for the next hint";
+      items.push({label: label, elem: elem});
+    }
+    if (hasAnswer) {
+      items.push({label: '', elem: document.getElementById("answer-{{id_prefix}}")});
+    }
+
+    var button = document.getElementById("hint-button-{{id_prefix}}");
+    button.onclick = function() {
+      items[nextHint].elem.style.display = 'block';
+      if ((nextHint + 1) >= items.length)
+        button.style.display = 'none';
+      else
+        button.innerHTML = items[nextHint].label;
+        nextHint += 1;
+    };
+    button.ondblclick = function(e) {
+      e.stopPropagation();
+    }
+    var answerCodeBlocks = document.getElementsByTagName("code");
+    for (var i = 0; i < answerCodeBlocks.length; i++) {
+      var elem = answerCodeBlocks[i];
+      var parent = elem.parentNode;
+      if (parent.name != "pre") {
+        var newNode = document.createElement("pre");
+        newNode.append(elem.cloneNode(true));
+        elem.replaceWith(newNode);
+        elem = newNode;
+      }
+      elem.ondblclick = function(e) {
+        e.stopPropagation();
+      };
+
+      elem.style.marginTop = "1em";
+    }
+  };
+</script>
+
+<div>
+  <button type="button" class="btn btn-light"
+          style="margin-top: 1em"
+          id="hint-button-{{id_prefix}}">Click here for a hint</button>
+</div>
+'''
+
+    # The template for a single hint. This is a Mustache template.
+    #
+    # Expected variables:
+    #
+    # id_prefix - HTML ID prefix to use (string). Must correspond to the
+    #             ID prefix used in the JavaScript and the answer.
+    # hint      - the body of the hint
+    HINT_TEMPLATE = \
+'''<div class="hint-{{id_prefix}}" style="padding-bottom: 20px; display: none">
+  Hint:
+  <div style="margin-left: 1em">{{hint}}</div>
+</div>
+'''
+
+    # The template for an expanded answer.
+    #
+    # Expected variables:
+    #
+    # answer    - the answer body
+    # id_prefix - HTML ID prefix to use (string). Must correspond to the
+    #             ID prefix used in the JavaScript and the hint(s).
+    ANSWER_TEMPLATE = \
+'''<div id="answer-{{id_prefix}}" style="padding-bottom: 20px; display: none">
+  The answer:
+  <div class="answer" style="margin-left: 1em">
+{{answer}}
+  </div>
+</div>
+'''
+
+    def __init__(self):
+        self._id_prefix = None
+        self._found_hints = False
+        self._in_hints_block = False
+
+    def process(self, contents, cell_code, language, params):
+        '''
+        Runs a cell's content through the template processor.
+
+        :param contents:  the contents, a list of lines with no trailing newline
+        :param cell_code: the cell code (CommandCode.MARKDOWN,
+                          CommandCode.MARKDOWN_SANDBOX)
+        :param language:  output language (as a CommandCode) of the notebook being
+                          generated
+        :param params:    the parsed command line parameters
+
+        :return: a tuple with two elements: the possibly-changed command code
+                 (because certain expansions only work in %md-sandbox) and the new
+                 content as a list of lines with no trailing newline
+        '''
+        import pystache
+
+        self._found_hints = False
+        self._in_hints_block = False
+
+        s = '\n'.join(contents)
+        if params.target_profile == TargetProfile.NONE:
+            amazon = ''
+            azure = ''
+        elif params.target_profile == TargetProfile.AMAZON:
+            amazon = 'Amazon'
+            azure = ''
+        else:
+            amazon = ''
+            azure = 'Azure'
+
+        if language == CommandCode.SQL:
+            lang_string = "SQL"
+        else:
+            lang_string = language.value.capitalize()
+
+        def handle_hints(text):
+            # Emit the prelude, which contains the JavaScript and the button.
+            # Then, pass the text along, for further expansion.
+            self._id_prefix = str(_rng.randint(0, 10000))
+            self._found_hints = True
+            self._in_hints_block = True
+            prelude_vars = {
+                'id_prefix': self._id_prefix
+            }
+            prelude = pystache.render(self.HINTS_PRELUDE_TEMPLATE, prelude_vars)
+            return prelude + text
+
+        def handle_hint(text):
+            # The text is the body of the hint. Expand the hints template.
+            if not self._in_hints_block:
+                raise Exception('Found {{#HINT}} outside required {{#HINTS}} block.')
+
+            hint_vars = {
+                'id_prefix': self._id_prefix,
+                'hint':      text
+            }
+            return pystache.render(self.HINT_TEMPLATE, hint_vars)
+
+        def handle_answer(text):
+            # The text is the body of the answer.
+            lines = text.split('\n')
+
+            vars = {
+                'id_prefix': self._id_prefix
+            }
+
+            # Finally, render the answer template.
+            vars['answer'] = text
+            return pystache.render(self.ANSWER_TEMPLATE, vars)
+
+
+        vars = {
+            'amazon':            amazon,
+            'azure':             azure,
+            'copyright_year':    params.copyright_year,
+            'notebook_language': lang_string,
+            'HINT':              handle_hint,
+            'HINTS':             handle_hints,
+            'ANSWER':            handle_answer,
+        }
+
+        if self._found_hints:
+            new_cell_code = CommandCode.MARKDOWN_SANDBOX
+        else:
+            new_cell_code = cell_code
+
+        vars.update(params.extra_template_vars)
+        new_content = pystache.render(s, vars)
+        return (new_cell_code, new_content.split('\n'))
+
+
 # -----------------------------------------------------------------------------
 # Globals and Functions
 # -----------------------------------------------------------------------------
@@ -1047,64 +1231,6 @@ def make_magic(regex_token, must_be_word=False):
     # Allow surrounding white space.
     regex_text = r'\s*' + adj_token + r'\s*(.*)$'
     return re.compile(make_magic_text(regex_text))
-
-def _process_cell_template(contents, cell_code, language, params):
-    '''
-    Runs a cell's content through the template processor.
-
-    :param contents:  the contents, a list of lines with no trailing newline
-    :param cell_code: the cell code (CommandCode.MARKDOWN,
-                      CommandCode.MARKDOWN_SANDBOX)
-    :param language:  output language (as a CommandCode) of the notebook being
-                      generated
-    :param params:    the parsed command line parameters
-
-    :return: a tuple with two elements: the possibly-changed command code
-             (because certain expansions only work in %md-sandbox) and the new
-             content as a list of lines with no trailing newline
-    '''
-    import pystache
-    s = '\n'.join(contents)
-    if params.target_profile == TargetProfile.NONE:
-        amazon = ''
-        azure = ''
-    elif params.target_profile == TargetProfile.AMAZON:
-        amazon = 'Amazon'
-        azure = ''
-    else:
-        amazon = ''
-        azure = 'Azure'
-
-    if language == CommandCode.SQL:
-        lang_string = "SQL"
-    else:
-        lang_string = language.value.capitalize()
-
-    found_hint = [False]
-    def handle_hint(text):
-        id_num = _rng.randint(0, 1000)
-        found_hint[0] = True
-        template = StringTemplate(HINT_TEMPLATE)
-        return template.safe_substitute({'text': text, 'id_num': str(id_num)})
-
-    vars = {
-        'amazon': amazon,
-        'azure': azure,
-        'copyright_year': params.copyright_year,
-        'notebook_language': lang_string,
-        'HINT': handle_hint
-    }
-
-    if found_hint[0]:
-        new_cell_code = CommandCode.MARKDOWN_SANDBOX
-    else:
-        new_cell_code = cell_code
-
-    vars.update(params.extra_template_vars)
-    new_content = pystache.render(s, vars)
-    return (new_cell_code, new_content.split('\n'))
-
-
 
 _databricks = make_re(r'Databricks')
 _command = make_re(r'COMMAND')

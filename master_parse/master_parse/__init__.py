@@ -1052,6 +1052,19 @@ class CellTemplateProcessor(object):
         else:
             lang_string = language.value.capitalize()
 
+        def strip_leading_and_trailing_blank_lines(text):
+            import itertools
+
+            def drop_leading(lines):
+                return list(itertools.dropwhile(lambda s: len(s.strip()) == 0, lines))
+
+            lines = drop_leading(text.split('\n'))
+            lines.reverse()
+            lines = drop_leading(lines)
+            lines.reverse()
+            return '\n'.join(lines)
+
+
         def handle_hints(text):
             # Emit the prelude, which contains the JavaScript and the button.
             # Then, pass the text along, for further expansion.
@@ -1062,7 +1075,7 @@ class CellTemplateProcessor(object):
                 'id_prefix': self._id_prefix
             }
             prelude = pystache.render(self.HINTS_PRELUDE_TEMPLATE, prelude_vars)
-            return prelude + text
+            return prelude + strip_leading_and_trailing_blank_lines(text)
 
         def handle_hint(text):
             # The text is the body of the hint. Expand the hints template.
@@ -1071,22 +1084,20 @@ class CellTemplateProcessor(object):
 
             hint_vars = {
                 'id_prefix': self._id_prefix,
-                'hint':      text
+                'hint':      strip_leading_and_trailing_blank_lines(text)
             }
             return pystache.render(self.HINT_TEMPLATE, hint_vars)
 
         def handle_answer(text):
             # The text is the body of the answer.
-            lines = text.split('\n')
 
             vars = {
                 'id_prefix': self._id_prefix
             }
 
-            # Finally, render the answer template.
-            vars['answer'] = text
+            # Render the answer template.
+            vars['answer'] = strip_leading_and_trailing_blank_lines(text)
             return pystache.render(self.ANSWER_TEMPLATE, vars)
-
 
         vars = {
             'amazon':            amazon,

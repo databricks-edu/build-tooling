@@ -511,7 +511,7 @@ revealable hints. The `{{#HINTS}}` construct introduces a block of hints (and
 is closed by `{{/HINTS}}`); such a constructo contains one or more revealable
 hints and an optional answer.
 
-This constructor is best described by example. Consider the following Markdown
+This construct is best described by example. Consider the following Markdown
 cell:
 
 <pre><code>%md
@@ -554,9 +554,13 @@ After the first button click, the cell will look like this:
 
 ![](https://files.training.databricks.com/images/tooling/hint-2.png)
 
-After the final button click, the cell will look like this:
+After the second button click, the cell will look like this:
 
 ![](https://files.training.databricks.com/images/tooling/hint-3.png)
+
+After the final button click, the cell will look like this:
+
+![](https://files.training.databricks.com/images/tooling/hint-4.png)
 
 **More formally**:
 

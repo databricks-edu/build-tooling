@@ -926,9 +926,10 @@ class CellTemplateProcessor(object):
 '''<script type="text/javascript">
   window.onload = function() {
     var allHints = document.getElementsByClassName("hint-{{id_prefix}}");
+    var answer = document.getElementById("answer-{{id_prefix}}");
     var totalHints = allHints.length;
     var nextHint = 0;
-    var hasAnswer = true;
+    var hasAnswer = (answer != null);
     var items = new Array();
     for (var i = 0; i < totalHints; i++) {
       var elem = allHints[i];
@@ -940,7 +941,7 @@ class CellTemplateProcessor(object):
       items.push({label: label, elem: elem});
     }
     if (hasAnswer) {
-      items.push({label: '', elem: document.getElementById("answer-{{id_prefix}}")});
+      items.push({label: '', elem: answer});
     }
 
     var button = document.getElementById("hint-button-{{id_prefix}}");
@@ -1015,6 +1016,7 @@ class CellTemplateProcessor(object):
         self._id_prefix = None
         self._found_hints = False
         self._in_hints_block = False
+        self._total_hints = 0
 
     def process(self, contents, cell_code, language, params):
         '''
@@ -1035,6 +1037,7 @@ class CellTemplateProcessor(object):
 
         self._found_hints = False
         self._in_hints_block = False
+        self._total_hints = 0
 
         s = '\n'.join(contents)
         if params.target_profile == TargetProfile.NONE:
@@ -1082,6 +1085,7 @@ class CellTemplateProcessor(object):
             if not self._in_hints_block:
                 raise Exception('Found {{#HINT}} outside required {{#HINTS}} block.')
 
+            self._total_hints += 1
             hint_vars = {
                 'id_prefix': self._id_prefix,
                 'hint':      strip_leading_and_trailing_blank_lines(text)
@@ -1109,13 +1113,19 @@ class CellTemplateProcessor(object):
             'ANSWER':            handle_answer,
         }
 
+        vars.update(params.extra_template_vars)
+        new_content = pystache.render(s, vars)
+
         if self._found_hints:
+            if self._total_hints == 0:
+                raise Exception(
+                    'There must be at least one {{#HINT}} inside a {{#HINTS}} ' +
+                    'block.'
+                )
             new_cell_code = CommandCode.MARKDOWN_SANDBOX
         else:
             new_cell_code = cell_code
 
-        vars.update(params.extra_template_vars)
-        new_content = pystache.render(s, vars)
         return (new_cell_code, new_content.split('\n'))
 
 

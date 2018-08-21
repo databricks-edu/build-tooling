@@ -499,6 +499,13 @@ In addition, you can substitute any variables defined in the `bdc` build file's
 If calling the master parser from the command line, there's a `--variable`
 parameter that allows you to pass additional variables.
 
+#### Built-in conditional logic
+
+The Mustache templating also provides some other convenient expansions, each
+of which is described here.
+
+##### Incrementally Revealable Hints
+
 #### Basic Mustache Syntax
 
 Mustache is a very simple template language. For full details, see

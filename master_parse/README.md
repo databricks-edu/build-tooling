@@ -530,10 +530,11 @@ rendered.
 {{#ANSWER}}
 
 Still no luck? Here's your answer:
-\```
+
+<span>`&nbsp;`&nbsp;`</span>
 df = spark.read.option("inferSchema", "true").option("header", "true").csv("dbfs:/tmp/foo.csv")
 df.limit(10).show()
-\```
+<span>`&nbsp;`&nbsp;`</span>
 
 {{/ANSWER}}
 

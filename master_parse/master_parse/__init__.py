@@ -29,7 +29,7 @@ from datetime import datetime
 from textwrap import TextWrapper
 from random import SystemRandom
 
-VERSION = "1.16.0"
+VERSION = "1.17.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional

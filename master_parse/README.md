@@ -510,7 +510,7 @@ The parser supports a special nested block, in Markdown cells only, for
 revealable hints, best described by example. Consider the following Markdown
 cell:
 
-```
+<pre><code>
 %md
 
 This is a pithy description of an exercise you are to perform, below.
@@ -531,15 +531,15 @@ rendered.
 
 Still no luck? Here's your answer:
 
-<span>`&nbsp;`&nbsp;`</span>
+```
 df = spark.read.option("inferSchema", "true").option("header", "true").csv("dbfs:/tmp/foo.csv")
 df.limit(10).show()
-<span>`&nbsp;`&nbsp;`</span>
+```
 
 {{/ANSWER}}
 
 {{/HINTS}}
-```
+</code></pre>
 
 The `{{#HINTS}}` construct introduces a block of hints (and is closed by
 ``{{/HINTS}}`).

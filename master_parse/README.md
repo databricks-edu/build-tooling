@@ -452,7 +452,7 @@ We're talking about life here, people. This is some important stuff. Pay attenti
 
 Currently, these tokens render as follows, in a `%md-sandbox` cell:
 
-![](https://raw.githubusercontent.com/bmc/build-tooling/master/master_parse/images/tokens-rendered.png)
+![](https://files.training.databricks.com/images/tooling/tokens-rendered.png)
 
 ### Cells as templates
 
@@ -498,6 +498,84 @@ In addition, you can substitute any variables defined in the `bdc` build file's
 
 If calling the master parser from the command line, there's a `--variable`
 parameter that allows you to pass additional variables.
+
+#### Built-in conditional logic
+
+The Mustache templating also provides some other convenient expansions, each
+of which is described here.
+
+##### Incrementally Revealable Hints
+
+The parser supports a special nested block, in Markdown cells only, for
+revealable hints. The `{{#HINTS}}` construct introduces a block of hints (and
+is closed by `{{/HINTS}}`); such a constructo contains one or more revealable
+hints and an optional answer.
+
+This construct is best described by example. Consider the following Markdown
+cell:
+
+<pre><code>%md
+
+This is a pithy description of an exercise you are to perform, below.
+
+{{#HINTS}}
+
+{{#HINT}}Revealable hint 1.{{/HINT}}
+
+{{#HINT}}  
+
+Revealable hint 2. Note that the source for this one
+is multiple lines _and_ contains some **Markdown** to be
+rendered.
+
+{{/HINT}}
+
+{{#ANSWER}}
+
+Still no luck? Here's your answer:
+
+```
+df = spark.read.option("inferSchema", "true").option("header", "true").csv("dbfs:/tmp/foo.csv")
+df.limit(10).show()
+```
+
+{{/ANSWER}}
+
+{{/HINTS}}
+</code></pre>
+
+
+When run through the master parser, the above will render a cell that
+initially looks like this:
+
+![](https://files.training.databricks.com/images/tooling/hint-1.png)
+
+After the first button click, the cell will look like this:
+
+![](https://files.training.databricks.com/images/tooling/hint-2.png)
+
+After the second button click, the cell will look like this:
+
+![](https://files.training.databricks.com/images/tooling/hint-3.png)
+
+After the final button click, the cell will look like this:
+
+![](https://files.training.databricks.com/images/tooling/hint-4.png)
+
+**More formally**:
+
+A hints block:
+
+- _must_ contain at least one hint block. A hint is Markdown or HTML in between
+  a starting `{{#HINT}}` and an ending `{{/HINT}}`.
+
+- _may_ contain multiple `{{#HINT}}` blocks.
+
+- _may_ contain an `{{#ANSWER}}` block.
+
+`{{#HINTS}}`, `{{#HINT}}` and `{{#ANSWER}}` blocks may contain leading and
+trailing blank lines, to aid source readability; those lines are stripped on
+output.
 
 #### Basic Mustache Syntax
 

@@ -23,12 +23,13 @@ import re
 import codecs
 from enum import Enum
 from collections import namedtuple
-from string import Template
+from string import Template as StringTemplate
 from InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
+from random import SystemRandom
 
-VERSION = "1.16.0"
+VERSION = "1.17.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -432,6 +433,7 @@ class NotebookGenerator(object):
         self.file_ext = self._get_extension()
         self.base_comment = _code_to_comment[self.notebook_code]
         self.params = params
+        self.cell_template_processor = CellTemplateProcessor()
 
     def _get_keep_labels(self, params, *args):
         labels = {
@@ -494,23 +496,18 @@ class NotebookGenerator(object):
             new_commands = []
             for cmd in commands:
                 if cmd.code.is_markdown():
-                    new_content = _process_cell_template(
-                        cmd.content, self.notebook_code, params,
+                    (new_code, new_content) = self.cell_template_processor.process(
+                        cmd.content, cmd.code, self.notebook_code, params,
                     )
                     new_commands.append(Command(
                         part=cmd.part,
-                        code=cmd.code,
+                        code=new_code,
                         labels=cmd.labels,
                         content=new_content
                     ))
                 else:
                     new_commands.append(cmd)
-            commands= new_commands
-
-        #if params.enable_templates and cell_state.command_code.is_markdown():
-        #    cell_state.command_content = self._process_template(
-        #        cell_state.command_content, params
-        #    )
+            commands = new_commands
 
         is_IPython = self.notebook_kind == NotebookKind.IPYTHON
         is_instructor_nb = self.notebook_user == NotebookUser.INSTRUCTOR
@@ -824,7 +821,7 @@ class NotebookGenerator(object):
 
             args = arg_string.split(None, 1)
             (id, title) = args if len(args) == 2 else (args[0], "video")
-            expanded = Template(VIDEO_TEMPLATE).safe_substitute({
+            expanded = StringTemplate(VIDEO_TEMPLATE).safe_substitute({
                 'title': title,
                 'id':    id
             })
@@ -912,6 +909,226 @@ class NotebookGenerator(object):
 
         return modified_content
 
+
+class CellTemplateProcessor(object):
+    '''
+    Used to process cell Mustache templates.
+    '''
+
+    # The template for the JavaScript and the initial button that
+    # precedes an expanded hints cell. This is a Mustache template.
+    #
+    # Expected variables:
+    #
+    # id_prefix - HTML ID prefix to use (string). Must correspond to the
+    #             ID prefix used in the hints and the answer.
+    HINTS_PRELUDE_TEMPLATE = \
+'''<script type="text/javascript">
+  window.onload = function() {
+    var allHints = document.getElementsByClassName("hint-{{id_prefix}}");
+    var answer = document.getElementById("answer-{{id_prefix}}");
+    var totalHints = allHints.length;
+    var nextHint = 0;
+    var hasAnswer = (answer != null);
+    var items = new Array();
+    for (var i = 0; i < totalHints; i++) {
+      var elem = allHints[i];
+      var label = "";
+      if ((i + 1) == totalHints)
+        label = "Click here for the answer";
+      else
+        label = "Click here for the next hint";
+      items.push({label: label, elem: elem});
+    }
+    if (hasAnswer) {
+      items.push({label: '', elem: answer});
+    }
+
+    var button = document.getElementById("hint-button-{{id_prefix}}");
+    button.onclick = function() {
+      items[nextHint].elem.style.display = 'block';
+      if ((nextHint + 1) >= items.length)
+        button.style.display = 'none';
+      else
+        button.innerHTML = items[nextHint].label;
+        nextHint += 1;
+    };
+    button.ondblclick = function(e) {
+      e.stopPropagation();
+    }
+    var answerCodeBlocks = document.getElementsByTagName("code");
+    for (var i = 0; i < answerCodeBlocks.length; i++) {
+      var elem = answerCodeBlocks[i];
+      var parent = elem.parentNode;
+      if (parent.name != "pre") {
+        var newNode = document.createElement("pre");
+        newNode.append(elem.cloneNode(true));
+        elem.replaceWith(newNode);
+        elem = newNode;
+      }
+      elem.ondblclick = function(e) {
+        e.stopPropagation();
+      };
+
+      elem.style.marginTop = "1em";
+    }
+  };
+</script>
+
+<div>
+  <button type="button" class="btn btn-light"
+          style="margin-top: 1em"
+          id="hint-button-{{id_prefix}}">Click here for a hint</button>
+</div>
+'''
+
+    # The template for a single hint. This is a Mustache template.
+    #
+    # Expected variables:
+    #
+    # id_prefix - HTML ID prefix to use (string). Must correspond to the
+    #             ID prefix used in the JavaScript and the answer.
+    # hint      - the body of the hint
+    HINT_TEMPLATE = \
+'''<div class="hint-{{id_prefix}}" style="padding-bottom: 20px; display: none">
+  Hint:
+  <div style="margin-left: 1em">{{hint}}</div>
+</div>
+'''
+
+    # The template for an expanded answer.
+    #
+    # Expected variables:
+    #
+    # answer    - the answer body
+    # id_prefix - HTML ID prefix to use (string). Must correspond to the
+    #             ID prefix used in the JavaScript and the hint(s).
+    ANSWER_TEMPLATE = \
+'''<div id="answer-{{id_prefix}}" style="padding-bottom: 20px; display: none">
+  The answer:
+  <div class="answer" style="margin-left: 1em">
+{{answer}}
+  </div>
+</div>
+'''
+
+    def __init__(self):
+        self._id_prefix = None
+        self._found_hints = False
+        self._in_hints_block = False
+        self._total_hints = 0
+
+    def process(self, contents, cell_code, language, params):
+        '''
+        Runs a cell's content through the template processor.
+
+        :param contents:  the contents, a list of lines with no trailing newline
+        :param cell_code: the cell code (CommandCode.MARKDOWN,
+                          CommandCode.MARKDOWN_SANDBOX)
+        :param language:  output language (as a CommandCode) of the notebook being
+                          generated
+        :param params:    the parsed command line parameters
+
+        :return: a tuple with two elements: the possibly-changed command code
+                 (because certain expansions only work in %md-sandbox) and the new
+                 content as a list of lines with no trailing newline
+        '''
+        import pystache
+
+        self._found_hints = False
+        self._in_hints_block = False
+        self._total_hints = 0
+
+        s = '\n'.join(contents)
+        if params.target_profile == TargetProfile.NONE:
+            amazon = ''
+            azure = ''
+        elif params.target_profile == TargetProfile.AMAZON:
+            amazon = 'Amazon'
+            azure = ''
+        else:
+            amazon = ''
+            azure = 'Azure'
+
+        if language == CommandCode.SQL:
+            lang_string = "SQL"
+        else:
+            lang_string = language.value.capitalize()
+
+        def strip_leading_and_trailing_blank_lines(text):
+            import itertools
+
+            def drop_leading(lines):
+                return list(itertools.dropwhile(lambda s: len(s.strip()) == 0, lines))
+
+            lines = drop_leading(text.split('\n'))
+            lines.reverse()
+            lines = drop_leading(lines)
+            lines.reverse()
+            return '\n'.join(lines)
+
+
+        def handle_hints(text):
+            # Emit the prelude, which contains the JavaScript and the button.
+            # Then, pass the text along, for further expansion.
+            self._id_prefix = str(_rng.randint(0, 10000))
+            self._found_hints = True
+            self._in_hints_block = True
+            prelude_vars = {
+                'id_prefix': self._id_prefix
+            }
+            prelude = pystache.render(self.HINTS_PRELUDE_TEMPLATE, prelude_vars)
+            return prelude + strip_leading_and_trailing_blank_lines(text)
+
+        def handle_hint(text):
+            # The text is the body of the hint. Expand the hints template.
+            if not self._in_hints_block:
+                raise Exception('Found {{#HINT}} outside required {{#HINTS}} block.')
+
+            self._total_hints += 1
+            hint_vars = {
+                'id_prefix': self._id_prefix,
+                'hint':      strip_leading_and_trailing_blank_lines(text)
+            }
+            return pystache.render(self.HINT_TEMPLATE, hint_vars)
+
+        def handle_answer(text):
+            # The text is the body of the answer.
+
+            vars = {
+                'id_prefix': self._id_prefix
+            }
+
+            # Render the answer template.
+            vars['answer'] = strip_leading_and_trailing_blank_lines(text)
+            return pystache.render(self.ANSWER_TEMPLATE, vars)
+
+        vars = {
+            'amazon':            amazon,
+            'azure':             azure,
+            'copyright_year':    params.copyright_year,
+            'notebook_language': lang_string,
+            'HINT':              handle_hint,
+            'HINTS':             handle_hints,
+            'ANSWER':            handle_answer,
+        }
+
+        vars.update(params.extra_template_vars)
+        new_content = pystache.render(s, vars)
+
+        if self._found_hints:
+            if self._total_hints == 0:
+                raise Exception(
+                    'There must be at least one {{#HINT}} inside a {{#HINTS}} ' +
+                    'block.'
+                )
+            new_cell_code = CommandCode.MARKDOWN_SANDBOX
+        else:
+            new_cell_code = cell_code
+
+        return (new_cell_code, new_content.split('\n'))
+
+
 # -----------------------------------------------------------------------------
 # Globals and Functions
 # -----------------------------------------------------------------------------
@@ -922,6 +1139,7 @@ _file_encoding_errors = 'strict'
 _output_dir = DEFAULT_OUTPUT_DIR
 _be_verbose = False
 _show_debug = False
+_rng = SystemRandom()
 
 COLUMNS = int(os.getenv('COLUMNS', '79'))
 DEBUG_PREFIX = "master_parse (DEBUG) "
@@ -1034,47 +1252,6 @@ def make_magic(regex_token, must_be_word=False):
     # Allow surrounding white space.
     regex_text = r'\s*' + adj_token + r'\s*(.*)$'
     return re.compile(make_magic_text(regex_text))
-
-def _process_cell_template(contents, language, params):
-    '''
-    Runs a cell's content through the template processor.
-
-    :param contents: the contents, a list of lines with no trailing newline
-    :param language: output language (as a CommandCode) of the notebook being
-                     generated
-    :param params:   the parsed command line parameters
-
-    :return: the new content, as a list of lines with no trailing newline
-    '''
-    import pystache
-    s = '\n'.join(contents)
-    if params.target_profile == TargetProfile.NONE:
-        amazon = ''
-        azure = ''
-    elif params.target_profile == TargetProfile.AMAZON:
-        amazon = 'Amazon'
-        azure = ''
-    else:
-        amazon = ''
-        azure = 'Azure'
-
-    if language == CommandCode.SQL:
-        lang_string = "SQL"
-    else:
-        lang_string = language.value.capitalize()
-
-    vars = {
-        'amazon': amazon,
-        'azure': azure,
-        'copyright_year': params.copyright_year,
-        'notebook_language': lang_string
-    }
-
-    vars.update(params.extra_template_vars)
-    new_content = pystache.render(s, vars)
-    return new_content.split('\n')
-
-
 
 _databricks = make_re(r'Databricks')
 _command = make_re(r'COMMAND')

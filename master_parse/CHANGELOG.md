@@ -1,5 +1,10 @@
 # Change Log for Master Parse Tool
 
+**Version 1.17.0**
+
+Extended the Mustache templates to support revealable hints. See the
+[README](README.md#incrementally-revealable-hints) for details.
+
 **Version 1.16.0**
 
 If templates are enabled (the `--template` command line parameter, or an

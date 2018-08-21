@@ -90,6 +90,8 @@ More than one option may be specified.
   (This preserves historical behavior better.)
 * `--templates`: Enable cell templates. See [below](#cells-as-templates)
   for details.
+* `-tp PROFILE` or `--target-profile PROFILE`: Target output profile, if any.
+  Valid values: amazon, azure
 * `--variable <var>`: Supply an initial variable for template substitution.
   Can be used multiple times. `<var>` can be one of:
     - `var=value`: define `var` to substitute the string "value"
@@ -253,6 +255,18 @@ are for special cells (like Markdown cells, `%fs` cells, `%sh` cells) that you
 want to include on a language-dependent basis. For example, if a Markdown cell
 is different for Scala vs. Python, then you can create two `%md` cells, with
 one marked PYTHON_ONLY and the other marked SCALA_ONLY.
+
+##### AMAZON\_ONLY, AZURE\_ONLY
+
+Cells marked with `AMAZON_ONLY` only show up when building for target profile
+`amazon`. Cells marked with `AZURE_ONLY` only show up when building for
+target profile `azure`.
+
+See the `-tp` command line option (in
+[Miscellaneous options](#miscellaneous-options), above) or the 
+`bdc` setting `only_in_profile` (in the `bdc`
+[Notebooks][../bdc/README.md#notebooks] section.
+
 
 ##### TODO
 

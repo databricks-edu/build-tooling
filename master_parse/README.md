@@ -452,7 +452,7 @@ We're talking about life here, people. This is some important stuff. Pay attenti
 
 Currently, these tokens render as follows, in a `%md-sandbox` cell:
 
-![](https://raw.githubusercontent.com/databricks-edu/build-tooling/master/master_parse/images/tokens-rendered.png)
+![](https://files.training.databricks.com/images/tooling/tokens-rendered.png)
 
 ### Cells as templates
 
@@ -530,10 +530,10 @@ rendered.
 {{#ANSWER}}
 
 Still no luck? Here's your answer:
-```
+\```
 df = spark.read.option("inferSchema", "true").option("header", "true").csv("dbfs:/tmp/foo.csv")
 df.limit(10).show()
-```
+\```
 
 {{/ANSWER}}
 
@@ -546,7 +546,7 @@ The `{{#HINTS}}` construct introduces a block of hints (and is closed by
 When run through the master parser, the above will render a cell that
 initially looks like this:
 
-![](https://raw.githubusercontent.com/bmc/build-tooling/master/master_parse/images/hint-1.png)
+![](![](https://files.training.databricks.com/images/tooling/hint-1.png)
 
 
 A hints block:

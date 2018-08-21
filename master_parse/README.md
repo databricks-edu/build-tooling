@@ -452,7 +452,7 @@ We're talking about life here, people. This is some important stuff. Pay attenti
 
 Currently, these tokens render as follows, in a `%md-sandbox` cell:
 
-![](https://raw.githubusercontent.com/bmc/build-tooling/master/master_parse/images/tokens-rendered.png)
+![](https://raw.githubusercontent.com/databricks-edu/build-tooling/master/master_parse/images/tokens-rendered.png)
 
 ### Cells as templates
 
@@ -505,6 +505,56 @@ The Mustache templating also provides some other convenient expansions, each
 of which is described here.
 
 ##### Incrementally Revealable Hints
+
+The parser supports a special nested block, in Markdown cells only, for
+revealable hints, best described by example. Consider the following Markdown
+cell:
+
+```
+%md
+
+This is a pithy description of an exercise you are to perform, below.
+
+{{#HINTS}}
+
+{{#HINT}}Revealable hint 1.{{/HINT}}
+
+{{#HINT}}  
+
+Revealable hint 2. Note that the source for this one
+is multiple lines _and_ contains some **Markdown** to be
+rendered.
+
+{{/HINT}}
+
+{{#ANSWER}}
+
+Still no luck? Here's your answer:
+```
+df = spark.read.option("inferSchema", "true").option("header", "true").csv("dbfs:/tmp/foo.csv")
+df.limit(10).show()
+```
+
+{{/ANSWER}}
+
+{{/HINTS}}
+```
+
+The `{{#HINTS}}` construct introduces a block of hints (and is closed by
+``{{/HINTS}}`).
+
+When run through the master parser, the above will render a cell that
+initially looks like this:
+
+![](https://raw.githubusercontent.com/bmc/build-tooling/master/master_parse/images/hint-1.png)
+
+
+A hints block:
+
+- _must_ contain at least one hint block. A hint is Markdown or HTML in between
+  a starting `{{#HINT}}` and an ending `{{/HINT}}`.
+
+- _can_ contain multiple `{{#HINT}}` blocks.
 
 #### Basic Mustache Syntax
 

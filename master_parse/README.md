@@ -265,7 +265,7 @@ target profile `azure`.
 See the `-tp` command line option (in
 [Miscellaneous options](#miscellaneous-options), above) or the 
 `bdc` setting `only_in_profile` (in the `bdc`
-[Notebooks][../bdc/README.md#notebooks] section.
+[Notebooks](../bdc/README.md#notebooks) section).
 
 
 ##### TODO

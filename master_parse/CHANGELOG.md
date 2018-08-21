@@ -3,7 +3,7 @@
 **Version 1.17.0**
 
 Extended the Mustache templates to support revealable hints. See the
-[README](README.md) for details.
+[README](README.md#incrementally-revealable-hints) for details.
 
 **Version 1.16.0**
 

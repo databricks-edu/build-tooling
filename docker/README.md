@@ -21,25 +21,25 @@ $ ./create_image.sh build
 To run `bdc`:
 
 ```
-docker run --rm -e HOME=$HOME -v $HOME:$HOME build-tool bdc <YOUR> <ARGS> <HERE>
+docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool bdc <YOUR> <ARGS> <HERE>
 ```
 
 To run `gendbc`:
 
 ```
-docker run --rm -e HOME=$HOME -v $HOME:$HOME build-tool gendbc <YOUR> <ARGS> <HERE>
+docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc <YOUR> <ARGS> <HERE>
 ```
 
 To run `master_parse`:
 
 ```
-docker run --rm -e HOME=$HOME -v $HOME:$HOME build-tool master_parse <YOUR> <ARGS> <HERE>
+docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse <YOUR> <ARGS> <HERE>
 ```
 
 Alternatively, you can add the following to your aliases, in which case a native experience can be achieved:
 
 ```
-alias bdc='docker run --rm -e HOME=$HOME -v $HOME:$HOME build-tool bdc'
-alias gendbc='docker run --rm -e HOME=$HOME -v $HOME:$HOME build-tool gendbc'
-alias master_parse='docker run --rm -e HOME=$HOME -v $HOME:$HOME build-tool master_parse'
+alias bdc="docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool bdc"
+alias gendbc="docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc"
+alias master_parse="docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse"
 ```

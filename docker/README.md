@@ -52,7 +52,7 @@ docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse <Y
 Alternatively, you can add the following to your aliases, in which case a native experience can be achieved:
 
 ```
-alias bdc="docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool bdc"
-alias gendbc="docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc"
-alias master_parse="docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse"
+alias bdc='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool bdc'
+alias gendbc='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc'
+alias master_parse='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse'
 ```

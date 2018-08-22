@@ -1,3 +1,4 @@
+#!/bin/sh
 curl -O https://raw.githubusercontent.com/docker-library/openjdk/master/8/jdk/Dockerfile
 sed -i.bak 's/FROM buildpack-deps:stretch-scm/FROM python:2/' Dockerfile
 sed -i.bak 's/update.sh/create_image.sh/' Dockerfile

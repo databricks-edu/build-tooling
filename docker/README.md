@@ -1,6 +1,6 @@
 # Build Tool Docker Image
 
-A Docker image capable defining a container capable of running the build tool must have both Python 2.7 and the JDK. Each of these exist as core images maintained by the Docker Team and available via Docker Hub ([here](https://hub.docker.com/_/python/) and [here](https://hub.docker.com/_/openjdk/)), however, as we require both, a custom image must be built. 
+A Docker image capable defining a container capable of running the build tool and its high-level wrapper `course` must have both Python 2.7 and the JDK. Each of these exist as core images maintained by the Docker Team and available via Docker Hub ([here](https://hub.docker.com/_/python/) and [here](https://hub.docker.com/_/openjdk/)), however, as we require both, a custom image must be built.
 
 In order to be able to use the images maintained by the Docker Team, a script
 is included that merges the two images, `create_image.sh`. Alternatively, this
@@ -37,6 +37,18 @@ To run `bdc`:
 docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool bdc <YOUR> <ARGS> <HERE>
 ```
 
+To run `course`:
+
+```
+docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool course <YOUR> <ARGS> <HERE>
+```
+
+To run `databricks`:
+
+```
+docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool databricks <YOUR> <ARGS> <HERE>
+```
+
 To run `gendbc`:
 
 ```
@@ -53,6 +65,8 @@ Alternatively, you can add the following to your aliases, in which case a native
 
 ```
 alias bdc='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool bdc'
+alias course='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool course'
+alias databricks='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool databricks'
 alias gendbc='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc'
 alias master_parse='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse'
 ```

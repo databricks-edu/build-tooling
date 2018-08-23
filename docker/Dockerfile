@@ -76,4 +76,6 @@ RUN /var/lib/dpkg/info/ca-certificates-java.postinst configure
 #
 #   https://github.com/docker-library/openjdk/issues
 RUN pip install git+https://github.com/databricks-edu/build-tooling
+RUN apt-get update && apt-get install less
 RUN mv /root/local/bin/gendbc /usr/local/bin/
+ADD course /usr/local/bin

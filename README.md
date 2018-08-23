@@ -3,9 +3,15 @@
 This directory contains source for the various build tools used during
 curriculum development within the Education department at Databricks.
 
-* `bdc`: *B*uild *D*atabricks *C*ourse: This is the main build tool.
-* `gendbc`: Create Databricks DBC files from the command line.
-* `master_parse`: The master notebook parse tool and module.
+* `bdc`: *B*uild *D*atabricks *C*ourse: This is the main build tool. See
+  the `bdc` [README](bdc/README.md) for full details.
+* `gendbc`: Create Databricks DBC files from the command line.  See
+  the `gendbc` [README](gendbc/README.md) for full details.
+* `master_parse`: The master notebook parse tool and module. See the
+  `master_parse` [README](master_parse/README.md) for full details.
+* `course`: An optional curriculum workflow management tool that sits on top
+  of `bdc`. There's no README for `course`. Just install it (or symlink to
+  it), and run `course help`.
 
 Unless you're actually developing the build tools, you'll probably never run
 `master_parse` or `gendbc` manually; `bdc` will do that for you.
@@ -21,6 +27,7 @@ Unless you're actually developing the build tools, you'll probably never run
   
 ## Quick Links
 
+* [Using a Docker-based Build Environment](#using-docker)
 * [Creating the virtual python environment](#virtual-python-environment)
 * [Installing the build tools](#installing-the-build-tools)
 * [`bdc` Documentation](bdc/README.md), which includes documentation of the build
@@ -28,7 +35,14 @@ Unless you're actually developing the build tools, you'll probably never run
 * [`master_parse` Documentation](master_parse/README.md), which tells you all
   the cool things the master parser supports within your notebooks.
 
-## Virtual Python Environment
+## Using Docker
+
+One of the simplest ways to set your build environment up is to use Docker.
+See the [README](docker/README.md) in the `docker` directory for details.
+
+## Installing the Build Tools Manually
+
+### Virtual Python Environment
 
 _bdc_ is currently limited to Python 2.
 
@@ -39,7 +53,7 @@ virtual environment. This document describes how to do that. If you want to
 use the system version of Python, you're on your own (because it's
 riskier).
 
-### Install `pip`
+#### Install `pip`
 
 You'll have to install `pip`, if it isn't already installed. First,
 download `get-pip.py` from here:
@@ -52,14 +66,14 @@ Once you have `get-pip.py`, install `pip`.
 * If you're on a Mac and using a Homebrew-installed Python: `/usr/local/bin/python get-pip.py`
 * If you're on Windows and you used the standard installer: `C:\Python27\python get-pip.py`
 
-### Install `virtualenv`
+#### Install `virtualenv`
 
 * Linux: `sudo pip install virtualenv`
 * Mac and not using Homebrew: `sudo pip install virtualenv`
 * Mac with Homebrew-install Python: `/usr/local/bin/pip install virtualenv`
 * Windows: `C:\Python27\Scripts\pip install virtualenv`
 
-### Create a virtual environment
+#### Create a virtual environment
 
 Create a virtual Python environment for the build. You can call it anything
 you want, and you can create it any where you want. Let's assume you'll
@@ -71,7 +85,7 @@ From a command window, assuming you're in your home directory:
 * Linux or Mac: `virtualenv dbbuild`
 * Windows: `C:\Python27\Scripts/virtualenv dbbuild`
 
-### Activate the virtual environment
+#### Activate the virtual environment
 
 Once you have the virtual Python environment installed, you'll need to
 activate it. **You have to activate the environment any time you create a
@@ -83,7 +97,7 @@ new command window.**
 * Windows: `dbbuild\bin\activate.bat`
 
 
-## Installing the Build Tools
+### Installing the Tools
 
 If you have never installed the tools in your virtual Python environment, run
 this command:
@@ -106,10 +120,6 @@ This installation script will install:
 * `databricks-cli`
 
 It'll take a few minutes, but it will download and install all three pieces.
-
-## Manual install 
-
-Clone this repo, `cd` into it, and type `python setup.py install`.
 
 
 ## NOTICE

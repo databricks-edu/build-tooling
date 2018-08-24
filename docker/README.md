@@ -26,10 +26,10 @@ $ ./create_image.sh build
 ## Updating with New Build Tools
 
 When new build tools are released, you'll need to update your Docker
-image. Run the following command to do so:
+image. To do this, simply build the image again:
 
 ```
-$ ./create_image.sh rebuild
+$ ./create_image.sh build
 ```
 
 ## To Use the Build Tool via Docker
@@ -44,7 +44,3 @@ following line (with the appropriate path):
 ```
 . /path/to/repos/build-tools/docker/aliases.sh
 ```
-
-
-
-

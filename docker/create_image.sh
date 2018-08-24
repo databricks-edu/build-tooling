@@ -1,6 +1,6 @@
 #!/bin/sh
 
-USAGE="$0 [build | rebuild]"
+USAGE="$0 [build]"
 
 DOCKERFILEDIR=/tmp/build-tool.$$
 
@@ -25,9 +25,6 @@ case $# in
         case "$1" in
             "build")
                 op=build
-                ;;
-            "rebuild")
-                op=rebuild
                 ;;
             *)
                 echo $USAGE >&1
@@ -61,11 +58,6 @@ case "$op" in
     "build")
         docker build -t build-tool $DOCKERFILEDIR
         ;;
-    "rebuild")
-        docker rmi build-tool
-        docker build -t build-tool $DOCKERFILEDIR
-        ;;
 esac
 
 rm -rf $DOCKERFILEDIR
-

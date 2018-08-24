@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.24.0
+
+- The `zipfile` and `dest` in the `bundle` section can now substitute the
+  current output profile ("amazon" or "azure").
+
 ### Version 1.23.2
 
 - Fixed handling of `DB_SHARD_HOME` to ensure that the environment variable

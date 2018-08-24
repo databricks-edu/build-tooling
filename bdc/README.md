@@ -925,6 +925,7 @@ The following variables are available for substitution within this value:
 | ------------------- | -----------
 | `${course_name}`    | the name of the course, from `course_info.name`
 | `${course_version}` | the course version, from `course_info.version`
+| `${profile}`        | the profile ("amazon" or "azure"), or "" if profiles aren't enabled
 
 If `zipfile` is not defined, `bdc` will use `${course_name}-${course_version}.zip`.
 
@@ -940,6 +941,7 @@ Within `dest`, the following substitutions are permitted:
 | `${basename}`  | the base file name of the `src`, _without_ the extension
 | `${filename}`  | the base file name of the `src`, _with_ the extension
 | `${extension}` | the `src` file's extension
+| `${profile}`   | the profile ("amazon" or "azure"), or "" if profiles aren't enabled
 | your variables | variables from the `variables` section.
 
 An example will help clarify this section:

@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.23.2"
+VERSION = "1.24.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -108,6 +108,7 @@ TARGET_LANG = 'target_lang'
 TARGET_EXTENSION = 'target_extension'
 NOTEBOOK_TYPE = 'notebook_type'
 OUTPUT_DIR = 'output_dir'
+PROFILE_VAR = 'profile'
 
 VALID_PROFILES = {'amazon', 'azure'}
 PROFILE_ABBREVIATIONS = {'amazon' : 'am', 'azure': 'az'}
@@ -117,6 +118,7 @@ POST_MASTER_PARSE_VARIABLES = {
     TARGET_EXTENSION:  variable_ref_patterns(TARGET_EXTENSION),
     NOTEBOOK_TYPE:     variable_ref_patterns(NOTEBOOK_TYPE),
     OUTPUT_DIR:        variable_ref_patterns(OUTPUT_DIR),
+    PROFILE_VAR:       variable_ref_patterns(PROFILE_VAR),
 }
 
 # EXT_LANG is used when parsing the YAML file.
@@ -751,8 +753,8 @@ def load_build_yaml(yaml_file):
         if '@' in dest:
             raise ConfigError('The "@" character is disallowed in destinations.')
 
-        # A set of variables is expanded only after master parsing; all others
-        # are expanded here. Any references to post master-parse variables
+        # A certain set of variables is expanded only after master parsing; all
+        # others are expanded here. Any references to post master-parse variables
         # (expanded in process_master_notebook) must be explicitly preserved
         # here. This logic escapes them by removing the "$" and surrounding the
         # rest with @ ... @. The escaping is undone, below.
@@ -779,7 +781,7 @@ def load_build_yaml(yaml_file):
 
         fields.update(extra_vars)
 
-        adj_dest = VariableSubstituter(adj_dest).substitute(fields)
+        adj_dest = VariableSubstituter(adj_dest).safe_substitute(fields)
 
         # Restore escaped variables.
         escaped = re.compile(r'^([^@]*)@([^@]+)@(.*)$')
@@ -990,7 +992,8 @@ def load_build_yaml(yaml_file):
         }
         zipfile = obj.get('zipfile')
         if zipfile:
-            zipfile = StringTemplate(zipfile).substitute(zip_vars)
+            # Use safe_substitute, which leaves all other variables alone.
+            zipfile = StringTemplate(zipfile).safe_substitute(zip_vars)
         else:
             zipfile = course_info.course_id + '.zip'
 
@@ -1873,9 +1876,14 @@ def write_version_notebook(dir, notebook_contents, version):
         out.write(notebook_contents)
 
 
-def bundle_course(build, dest_dir):
+def bundle_course(build, dest_dir, profile):
     from zipfile import ZipFile
-    zip_path = joinpath(dest_dir, build.bundle_info.zipfile)
+
+    # Expand any run-time variables in zipfile and dest.
+    vars = {PROFILE_VAR: profile or ''}
+
+    t = StringTemplate(joinpath(dest_dir, build.bundle_info.zipfile))
+    zip_path = t.safe_substitute(vars)
     print('Writing bundle {}'.format(zip_path))
 
     with ZipFile(zip_path, 'w') as z:
@@ -1892,7 +1900,8 @@ def bundle_course(build, dest_dir):
                     )
                 )
 
-            z.write(src, file.dest)
+            dest = StringTemplate(file.dest).safe_substitute(vars)
+            z.write(src, dest)
 
 
 def do_build(build, gendbc, base_dest_dir, profile=None):
@@ -1946,7 +1955,7 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
     copy_datasets(build, dest_dir)
 
     if build.bundle_info:
-        bundle_course(build, dest_dir)
+        bundle_course(build, dest_dir, profile)
 
     # Finally, remove the instructor labs folder and the student labs
     # folder.

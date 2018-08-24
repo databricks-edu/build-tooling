@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.23.1"
+VERSION = "1.23.2"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -2073,6 +2073,9 @@ def expand_shard_path(shard_path):
 
     # Relative path. Look for DB_SHARD_HOME environment variable.
     home = os.getenv(DB_SHARD_HOME_VAR)
+    if home is not None:
+        if len(home.strip()) == 0:
+            home = None
     if home is None:
         db_config = os.path.expanduser('~/.databrickscfg')
         if os.path.exists(db_config):
@@ -2085,9 +2088,8 @@ def expand_shard_path(shard_path):
 
     if home is None:
         die(('Shard path "{0}" is relative, but environment variable {1} ' +
-             'does not exist, and there is no "home" setting in {2}.').format(
-            shard_path, DB_SHARD_HOME_VAR, db_config
-        ))
+             'does not exist or is empty, and there is no "home" setting in ' +
+             '{2}.').format(shard_path, DB_SHARD_HOME_VAR, db_config))
 
     if shard_path == '':
         shard_path = home

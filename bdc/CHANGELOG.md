@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.23.2
+
+- Fixed handling of `DB_SHARD_HOME` to ensure that the environment variable
+  actually has a non-empty value, not just that it is present.
+
 ### Version 1.23.1
 
 - Fixed to pass `notebook_defaults.variables` variables into the master

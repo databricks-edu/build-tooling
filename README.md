@@ -38,7 +38,8 @@ Unless you're actually developing the build tools, you'll probably never run
 ## Using Docker
 
 One of the simplest ways to set your build environment up is to use Docker.
-See the [README](docker/README.md) in the `docker` directory for details.
+See the [README](docker/README.md) in the `docker` directory for details on
+creating and updating a Docker-based build tool environment.
 
 ## Installing the Build Tools Manually
 

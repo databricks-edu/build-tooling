@@ -34,45 +34,17 @@ $ ./create_image.sh rebuild
 
 ## To Use the Build Tool via Docker
 
-To run `bdc`:
+Install the aliases and functions defined in `aliases.sh` to define
+versions of `bdc`, `course`, `databricks`, `gendbc` and `master_parse` that
+will invoke the ones inside your Docker instance.
+
+In your `.bashrc`, `.bash_profile` or `.zshrc` (if you use Zsh), put the
+following line (with the appropriate path):
 
 ```
-docker run --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME build-tool bdc <YOUR> <ARGS> <HERE>
+. /path/to/repos/build-tools/docker/aliases.sh
 ```
 
-To run `course`:
-
-```
-docker run --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME build-tool course <YOUR> <ARGS> <HERE>
-```
-
-To run `databricks`:
-
-```
-docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool databricks <YOUR> <ARGS> <HERE>
-```
-
-To run `gendbc`:
-
-```
-docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc <YOUR> <ARGS> <HERE>
-```
-
-To run `master_parse`:
-
-```
-docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse <YOUR> <ARGS> <HERE>
-```
-
-Alternatively, you can add the following to your aliases, in which case a native experience can be achieved:
-
-```
-alias bdc='docker run --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME build-tool bdc'
-alias course='docker run --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME build-tool course'
-alias databricks='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool databricks'
-alias gendbc='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc'
-alias master_parse='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse'
-```
 
 
 

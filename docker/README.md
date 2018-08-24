@@ -34,13 +34,13 @@ $ ./create_image.sh build
 To run `bdc`:
 
 ```
-docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool bdc <YOUR> <ARGS> <HERE>
+docker run --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME build-tool bdc <YOUR> <ARGS> <HERE>
 ```
 
 To run `course`:
 
 ```
-docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool course <YOUR> <ARGS> <HERE>
+docker run --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME build-tool course <YOUR> <ARGS> <HERE>
 ```
 
 To run `databricks`:
@@ -64,8 +64,8 @@ docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse <Y
 Alternatively, you can add the following to your aliases, in which case a native experience can be achieved:
 
 ```
-alias bdc='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool bdc'
-alias course='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool course'
+alias bdc='docker run --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME build-tool bdc'
+alias course='docker run --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME build-tool course'
 alias databricks='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool databricks'
 alias gendbc='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc'
 alias master_parse='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse'

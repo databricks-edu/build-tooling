@@ -1,5 +1,11 @@
 # Change Log for Master Parse Tool
 
+**Version 1.18.0**
+
+The Mustache templates now support `{{#scala}}`, `{{#sql}}`, `{{#python}}`
+and `{{#r}}` tests, which can be used to include conditional content based
+on the output language.
+
 **Version 1.17.0**
 
 Extended the Mustache templates to support revealable hints. See the

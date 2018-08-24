@@ -29,7 +29,7 @@ from datetime import datetime
 from textwrap import TextWrapper
 from random import SystemRandom
 
-VERSION = "1.17.0"
+VERSION = "1.18.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -1050,10 +1050,22 @@ class CellTemplateProcessor(object):
             amazon = ''
             azure = 'Azure'
 
+        scala = False
+        python = False
+        r = False
+        sql = False
         if language == CommandCode.SQL:
             lang_string = "SQL"
-        else:
-            lang_string = language.value.capitalize()
+            sql = True
+        elif language == CommandCode.SCALA:
+            lang_string = "Scala"
+            scala = True
+        elif language == CommandCode.PYTHON:
+            lang_string = "Python"
+            python = True
+        elif language == CommandCode.R:
+            lang_string = "R"
+            r = True
 
         def strip_leading_and_trailing_blank_lines(text):
             import itertools
@@ -1111,6 +1123,10 @@ class CellTemplateProcessor(object):
             'HINT':              handle_hint,
             'HINTS':             handle_hints,
             'ANSWER':            handle_answer,
+            'r':                 r,
+            'scala':             scala,
+            'python':            python,
+            'sql':               sql
         }
 
         vars.update(params.extra_template_vars)

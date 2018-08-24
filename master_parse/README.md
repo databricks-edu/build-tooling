@@ -495,7 +495,7 @@ syntax.
 
 #### Variables you can test or substitute
 
-The master parser defines four variables automatically:
+The master parser defines the following variables automatically:
 
 - `amazon`: Set to "Amazon" (which also evaluates as `true` in a template),
   if building for Amazon. Otherwise, set to an empty string (which also 
@@ -506,6 +506,10 @@ The master parser defines four variables automatically:
 - `copyright_year`: The value of the copyright year parameter.
 - `notebook_language`: The programming language of the notebook being
   generated (e.g., "Scala", "Python", "R", "SQL".)
+- `scala`: `true` if the output notebook is Scala, `false` otherwise.
+- `python`: `true` if the output notebook is Python, `false` otherwise.
+- `r`: `true` if the output notebook is R, `false` otherwise.
+- `sql`: `true` if the output notebook is SQL, `false` otherwise.
 
 In addition, you can substitute any variables defined in the `bdc` build file's
 [`variables` section](../bdc/README.md#variables-and-cell-templates).

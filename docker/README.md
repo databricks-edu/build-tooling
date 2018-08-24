@@ -17,16 +17,19 @@ Download it, and install it. Then, run it at least once (e.g., on the Mac,
 open `/Applications/Docker.app`), which will create the various command line
 links you'll need.
 
-## To Create the `Dockerfile`
-
-```
-$ ./create_image.sh
-```
-
 ## To Create the `Dockerfile` and Build the Image
 
 ```
 $ ./create_image.sh build
+```
+
+## Updating with New Build Tools
+
+When new build tools are released, you'll need to update your Docker
+image. Run the following command to do so:
+
+```
+$ ./create_image.sh rebuild
 ```
 
 ## To Use the Build Tool via Docker
@@ -70,3 +73,6 @@ alias databricks='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-to
 alias gendbc='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool gendbc'
 alias master_parse='docker run --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME build-tool master_parse'
 ```
+
+
+

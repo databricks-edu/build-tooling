@@ -1,14 +1,71 @@
 #!/bin/sh
-curl -O https://raw.githubusercontent.com/docker-library/openjdk/master/8/jdk/Dockerfile
-sed -i.bak 's/FROM buildpack-deps:stretch-scm/FROM python:2/' Dockerfile
-sed -i.bak 's/update.sh/create_image.sh/' Dockerfile
-echo 'RUN pip install git+https://github.com/databricks-edu/build-tooling' >> Dockerfile
-echo 'RUN apt-get update && apt-get install less' >> Dockerfile
-echo 'RUN mv /root/local/bin/gendbc /usr/local/bin/' >> Dockerfile
-cp ../course .
-echo 'ADD course /usr/local/bin' >> Dockerfile
 
-if [ "$1" != "" -a "$1"=="build" ]; then
-    docker build -t build-tool .
-fi
-rm Dockerfile.bak course
+USAGE="$0 [build | rebuild]"
+
+DOCKERFILEDIR=/tmp/build-tool.$$
+
+mkdir $DOCKERFILEDIR || exit 1
+
+DOCKERFILE=$DOCKERFILEDIR/Dockerfile
+
+THIS_DIR=`dirname $0`
+case "$THIS_DIR" in
+    ""|.)
+        THIS_DIR=`pwd`
+        ;;
+    *)
+        ;;
+esac
+cd $THIS_DIR
+
+op=
+
+case $# in
+    1)
+        case "$1" in
+            "build")
+                op=build
+                ;;
+            "rebuild")
+                op=rebuild
+                ;;
+            *)
+                echo $USAGE >&1
+                exit 1
+                ;;
+        esac
+        ;;
+    *)
+        echo $USAGE >&2
+        exit 1
+        ;;
+esac
+
+echo "Creating $DOCKERFILE"
+
+curl -o $DOCKERFILE https://raw.githubusercontent.com/docker-library/openjdk/master/8/jdk/Dockerfile
+
+sed -i.bak 's/FROM buildpack-deps:stretch-scm/FROM python:2/' $DOCKERFILE
+sed -i.bak 's/update.sh/create_image.sh/' $DOCKERFILE
+echo 'RUN pip install git+https://github.com/databricks-edu/build-tooling' >> $DOCKERFILE
+echo 'RUN apt-get update && apt-get install less' >> $DOCKERFILE
+echo 'RUN mv /root/local/bin/gendbc /usr/local/bin/' >> $DOCKERFILE
+cp ../course $DOCKERFILEDIR
+echo 'ADD course /usr/local/bin' >> $DOCKERFILE
+
+USAGE=
+
+case "$op" in
+    "")
+        ;;
+    "build")
+        docker build -t build-tool $DOCKERFILEDIR
+        ;;
+    "rebuild")
+        docker rmi build-tool
+        docker build -t build-tool $DOCKERFILEDIR
+        ;;
+esac
+
+rm -rf $DOCKERFILEDIR
+

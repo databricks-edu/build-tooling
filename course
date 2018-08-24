@@ -1,13 +1,25 @@
 #!/bin/bash -e
 CONFIG_FILE=~/.databricks/course.config
 
+VERSION=1.1.0
+
 if [ -f "${CONFIG_FILE}" ]; then
   . "${CONFIG_FILE}"
 fi
 
 export EDITOR="${EDITOR:-"open -t"}"
 export PAGER="${PAGER:-"less --RAW-CONTROL-CHARS"}"
-COURSE_REPO="${REPO:-"${HOME}/repos/training"}"
+
+# backward compatability
+if [ -z $COURSE_REPO ]
+then
+  if [ -n $REPO ]
+  then
+    COURSE_REPO=$REPO
+  else
+    COURSE_REPO=$HOME/repos/training
+  fi
+fi
 
 function configure() {
   if [ "${CONFIGURE_COMPLETE}" == "true" -a "$1" != "force" ]; then
@@ -428,6 +440,10 @@ while [ $# -gt 0 ]; do
     cmd=`echo "${cmd}" | sed 's/-//g'`
   fi
   case "${cmd}" in
+    version|--version|-v)
+      echo $VERSION
+      exit 0
+      ;;
     help|--help|-h)
       help
     ;;

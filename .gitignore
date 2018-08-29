@@ -2,6 +2,7 @@
 *.egg-info
 *.pyc
 *.swp
+*.iml
 /dist
 /build
 .DS_Store

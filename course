@@ -376,6 +376,8 @@ installtools() {
     if [ -e "${HOME}/local/bin/course" ]; then
       echo 'Unable to install ~/local/bin/course.  Another file already exists.'
       exit 1
+    elif [ -h "${HOME}/local/bin/course" ]; then
+      rm "${HOME}/local/bin/course"
     else
       if [ ! -e ~/local/bin ]; then
         (set -x; mkdir -p ~/local/bin)

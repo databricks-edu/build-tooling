@@ -10,15 +10,8 @@ fi
 export EDITOR="${EDITOR:-"open -t"}"
 export PAGER="${PAGER:-"less --RAW-CONTROL-CHARS"}"
 
-# backward compatability
-if [ -z $COURSE_REPO ]
-then
-  if [ -n $REPO ]
-  then
-    COURSE_REPO=$REPO
-  else
-    COURSE_REPO=$HOME/repos/training
-  fi
+if [ -z "$COURSE_REPO" ]; then
+  COURSE_REPO="${REPO:-"${HOME}/repos/training"}"
 fi
 
 function configure() {

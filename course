@@ -1,7 +1,7 @@
 #!/bin/bash -e
 CONFIG_FILE=~/.databricks/course.config
 
-VERSION=1.1.0
+VERSION=1.1.1
 
 if [ -f "${CONFIG_FILE}" ]; then
   . "${CONFIG_FILE}"
@@ -371,12 +371,11 @@ installtools() {
       exit 1
     elif [ -h "${HOME}/local/bin/course" ]; then
       rm "${HOME}/local/bin/course"
-    else
-      if [ ! -e ~/local/bin ]; then
-        (set -x; mkdir -p ~/local/bin)
-      fi
-      (set -x; ln -s "${script}" ~/local/bin/course)
     fi
+    if [ ! -e ~/local/bin ]; then
+      (set -x; mkdir -p ~/local/bin)
+    fi
+    (set -x; ln -s "${script}" ~/local/bin/course)
   fi
   (set -x; pip install --upgrade databricks-cli)
   (set -x; pip install --upgrade git+https://github.com/databricks-edu/build-tooling)

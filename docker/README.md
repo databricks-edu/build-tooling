@@ -1,13 +1,20 @@
 # Build Tool Docker Image
 
-A Docker image capable defining a container capable of running the build tool and its high-level wrapper `course` must have both Python 2.7 and the JDK. Each of these exist as core images maintained by the Docker Team and available via Docker Hub ([here](https://hub.docker.com/_/python/) and [here](https://hub.docker.com/_/openjdk/)), however, as we require both, a custom image must be built.
+A Docker image capable defining a container capable of running the build tool
+and its high-level wrapper `course` must have both Python 2.7 and the JDK.
+Each of these exist as core images maintained by the Docker Team and available
+via Docker Hub ([here](https://hub.docker.com/_/python/) and
+[here](https://hub.docker.com/_/openjdk/)); however, as we require both, a
+custom image must be built.
 
 In order to be able to use the images maintained by the Docker Team, a script
 is included that merges the two images, `create_image.sh`. Alternatively, this
 script will also build the image for you.
 
-Note: You will need a recent version of Docker. Use the Community Edition
-version available at <https://store.docker.com>:
+## Install Docker
+
+You will need a recent version of Docker. Use the Community Edition version
+available at <https://store.docker.com>:
 
 * [Mac edition](https://store.docker.com/editions/community/docker-ce-desktop-mac)
 * [Windows edition](https://store.docker.com/editions/community/docker-ce-desktop-windows)
@@ -16,6 +23,11 @@ version available at <https://store.docker.com>:
 Download it, and install it. Then, run it at least once (e.g., on the Mac,
 open `/Applications/Docker.app`), which will create the various command line
 links you'll need.
+
+**WARNING**: On the Mac, do _not_ use the version of Docker that can be
+installed via Homebrew. Some people have had problems with that version, and
+we will not debug problems using the build tools in that environment. Use the
+official Community Edition version, as noted above.
 
 ## To Create the `Dockerfile` and Build the Image
 

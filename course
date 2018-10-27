@@ -52,6 +52,7 @@ function configure() {
     exit 1
   fi
   eval `bdc --info --shell "${COURSE_YAML}"`
+  export COURSE_NAME COURSE_VERSION
   COURSE_LOWERCASE="`echo "${COURSE_NAME}" | tr '[:upper:]' '[:lower:]'`"
   DEPLOY_PATH="s3://files.training.databricks.com/courses/${COURSE_LOWERCASE}"
   SOURCE_IMAGES="${COURSE_REPO}/modules/self-paced/${COURSE_NAME}/images"

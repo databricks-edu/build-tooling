@@ -29,9 +29,9 @@ function configure() {
   fi
 
   # Navigation logic for self-paced courses
-  SELF_PACED_COURSES="Spark-SQL DataFrames ETL-Part-1 ETL-Part-2 ETL-Part-3 Delta"
+  SELF_PACED_COURSES="Structured-Streaming Spark-SQL DataFrames ETL-Part-1 ETL-Part-2 ETL-Part-3 Delta"
   if  [[ "${SELF_PACED_COURSES}" =~ (^|[[:space:]])"${COURSE_NAME}"($|[[:space:]]) ]]; then
-    PREFIX="${PREFIX:-"self-paced/"}"
+    PREFIX="${PREFIX:-"Self-Paced/"}"
   else
     PREFIX="${PREFIX:-""}"
   fi

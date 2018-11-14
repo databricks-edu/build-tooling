@@ -38,7 +38,7 @@ setup(
         'PyYAML >= 3.12',
         'pystache >= 0.5.4',
         'parsimonious==0.8.0',
-        'WeasyPrint >= 0.42.3'
+        'WeasyPrint==0.42.3'
     ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

@@ -1,7 +1,7 @@
-#!/bin/bash -e
+#!/bin/bash
+set -a -e
 CONFIG_FILE=~/.databricks/course.config
-
-VERSION=1.1.1
+VERSION=1.1.2
 
 if [ -f "${CONFIG_FILE}" ]; then
   . "${CONFIG_FILE}"
@@ -29,9 +29,9 @@ function configure() {
   fi
 
   # Navigation logic for self-paced courses
-  SELF_PACED_COURSES="Spark-SQL DataFrames ETL-Part-1 ETL-Part-2 ETL-Part-3 Delta"
+  SELF_PACED_COURSES="Structured-Streaming Spark-SQL DataFrames ETL-Part-1 ETL-Part-2 ETL-Part-3 Delta"
   if  [[ "${SELF_PACED_COURSES}" =~ (^|[[:space:]])"${COURSE_NAME}"($|[[:space:]]) ]]; then
-    PREFIX="${PREFIX:-"self-paced/"}"
+    PREFIX="${PREFIX:-"Self-Paced/"}"
   else
     PREFIX="${PREFIX:-""}"
   fi
@@ -46,15 +46,16 @@ function configure() {
   COURSE_MODULES="${COURSE_MODULES:-"${COURSE_REPO}/modules/${PREFIX}${COURSE_NAME}"}"
   SOURCE="${SOURCE:-"_Source"}"
   TARGET="${TARGET:-"_Target"}"
-  SOURCE_PATH="${COURSE_REPO}/courses/self-paced/${COURSE_NAME}"
+  SOURCE_PATH="${COURSE_REPO}/courses/${PREFIX}/${COURSE_NAME}"
   if ! bdc --info "${COURSE_YAML}"; then
     echo "Aborting: Error reading/parsing ${COURSE_YAML}" 1>&2
     exit 1
   fi
   eval `bdc --info --shell "${COURSE_YAML}"`
+  export COURSE_NAME COURSE_VERSION
   COURSE_LOWERCASE="`echo "${COURSE_NAME}" | tr '[:upper:]' '[:lower:]'`"
   DEPLOY_PATH="s3://files.training.databricks.com/courses/${COURSE_LOWERCASE}"
-  SOURCE_IMAGES="${COURSE_REPO}/modules/self-paced/${COURSE_NAME}/images"
+  SOURCE_IMAGES="${COURSE_REPO}/modules/${PREFIX}/${COURSE_NAME}/images"
   DEPLOY_IMAGES="${DEPLOY_PATH}/${COURSE_VERSION}/images"
 
   # If DB_SHARD_HOME is not yet, then read it from .databrickscfg.
@@ -291,6 +292,10 @@ release() {
       aws s3 cp --profile "${COURSE_AWS_PROFILE}" --cache-control "max-age=15" --recursive "${DEPLOY_PATH}/${COURSE_VERSION}" "${DEPLOY_PATH}/${deploy_type}"
     )
     deployimages
+    echo ""
+    echo "= ${COURSE_NAME} is now published to:"
+    echo "https:${DEPLOY_PATH#s3:}/${deploy_type}/amazon/Lessons.dbc"
+    echo "https:${DEPLOY_PATH#s3:}/${deploy_type}/azure/Lessons.dbc"
   fi
 }
 

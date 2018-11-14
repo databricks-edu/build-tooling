@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.24.1"
+VERSION = "1.25.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1035,7 +1035,7 @@ def load_build_yaml(yaml_file):
             mf = MiscFileData(
                 src=src,
                 dest=dest,
-                dest_is_dir=obj.get('dest_is_dir', False),
+                dest_is_dir=obj.get('dest_is_dir', None),
                 is_template=obj.get('template', False)
             )
             # Sanity checks: A Markdown file can be translated to Markdown,
@@ -1050,14 +1050,16 @@ def load_build_yaml(yaml_file):
             # We can't check to see whether the target is a directory, since
             # nothing exists yet. But if it has an extension, we can assume it
             # is not a directory.
-            if ((dest == '.') or dest.endswith('/')) and (not mf.dest_is_dir):
-                # It's the top-level directory. Nothing to check.
-                raise ConfigError(
-                    ('Section misc_files: "{}" uses a "dest" of "{}", but '
-                     '"dest_is_dir" is not set to true.').format(src, dest)
-                )
-            elif has_extension(dest):
+            if has_extension(dest):
                 # It's a file, not a directory.
+                if mf.dest_is_dir:
+                    raise ConfigError(
+                        ('Section misc_files: "{}" uses a "dest" of "{}", ' +
+                         'which has an extension, so it is assumed to be a ' +
+                         'file. But, "dest_is_dir" is set to true.').format(
+                            src, dest
+                        )
+                    )
                 if is_markdown(src):
                     if not (is_pdf(dest) or is_html(dest) or is_markdown(dest)):
                         raise ConfigError(
@@ -1072,6 +1074,18 @@ def load_build_yaml(yaml_file):
                              'target ("{}") is not a directory and is not ' +
                              "PDF or HTML.").format(src, dest)
                         )
+            else:
+                # No extension. Assume dest_is_dir is True, if not set.
+                if mf.dest_is_dir is None:
+                    mf = mf._replace(dest_is_dir=True)
+
+                # Some simple sanity checks.
+                if (not mf.dest_is_dir) and (dest in ('.', '..')):
+                    raise ConfigError(
+                        ('Section misc_files: "{}" has a "dest" of "{}", ' +
+                         '''but "dest_is_dir" is set to false. That's just ''' +
+                         'silly.').format(src, dest)
+                    )
 
             return mf
 
@@ -1465,14 +1479,10 @@ def _convert_and_copy_info_file(src, dest, build):
         # Not a special type that we have to convert. Just copy.
         copy(src, dest)
     elif dest_type is None:
-        # Source type is a special type (Markdown, HTML), or it's a directory
-        # that isn't properly marked. Either way, we don't know the destination
-        # type.
-        raise BuildError(
-            ('''Don't know how to translate "{}" into "{}". (Is "{}" a ''' +
-             '''directory, and did you forget to set "dest_is_dir"?)''').format(
-                src, dest, dest
-            ))
+        # Source type is a special type (Markdown, HTML), and the destination
+        # (a) isn't marked as a directory, and (b) isn't a type we understand.
+        # Treat it as a straight copy.
+        shutil.copy(src, dest)
     else:
         proc = INFO_PROCESSORS.get(src_type, {}).get(dest_type, None)
         if proc is None:

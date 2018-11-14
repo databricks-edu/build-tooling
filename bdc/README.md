@@ -349,8 +349,9 @@ containing `build.yaml`.
 **`dest`** (REQUIRED) The destination path, relative to the top of the
 build output directory (or the profile subdirectory, if
 [Build Profiles](#build-profiles) are enabled). A value of "." means
-"top-level directory". This parameter can be a file or a directory. If
-it is a directory, you _must_ set `dest_is_dir` to true.
+"top-level directory". This parameter can be a file or a directory. If the
+destination does not have an extension, it is assumed to be a directory,
+unless you set `dest_is_dir` to false.
   
 The following substitutions are permitted within `dest`:
 
@@ -361,9 +362,9 @@ The following substitutions are permitted within `dest`:
 | `${extension}` | the file extension
 | your variables | Any variables defined in the `variables` section, without prefix. 
 
-
 **`dest_is_dir`**: (OPTIONAL) `true` indicates that `dest` is intended to
 be a directory; `false` indicates that it is a file. Defaults to `false`.
+You can't set this to `true` if the destination has an extension.
   
 **`template`**: (OPTIONAL) `true` indicates that the source file is actually
 a [Mustache][] template, which allows you to use variable substitution and

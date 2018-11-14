@@ -1,5 +1,12 @@
 # Change Log for BDC
 
+### Version 1.25.0
+
+- In `misc_files`, if the destination does not have an extension, it is now
+  assumed to be a directory, and `dest_is_dir` is inferred to be true.
+  You can force it to be false, if need be, but only if the destination
+  doesn't have an extension.
+
 ### Version 1.24.1
 
 - Fixed a misleading error message when `misc_files` specifies a target

@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.24.1
+
+- Fixed a misleading error message when `misc_files` specifies a target
+  destination of directory, but `dest_is_dir` isn't set.
+
 ### Version 1.24.0
 
 - The `zipfile` and `dest` in the `bundle` section can now substitute the

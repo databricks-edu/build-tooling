@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.24.0"
+VERSION = "1.24.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1031,6 +1031,7 @@ def load_build_yaml(yaml_file):
             return None
         else:
             dest = parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars)
+
             mf = MiscFileData(
                 src=src,
                 dest=dest,
@@ -1049,11 +1050,11 @@ def load_build_yaml(yaml_file):
             # We can't check to see whether the target is a directory, since
             # nothing exists yet. But if it has an extension, we can assume it
             # is not a directory.
-            if (dest == '.') and (not mf.dest_is_dir):
+            if ((dest == '.') or dest.endswith('/')) and (not mf.dest_is_dir):
                 # It's the top-level directory. Nothing to check.
                 raise ConfigError(
-                    ('Section misc_files: "{}" uses a "dest" of ".", but '
-                     '"dest_is_dir" is not set to true.').format(src)
+                    ('Section misc_files: "{}" uses a "dest" of "{}", but '
+                     '"dest_is_dir" is not set to true.').format(src, dest)
                 )
             elif has_extension(dest):
                 # It's a file, not a directory.
@@ -1464,18 +1465,18 @@ def _convert_and_copy_info_file(src, dest, build):
         # Not a special type that we have to convert. Just copy.
         copy(src, dest)
     elif dest_type is None:
-        # Source type is a special type (Markdown, HTML), but we don't know the
-        # destination type. This is a bug, since this error should've been
-        # caught during build file parsing..
+        # Source type is a special type (Markdown, HTML), or it's a directory
+        # that isn't properly marked. Either way, we don't know the destination
+        # type.
         raise BuildError(
-            '(BUG: Should have been caught earlier) "{}" -> "{}".'.format(
-                src, dest
-            )
-        )
+            ('''Don't know how to translate "{}" into "{}". (Is "{}" a ''' +
+             '''directory, and did you forget to set "dest_is_dir"?)''').format(
+                src, dest, dest
+            ))
     else:
         proc = INFO_PROCESSORS.get(src_type, {}).get(dest_type, None)
         if proc is None:
-            raise BuildError(
+            raise Exception(
                 '(BUG: No processor) "{}" -> "{}".'.format(
                     src, dest
                 )
@@ -1829,10 +1830,9 @@ def copy_misc_files(build, dest_root, profile):
             if dest == '.':
                 dest = dest_root
 
-            if f.dest_is_dir and (not path.isdir(dest)):
-                os.mkdir(dest)
-
             t = joinpath(dest_root, dest)
+            if f.dest_is_dir and (not path.isdir(t)):
+                os.mkdir(t)
             copy_info_file(s, t, f.is_template, build, profile)
 
 

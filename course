@@ -1,5 +1,5 @@
 #!/bin/bash
-set -a -e
+set -e
 CONFIG_FILE=~/.databricks/course.config
 VERSION=1.1.2
 

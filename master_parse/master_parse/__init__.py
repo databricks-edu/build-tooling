@@ -1159,6 +1159,16 @@ class CellTemplateProcessor(object):
             vars['answer'] = strip_leading_and_trailing_blank_lines(text)
             return self._renderer.render(self.ANSWER_TEMPLATE, vars)
 
+        if params.course_type == CourseType.SELF_PACED:
+            self_paced = True
+            ilt = False
+        elif params.course_type == CourseType.ILT:
+            self_paced = False
+            ilt = True
+        else:
+            self_paced = False
+            ilt = False
+
         vars = {
             'amazon':            amazon,
             'azure':             azure,
@@ -1170,7 +1180,9 @@ class CellTemplateProcessor(object):
             'r':                 r,
             'scala':             scala,
             'python':            python,
-            'sql':               sql
+            'sql':               sql,
+            'ilt':               ilt,
+            'self_paced':        self_paced,
         }
 
         vars.update(params.extra_template_vars)

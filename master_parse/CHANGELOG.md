@@ -5,12 +5,20 @@
 - Mustache parsing logic now contains some simple checks for bad Mustache
   template syntax. It will detect, and issue warnings, for the following
   incorrect Mustache substitutions:
-  - `{{tag}` (missing a closing brace)
-  - `{{#tag}` (missing a closing brace)
-  - `{{/tag}` (missing a closing brace)
-  - `{tag}}` (missing opening brace)
-  - `{#tag}}` (missing opening brace)
-  - `{/tag}}` (missing opening brace)
+    - `{{tag}` (missing a closing brace)
+    - `{{#tag}` (missing a closing brace)
+    - `{{/tag}` (missing a closing brace)
+    - `{tag}}` (missing opening brace)
+    - `{#tag}}` (missing opening brace)
+    - `{/tag}}` (missing opening brace)
+
+- Added the following Mustache tests:
+    - `{{#self_paced}}self-paced-only content{{/self-paced}}`: Emits the
+      specified content if the build is for self-paced curriculum; omits the
+      content if the build is for ILT curriculum.         
+    - `{{#ilt}}instructor led-only content{{/ilt}}`: Emits the specified content 
+      if the build is for ILT curriculum; omits the content if the build is for 
+      self-paced curriculum.         
   
 **Version 1.18.0**
 

@@ -510,6 +510,10 @@ The master parser defines the following variables automatically:
 - `python`: `true` if the output notebook is Python, `false` otherwise.
 - `r`: `true` if the output notebook is R, `false` otherwise.
 - `sql`: `true` if the output notebook is SQL, `false` otherwise.
+- `self_paced`: `true` if the build is a self-paced build; `false` if it is
+  an ILT build.
+- `ilt`: `true` if the build is an ILT build; `false` if it is a self-paced
+  build.  
 
 In addition, you can substitute any variables defined in the `bdc` build file's
 [`variables` section](../bdc/README.md#variables-and-cell-templates).

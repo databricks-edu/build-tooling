@@ -38,10 +38,13 @@ $ ./create_image.sh build
 ## Updating with New Build Tools
 
 When new build tools are released, you'll need to update your Docker
-image. To do this, simply build the image again:
+image. Currently, you have to destroy the image and rebuild it, which takes
+time. (We're working on a better solution.)
+
+To do that:
 
 ```
-$ ./create_image.sh build
+$ ./create_image.sh rebuild
 ```
 
 ## To Use the Build Tool via Docker

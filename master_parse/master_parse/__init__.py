@@ -933,11 +933,12 @@ class CellTemplateProcessor(object):
     var nextHint = 0;
     var hasAnswer = (answer != null);
     var items = new Array();
+    var answerLabel = "Click here for the answer";
     for (var i = 0; i < totalHints; i++) {
       var elem = allHints[i];
       var label = "";
       if ((i + 1) == totalHints)
-        label = "Click here for the answer";
+        label = answerLabel;
       else
         label = "Click here for the next hint";
       items.push({label: label, elem: elem});
@@ -947,6 +948,9 @@ class CellTemplateProcessor(object):
     }
 
     var button = document.getElementById("hint-button-{{id_prefix}}");
+    if (totalHints == 0) {
+      button.innerHTML = answerLabel;
+    }
     button.onclick = function() {
       items[nextHint].elem.style.display = 'block';
       if ((nextHint + 1) >= items.length)

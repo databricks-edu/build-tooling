@@ -19,7 +19,10 @@
     - `{{#ilt}}instructor led-only content{{/ilt}}`: Emits the specified content 
       if the build is for ILT curriculum; omits the content if the build is for 
       self-paced curriculum.         
-  
+
+- A revealable hints section can now have no hints (i.e., just the revealable
+  answer.)
+
 **Version 1.18.0**
 
 The Mustache templates now support `{{#scala}}`, `{{#sql}}`, `{{#python}}`

@@ -1,5 +1,17 @@
 # Change Log for Master Parse Tool
 
+**Version 1.19.0**
+
+- Mustache parsing logic now contains some simple checks for bad Mustache
+  template syntax. It will detect, and issue warnings, for the following
+  incorrect Mustache substitutions:
+  - `{{tag}` (missing a closing brace)
+  - `{{#tag}` (missing a closing brace)
+  - `{{/tag}` (missing a closing brace)
+  - `{tag}}` (missing opening brace)
+  - `{#tag}}` (missing opening brace)
+  - `{/tag}}` (missing opening brace)
+  
 **Version 1.18.0**
 
 The Mustache templates now support `{{#scala}}`, `{{#sql}}`, `{{#python}}`

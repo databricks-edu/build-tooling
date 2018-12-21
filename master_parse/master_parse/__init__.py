@@ -29,7 +29,7 @@ from datetime import datetime
 from textwrap import TextWrapper
 from random import SystemRandom
 
-VERSION = "1.18.0"
+VERSION = "1.19.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -494,10 +494,12 @@ class NotebookGenerator(object):
         if params.enable_templates:
             # Process the cell as a template.
             new_commands = []
-            for cmd in commands:
+            for i, cmd in enumerate(commands):
+                cell_num = i + 1
                 if cmd.code.is_markdown():
                     (new_code, new_content) = self.cell_template_processor.process(
-                        cmd.content, cmd.code, self.notebook_code, params,
+                        cmd.content, cmd.code, cell_num, input_name,
+                        self.notebook_code, params,
                     )
                     new_commands.append(Command(
                         part=cmd.part,
@@ -1012,29 +1014,52 @@ class CellTemplateProcessor(object):
 </div>
 '''
 
+    # Regex patterns that match possible bad Mustache substitutions. The code
+    # assumes all patterns have at one capture group containing the part that
+    # mismatches.
+    BAD_MUSTACHE_PATTERNS = (
+        r'({{}})',                    # empty tag
+        r'^({[#/]?[^{}]+}})',         # {tag}}, {#tag}}, {/tag}} at start
+        r'^({[#/]?[^{}]+}})$',        # {tag}}, {#tag}}, {/tag}} at start & end
+        r'[^{]({[#/]?[^{}]+}})',      # {tag}}, {#tag}}, {/tag}} elsewhere
+        r'^[^{]({{[#/]?[^{}]+})$',    # {{tag}, {{#tag}, {{/tag} at start & end
+        r'[^{]({{[#/]?[^{}]+})$',     # {{tag}, {{#tag}, {{/tag} at end
+        r'[^{]({{[#/]?[^{}]+})[^}]',  # {{tag}, {{#tag}, {{/tag} elsewhere
+    )
+
+    BAD_MUSTACHE_REGEXPS = [re.compile(s) for s in BAD_MUSTACHE_PATTERNS]
+
     def __init__(self):
+        import pystache
+
         self._id_prefix = None
         self._found_hints = False
         self._in_hints_block = False
         self._total_hints = 0
+        # Use an instantiated pystache.Renderer() object, rather than the
+        # pystache.render() function, because the object generates better
+        # errors.
+        self._renderer = pystache.Renderer(missing_tags='strict')
 
-    def process(self, contents, cell_code, language, params):
+    def process(self, contents, cell_code, cell_num, notebook_name,
+                language, params):
         '''
         Runs a cell's content through the template processor.
 
-        :param contents:  the contents, a list of lines with no trailing newline
-        :param cell_code: the cell code (CommandCode.MARKDOWN,
-                          CommandCode.MARKDOWN_SANDBOX)
-        :param language:  output language (as a CommandCode) of the notebook being
-                          generated
-        :param params:    the parsed command line parameters
+        :param contents:      the contents, a list of lines with no trailing
+                              newline
+        :param cell_code:     the cell code (CommandCode.MARKDOWN,
+                              CommandCode.MARKDOWN_SANDBOX)
+        :param cell_num:      the cell number, for errors/warnings
+        :param notebook_name: name of notebook, for errors/warnings
+        :param language:      output language (as a CommandCode) of the
+                              notebook being generated
+        :param params:        the parsed command line parameters
 
         :return: a tuple with two elements: the possibly-changed command code
                  (because certain expansions only work in %md-sandbox) and the new
                  content as a list of lines with no trailing newline
         '''
-        import pystache
-
         self._found_hints = False
         self._in_hints_block = False
         self._total_hints = 0
@@ -1066,6 +1091,23 @@ class CellTemplateProcessor(object):
         elif language == CommandCode.R:
             lang_string = "R"
             r = True
+        else:
+            lang_string = ""
+
+        def check_for_bad_tags(s):
+            bad = False
+            lines = s.split('\n')
+            for i, line in enumerate(lines):
+                line_num = i + 1
+                for r in self.BAD_MUSTACHE_REGEXPS:
+                    m = r.search(line)
+                    if m:
+                        _warning(('"{}", cell #{}, line {}: Possibly bad ' +
+                                  'Mustache tag "{}".').format(
+                            notebook_name, cell_num, line_num, m.group(1)
+                        ))
+                        bad = True
+            return bad
 
         def strip_leading_and_trailing_blank_lines(text):
             import itertools
@@ -1089,7 +1131,9 @@ class CellTemplateProcessor(object):
             prelude_vars = {
                 'id_prefix': self._id_prefix
             }
-            prelude = pystache.render(self.HINTS_PRELUDE_TEMPLATE, prelude_vars)
+            prelude = self._renderer.render(
+                self.HINTS_PRELUDE_TEMPLATE, prelude_vars
+            )
             return prelude + strip_leading_and_trailing_blank_lines(text)
 
         def handle_hint(text):
@@ -1102,7 +1146,7 @@ class CellTemplateProcessor(object):
                 'id_prefix': self._id_prefix,
                 'hint':      strip_leading_and_trailing_blank_lines(text)
             }
-            return pystache.render(self.HINT_TEMPLATE, hint_vars)
+            return self._renderer.render(self.HINT_TEMPLATE, hint_vars)
 
         def handle_answer(text):
             # The text is the body of the answer.
@@ -1113,7 +1157,7 @@ class CellTemplateProcessor(object):
 
             # Render the answer template.
             vars['answer'] = strip_leading_and_trailing_blank_lines(text)
-            return pystache.render(self.ANSWER_TEMPLATE, vars)
+            return self._renderer.render(self.ANSWER_TEMPLATE, vars)
 
         vars = {
             'amazon':            amazon,
@@ -1130,14 +1174,10 @@ class CellTemplateProcessor(object):
         }
 
         vars.update(params.extra_template_vars)
-        new_content = pystache.render(s, vars)
+        check_for_bad_tags(s)
+        new_content = self._renderer.render(s, vars)
 
         if self._found_hints:
-            if self._total_hints == 0:
-                raise Exception(
-                    'There must be at least one {{#HINT}} inside a {{#HINTS}} ' +
-                    'block.'
-                )
             new_cell_code = CommandCode.MARKDOWN_SANDBOX
         else:
             new_cell_code = cell_code
@@ -1157,19 +1197,24 @@ _be_verbose = False
 _show_debug = False
 _rng = SystemRandom()
 
-COLUMNS = int(os.getenv('COLUMNS', '79'))
+COLUMNS = int(os.getenv('COLUMNS', '80')) - 1
 DEBUG_PREFIX = "master_parse (DEBUG) "
 VERBOSE_PREFIX = "master_parse: "
+WARNING_PREFIX = "master_parse: (WARNING) "
 
 # Text wrappers
 
-_error_wrapper = TextWrapper(width=COLUMNS)
+_warning_wrapper = TextWrapper(width=COLUMNS,
+                               subsequent_indent=' ' * len(WARNING_PREFIX))
 
 _verbose_wrapper = TextWrapper(width=COLUMNS,
                                subsequent_indent=' ' * len(VERBOSE_PREFIX))
 
 _debug_wrapper = TextWrapper(width=COLUMNS,
                              subsequent_indent=' ' * len(DEBUG_PREFIX))
+
+def _warning(msg):
+    print(_warning_wrapper.fill("{0}{1}".format(WARNING_PREFIX, msg)))
 
 def _debug(msg):
     if _show_debug:

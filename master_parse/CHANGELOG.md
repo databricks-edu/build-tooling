@@ -1,5 +1,28 @@
 # Change Log for Master Parse Tool
 
+**Version 1.19.0**
+
+- Mustache parsing logic now contains some simple checks for bad Mustache
+  template syntax. It will detect, and issue warnings, for the following
+  incorrect Mustache substitutions:
+    - `{{tag}` (missing a closing brace)
+    - `{{#tag}` (missing a closing brace)
+    - `{{/tag}` (missing a closing brace)
+    - `{tag}}` (missing opening brace)
+    - `{#tag}}` (missing opening brace)
+    - `{/tag}}` (missing opening brace)
+
+- Added the following Mustache tests:
+    - `{{#self_paced}}self-paced-only content{{/self-paced}}`: Emits the
+      specified content if the build is for self-paced curriculum; omits the
+      content if the build is for ILT curriculum.         
+    - `{{#ilt}}instructor led-only content{{/ilt}}`: Emits the specified content 
+      if the build is for ILT curriculum; omits the content if the build is for 
+      self-paced curriculum.         
+
+- A revealable hints section can now have no hints (i.e., just the revealable
+  answer.)
+
 **Version 1.18.0**
 
 The Mustache templates now support `{{#scala}}`, `{{#sql}}`, `{{#python}}`

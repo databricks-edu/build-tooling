@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.25.0"
+VERSION = "1.26.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -2137,7 +2137,8 @@ def get_sources_and_targets(build):
 
     :param build: the build
 
-    :return: A dict of source names to partial-path target names
+    :return: A dict of source names to partial-path target names. Each source
+             name can map to multiple targets.
     """
     template_data = {
         TARGET_LANG: '',
@@ -2199,30 +2200,50 @@ def get_sources_and_targets(build):
             ext = ext[1:] # remove the leading "."
         dest = map_notebook_dest(nb)
 
-        res[nb_full_path] = dest
+        res[nb_full_path] = res.get(nb_full_path, []) + [dest]
 
     return res
 
 
+def check_for_multiple_upload_download_mappings(notebooks):
+    '''
+    Check the result returned by get_sources_and_targets() for sources that
+    map to multiple targets.
+
+    :param notebooks: the result of get_get_sources_and_targets()
+
+    :return: A sequence of (source, targets) tuples of only those results that
+             map to multiple targets. The iterator might be empty.
+    '''
+    res = {}
+    for src, targets in notebooks.items():
+        if len(targets) == 1:
+            continue
+        res[src] = targets
+
+    return tuple(res.items())
+
 def upload_notebooks(build, shard_path, db_profile):
     shard_path = expand_shard_path(shard_path)
-    ensure_shard_path_does_not_exist(shard_path, db_profile)
-
     notebooks = get_sources_and_targets(build)
-    try:
+
+    def do_upload(notebooks):
+        ensure_shard_path_does_not_exist(shard_path, db_profile)
+
         with TemporaryDirectory() as tempdir:
             info("Copying notebooks to temporary directory.")
-            for nb_full_path, partial_path in notebooks.items():
+            for nb_full_path, partial_paths in notebooks.items():
                 if not path.exists(nb_full_path):
                     warning('Notebook "{}" does not exist. Skipping it.'.format(
                         nb_full_path
                     ))
                     continue
-                temp_path = joinpath(tempdir, partial_path)
-                dir = path.dirname(temp_path)
-                mkdirp(dir)
-                verbose('Copying "{0}" to "{1}"'.format(nb_full_path, temp_path))
-                copy(nb_full_path, temp_path)
+                for partial_path in partial_paths:
+                    temp_path = joinpath(tempdir, partial_path)
+                    dir = path.dirname(temp_path)
+                    mkdirp(dir)
+                    verbose('Copying "{0}" to "{1}"'.format(nb_full_path, temp_path))
+                    copy(nb_full_path, temp_path)
 
             with working_directory(tempdir):
                 info("Uploading notebooks to {0}".format(shard_path))
@@ -2236,51 +2257,102 @@ def upload_notebooks(build, shard_path, db_profile):
                     info("Uploaded {0} notebooks to {1}.".format(
                         len(notebooks), shard_path
                     ))
+
+    try:
+        do_upload(notebooks)
     except UploadDownloadError as e:
         dbw('rm', [shard_path], capture_stdout=False, db_profile=db_profile)
         die(e.message)
 
+    multiple_mappings = check_for_multiple_upload_download_mappings(notebooks)
+    if len(multiple_mappings) > 0:
+        wrap2stdout('\n********')
+        wrap2stdout('CAUTION:')
+        wrap2stdout('********\n')
+        wrap2stdout('Some source files have been copied to multiple destinations!\n')
+
+        for src, targets in multiple_mappings:
+            wrap2stdout(
+                ('\n"{}" has been uploaded to multiple places. Only edits to ' +
+                 '"{}/{}" will be applied on download.').format(
+                    src, shard_path, targets[0]
+            ))
+
+        wrap2stdout("\nIf you edit the build file before you run --download, " +
+                    "you might lose any edits to those files!")
+
 
 def download_notebooks(build, shard_path, db_profile):
     shard_path = expand_shard_path(shard_path)
-    ensure_shard_path_exists(shard_path, db_profile)
+    notebooks = get_sources_and_targets(build)
+
+    def do_download(notebooks):
+        # remote_to_local is assumed to be a 1-1 mapping of remote paths to
+        # local paths.
+        ensure_shard_path_exists(shard_path, db_profile)
+        with TemporaryDirectory() as tempdir:
+            info("Downloading notebooks to temporary directory")
+            with working_directory(tempdir):
+                rc, res = dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
+                if rc != 0:
+                    raise UploadDownloadError(
+                        "Download failed: {0}".format(res.get('message', '?'))
+                    )
+
+                for local, remotes in notebooks.items():
+                    # We only ever download the first one.
+                    remote = remotes[0]
+                    if not path.exists(remote):
+                        warning(('Cannot find downloaded version of course ' +
+                                 'notebook "{0}".').format(local))
+                    print('"{0}" -> {1}'.format(remote, local))
+                    # Make sure there's a newline at the end of each file.
+                    move(remote, local, ensure_final_newline=True)
+                    # Remove any others, so they're not treated as leftovers.
+                    for r in remotes[1:]:
+                        if path.exists(r):
+                            os.unlink(r)
+
+                # Are there any leftovers?
+                leftover_files = []
+                for root, dirs, files in os.walk('.'):
+                    for f in files:
+                        leftover_files.append(path.relpath(joinpath(root, f)))
+                if len(leftover_files) > 0:
+                    warning(("These files from {0} aren't in the build file and" +
+                             " were not copied").format(shard_path))
+                    for f in leftover_files:
+                        print("    {0}".format(f))
 
     # get_sources_and_targets() returns a dict of
-    # local-path -> remote-partial-path. Reverse it. Bail if there are any
-    # duplicate keys, because it's supposed to be 1:1.
+    # local-path -> remote-partial-paths. Reverse it. If there are duplicate
+    # (remote) keys, keep only the first one. See upload_notebooks()
     remote_to_local = {}
-    for local, remote in get_sources_and_targets(build).items():
+    for local, remotes in notebooks.items():
+        # We only ever download the first one.
+        remote = remotes[0]
         if remote in remote_to_local:
             die('(BUG): Found multiple instances of remote path "{0}"'.format(
                 remote
             ))
         remote_to_local[remote] = local
 
-    with TemporaryDirectory() as tempdir:
-        info("Downloading notebooks to temporary directory")
-        with working_directory(tempdir):
-            rc, res = dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
-            if rc != 0:
-                die("Download failed: {0}".format(res.get('message', '?')))
+    try:
+        do_download(notebooks)
+    except UploadDownloadError as e:
+        die(e.message)
 
-            for remote, local in remote_to_local.items():
-                if not path.exists(remote):
-                    warning(('Cannot find downloaded version of course ' +
-                             'notebook "{0}".').format(local))
-                print('"{0}" -> {1}'.format(remote, local))
-                # Make sure there's a newline at the end of each file.
-                move(remote, local, ensure_final_newline=True)
+    multiple_mappings = check_for_multiple_upload_download_mappings(notebooks)
+    if len(multiple_mappings) > 0:
+        wrap2stdout('\n********')
+        wrap2stdout('CAUTION:')
+        wrap2stdout('********\n')
+        wrap2stdout('Some source files exist more than once in the build file!')
 
-            # Are there any leftovers?
-            leftover_files = []
-            for root, dirs, files in os.walk('.'):
-                for f in files:
-                    leftover_files.append(path.relpath(joinpath(root, f)))
-            if len(leftover_files) > 0:
-                warning(("These files from {0} aren't in the build file and" +
-                         " were not copied").format(shard_path))
-                for f in leftover_files:
-                    print("    {0}".format(f))
+        for src, targets in multiple_mappings:
+            wrap2stdout('\n"{}" has ONLY been downloaded from "{}/{}"'.format(
+                    src, shard_path, targets[0]
+            ))
 
 
 def list_notebooks(build):

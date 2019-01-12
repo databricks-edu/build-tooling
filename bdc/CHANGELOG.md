@@ -1,5 +1,11 @@
 # Change Log for BDC
 
+### Version 1.26.0
+
+- `bdc --upload` and `bdc --download` now supports multiple instances of a 
+  source file. The source file will be uploaded to all the target places.
+  Upon download, only the first instance will be downloaded. **Use with care!** 
+
 ### Version 1.25.0
 
 - In `misc_files`, if the destination does not have an extension, it is now

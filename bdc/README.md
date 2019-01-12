@@ -169,11 +169,12 @@ the `markdown` section:
 
 ```yaml
 markdown:
-  html_stylesheet: /path/to/my/stylesheet.css
+  html_stylesheet: path/to/my/stylesheet.css
 ```
 
 If you specify `markdown.html_stylesheet`, the stylesheet you specify is
 inserting, inline, in each HTML file that is generated from Markdown source.
+Unless absolute, the path is assumed to be relative to the build file.
 
 ### Output Generation
 

@@ -87,9 +87,24 @@ h4 {
 }
 """
 
-COLUMNS = int(os.getenv('COLUMNS', '79'))
+COLUMNS = int(os.getenv('COLUMNS', '80')) - 1
 WARNING_PREFIX = "*** WARNING: "
 DEBUG_PREFIX = "(DEBUG) "
+
+# ---------------------------------------------------------------------------
+# Custom TextWrapper class
+# ---------------------------------------------------------------------------
+
+class BDCTextWrapper(TextWrapper):
+    def __init__(self, width=COLUMNS, subsequent_indent=''):
+        TextWrapper.__init__(self,
+                             width=width,
+                             subsequent_indent=subsequent_indent)
+
+    def fill(self, msg):
+        wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
+        return '\n'.join(wrapped)
+
 
 # ---------------------------------------------------------------------------
 # Module globals
@@ -99,17 +114,17 @@ _verbose = False
 _verbose_prefix = ''
 
 # Text wrappers
-_warning_wrapper = TextWrapper(width=COLUMNS,
-                               subsequent_indent=' ' * len(WARNING_PREFIX))
+_warning_wrapper = BDCTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
 
-_verbose_wrapper = TextWrapper(width=COLUMNS)
+_verbose_wrapper = BDCTextWrapper()
 
-_error_wrapper = TextWrapper(width=COLUMNS)
+_error_wrapper = BDCTextWrapper()
 
-_info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
+_info_wrapper = BDCTextWrapper(subsequent_indent=' ' * 4)
 
-_debug_wrapper = TextWrapper(width=COLUMNS,
-                             subsequent_indent = ' ' * len(DEBUG_PREFIX))
+_debug_wrapper = BDCTextWrapper(subsequent_indent = ' ' * len(DEBUG_PREFIX))
+
+_generic_wrapper = BDCTextWrapper()
 
 # ---------------------------------------------------------------------------
 # Public functions
@@ -130,8 +145,7 @@ def set_verbosity(verbose, verbose_prefix):
     _verbose = verbose
     if verbose_prefix:
         _verbose_prefix = verbose_prefix
-        _verbose_wrapper = TextWrapper(
-            width=COLUMNS,
+        _verbose_wrapper = BDCTextWrapper(
             subsequent_indent=' ' * len(verbose_prefix)
         )
 
@@ -145,6 +159,12 @@ def verbosity_is_enabled():
     return _verbose
 
 
+def _do_fill(msg, wrapper):
+    s = ''
+    wrapped = [wrapper.fill(line) for line in msg.split('\n')]
+    return '\n'.join(wrapped)
+
+
 def verbose(msg):
     """
     Conditionally emit a verbose message. See also set_verbosity().
@@ -152,7 +172,7 @@ def verbose(msg):
     :param msg: the message
     """
     if _verbose:
-        print(_verbose_wrapper.fill("{0}{1}".format(_verbose_prefix, msg)))
+        print(_do_fill("{0}{1}".format(_verbose_prefix, msg), _verbose_wrapper))
 
 
 def debug(msg, debug_enabled=True):
@@ -163,7 +183,7 @@ def debug(msg, debug_enabled=True):
     :param debug_enabled:  whether debug messages are enabled or not
     '''
     if debug_enabled:
-        print(_debug_wrapper.fill("{0}{1}".format(DEBUG_PREFIX, msg)))
+        print(_do_fill("{0}{1}".format(DEBUG_PREFIX, msg), _debug_wrapper))
 
 
 def warning(msg):
@@ -172,7 +192,7 @@ def warning(msg):
 
     :param msg: The message
     """
-    print(_warning_wrapper.fill('{0}{1}'.format(WARNING_PREFIX, msg)))
+    print(_do_fill("{0}{1}".format(WARNING_PREFIX, msg), _warning_wrapper))
 
 
 def info(msg):
@@ -181,7 +201,7 @@ def info(msg):
 
     :param msg: The message
     """
-    print(_info_wrapper.fill(msg))
+    print(_do_fill(msg, _info_wrapper))
 
 
 def emit_error(msg):
@@ -191,8 +211,18 @@ def emit_error(msg):
     :param msg: The message
     """
     print('***')
-    print(_error_wrapper.fill(msg))
+    print(_do_fill(msg, _error_wrapper))
     print('***')
+
+
+def wrap2stdout(msg):
+    """
+    Emit a message to standard output, wrapped at screen boundaries (as
+    determined by the COLUMNS environment variable), without any prefix.
+
+    :param msg: The message
+    """
+    print(_do_fill(msg, _generic_wrapper))
 
 
 def parse_version_string(version):

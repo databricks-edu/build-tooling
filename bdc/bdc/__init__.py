@@ -46,7 +46,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.25.0"
+VERSION = "1.26.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -59,6 +59,7 @@ USAGE = ("""
 Usage:
   {0} (--version)
   {0} --info [--shell] [BUILD_YAML]
+  {0} (-C | --check) [BUILD_YAML]
   {0} (-h | --help)
   {0} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
   {0} --list-notebooks [BUILD_YAML]
@@ -75,6 +76,8 @@ properly for --upload and --download to work.
 
 Options:
   -h --help                Show this screen.
+  -C --check               Parse the build file and validate that the referenced
+                           paths actually exist.
   -d DEST --dest DEST      Specify output destination. Defaults to
                            ~/tmp/curriculum/<course_id>
   -o --overwrite           Overwrite the destination directory, if it exists.
@@ -607,7 +610,7 @@ class BuildData(object, DefaultStrMixin):
         :param notebooks:             list of parsed Notebook objects
         :param slides:                parsed SlideInfo object
         :param datasets:              parsed DatasetData object
-        :param misc_files:            parsed MiscFilesData object
+        :param misc_files:            parsed MiscFileData object
         :param keep_lab_dirs:         value of keep_lab_dirs setting
         :param notebook_heading:      parsed NotebookHeading object
         :param markdown_cfg:          parsed MarkdownInfo object
@@ -626,7 +629,21 @@ class BuildData(object, DefaultStrMixin):
         self.output_info = output_info
         self.slides = slides
         self.datasets = datasets
-        self.markdown = markdown_cfg
+
+        if markdown_cfg.html_stylesheet:
+            if path.isabs(markdown_cfg.html_stylesheet):
+                self.markdown = markdown_cfg
+            else:
+                # Stylesheet is relative to the build directory. Resolve it
+                # here.
+                p = joinpath(path.dirname(build_file_path),
+                             markdown_cfg.html_stylesheet)
+                fields = markdown_cfg._asdict()
+                fields['html_stylesheet'] = p
+                self.markdown = MarkdownInfo(**fields)
+        else:
+            self.markdown = markdown_cfg
+
         self.misc_files = misc_files
         self.keep_lab_dirs = keep_lab_dirs
         self.notebook_type_map = notebook_type_map
@@ -695,7 +712,8 @@ MASTER_PARSE_DEFAULTS = {
 def error(msg):
     global errors
     errors += 1
-    emit_error(msg)
+    if msg:
+        emit_error(msg)
 
 
 def die(msg, show_usage=False):
@@ -2137,7 +2155,8 @@ def get_sources_and_targets(build):
 
     :param build: the build
 
-    :return: A dict of source names to partial-path target names
+    :return: A dict of source names to partial-path target names. Each source
+             name can map to multiple targets.
     """
     template_data = {
         TARGET_LANG: '',
@@ -2199,30 +2218,50 @@ def get_sources_and_targets(build):
             ext = ext[1:] # remove the leading "."
         dest = map_notebook_dest(nb)
 
-        res[nb_full_path] = dest
+        res[nb_full_path] = res.get(nb_full_path, []) + [dest]
 
     return res
 
 
+def check_for_multiple_upload_download_mappings(notebooks):
+    '''
+    Check the result returned by get_sources_and_targets() for sources that
+    map to multiple targets.
+
+    :param notebooks: the result of get_get_sources_and_targets()
+
+    :return: A sequence of (source, targets) tuples of only those results that
+             map to multiple targets. The iterator might be empty.
+    '''
+    res = {}
+    for src, targets in notebooks.items():
+        if len(targets) == 1:
+            continue
+        res[src] = targets
+
+    return tuple(res.items())
+
 def upload_notebooks(build, shard_path, db_profile):
     shard_path = expand_shard_path(shard_path)
-    ensure_shard_path_does_not_exist(shard_path, db_profile)
-
     notebooks = get_sources_and_targets(build)
-    try:
+
+    def do_upload(notebooks):
+        ensure_shard_path_does_not_exist(shard_path, db_profile)
+
         with TemporaryDirectory() as tempdir:
             info("Copying notebooks to temporary directory.")
-            for nb_full_path, partial_path in notebooks.items():
+            for nb_full_path, partial_paths in notebooks.items():
                 if not path.exists(nb_full_path):
                     warning('Notebook "{}" does not exist. Skipping it.'.format(
                         nb_full_path
                     ))
                     continue
-                temp_path = joinpath(tempdir, partial_path)
-                dir = path.dirname(temp_path)
-                mkdirp(dir)
-                verbose('Copying "{0}" to "{1}"'.format(nb_full_path, temp_path))
-                copy(nb_full_path, temp_path)
+                for partial_path in partial_paths:
+                    temp_path = joinpath(tempdir, partial_path)
+                    dir = path.dirname(temp_path)
+                    mkdirp(dir)
+                    verbose('Copying "{0}" to "{1}"'.format(nb_full_path, temp_path))
+                    copy(nb_full_path, temp_path)
 
             with working_directory(tempdir):
                 info("Uploading notebooks to {0}".format(shard_path))
@@ -2236,51 +2275,102 @@ def upload_notebooks(build, shard_path, db_profile):
                     info("Uploaded {0} notebooks to {1}.".format(
                         len(notebooks), shard_path
                     ))
+
+    try:
+        do_upload(notebooks)
     except UploadDownloadError as e:
         dbw('rm', [shard_path], capture_stdout=False, db_profile=db_profile)
         die(e.message)
 
+    multiple_mappings = check_for_multiple_upload_download_mappings(notebooks)
+    if len(multiple_mappings) > 0:
+        wrap2stdout('\n********')
+        wrap2stdout('CAUTION:')
+        wrap2stdout('********\n')
+        wrap2stdout('Some source files have been copied to multiple destinations!\n')
+
+        for src, targets in multiple_mappings:
+            wrap2stdout(
+                ('\n"{}" has been uploaded to multiple places. Only edits to ' +
+                 '"{}/{}" will be applied on download.').format(
+                    src, shard_path, targets[0]
+            ))
+
+        wrap2stdout("\nIf you edit the build file before you run --download, " +
+                    "you might lose any edits to those files!")
+
 
 def download_notebooks(build, shard_path, db_profile):
     shard_path = expand_shard_path(shard_path)
-    ensure_shard_path_exists(shard_path, db_profile)
+    notebooks = get_sources_and_targets(build)
+
+    def do_download(notebooks):
+        # remote_to_local is assumed to be a 1-1 mapping of remote paths to
+        # local paths.
+        ensure_shard_path_exists(shard_path, db_profile)
+        with TemporaryDirectory() as tempdir:
+            info("Downloading notebooks to temporary directory")
+            with working_directory(tempdir):
+                rc, res = dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
+                if rc != 0:
+                    raise UploadDownloadError(
+                        "Download failed: {0}".format(res.get('message', '?'))
+                    )
+
+                for local, remotes in notebooks.items():
+                    # We only ever download the first one.
+                    remote = remotes[0]
+                    if not path.exists(remote):
+                        warning(('Cannot find downloaded version of course ' +
+                                 'notebook "{0}".').format(local))
+                    print('"{0}" -> {1}'.format(remote, local))
+                    # Make sure there's a newline at the end of each file.
+                    move(remote, local, ensure_final_newline=True)
+                    # Remove any others, so they're not treated as leftovers.
+                    for r in remotes[1:]:
+                        if path.exists(r):
+                            os.unlink(r)
+
+                # Are there any leftovers?
+                leftover_files = []
+                for root, dirs, files in os.walk('.'):
+                    for f in files:
+                        leftover_files.append(path.relpath(joinpath(root, f)))
+                if len(leftover_files) > 0:
+                    warning(("These files from {0} aren't in the build file and" +
+                             " were not copied").format(shard_path))
+                    for f in leftover_files:
+                        print("    {0}".format(f))
 
     # get_sources_and_targets() returns a dict of
-    # local-path -> remote-partial-path. Reverse it. Bail if there are any
-    # duplicate keys, because it's supposed to be 1:1.
+    # local-path -> remote-partial-paths. Reverse it. If there are duplicate
+    # (remote) keys, keep only the first one. See upload_notebooks()
     remote_to_local = {}
-    for local, remote in get_sources_and_targets(build).items():
+    for local, remotes in notebooks.items():
+        # We only ever download the first one.
+        remote = remotes[0]
         if remote in remote_to_local:
             die('(BUG): Found multiple instances of remote path "{0}"'.format(
                 remote
             ))
         remote_to_local[remote] = local
 
-    with TemporaryDirectory() as tempdir:
-        info("Downloading notebooks to temporary directory")
-        with working_directory(tempdir):
-            rc, res = dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
-            if rc != 0:
-                die("Download failed: {0}".format(res.get('message', '?')))
+    try:
+        do_download(notebooks)
+    except UploadDownloadError as e:
+        die(e.message)
 
-            for remote, local in remote_to_local.items():
-                if not path.exists(remote):
-                    warning(('Cannot find downloaded version of course ' +
-                             'notebook "{0}".').format(local))
-                print('"{0}" -> {1}'.format(remote, local))
-                # Make sure there's a newline at the end of each file.
-                move(remote, local, ensure_final_newline=True)
+    multiple_mappings = check_for_multiple_upload_download_mappings(notebooks)
+    if len(multiple_mappings) > 0:
+        wrap2stdout('\n********')
+        wrap2stdout('CAUTION:')
+        wrap2stdout('********\n')
+        wrap2stdout('Some source files exist more than once in the build file!')
 
-            # Are there any leftovers?
-            leftover_files = []
-            for root, dirs, files in os.walk('.'):
-                for f in files:
-                    leftover_files.append(path.relpath(joinpath(root, f)))
-            if len(leftover_files) > 0:
-                warning(("These files from {0} aren't in the build file and" +
-                         " were not copied").format(shard_path))
-                for f in leftover_files:
-                    print("    {0}".format(f))
+        for src, targets in multiple_mappings:
+            wrap2stdout('\n"{}" has ONLY been downloaded from "{}/{}"'.format(
+                    src, shard_path, targets[0]
+            ))
 
 
 def list_notebooks(build):
@@ -2297,6 +2387,90 @@ def print_info(build, shell):
     else:
         print("Course name:    {}".format(build.name))
         print("Course version: {}".format(build.course_info.version))
+
+
+def validate_build(build):
+    # TODO: Path joins here duplicate logic elsewhere. Consolidate.
+    errors = 0
+    error_prefix = "ERROR: "
+    wrapper = BDCTextWrapper(subsequent_indent=' ' * len(error_prefix))
+    build_file_dir = path.dirname(path.abspath(build.build_file_path))
+
+    def complain(msg):
+        print(wrapper.fill(error_prefix + msg))
+
+    def rel_to_build(src):
+        return joinpath(build_file_dir, src)
+
+    def rel_to_src_base(src):
+        return joinpath(build.source_base, src)
+
+    if not path.exists(build.source_base):
+        complain('src_base "{}" does not exist.'.format(
+            path.abspath(build.source_base)
+        ))
+        errors += 1
+
+    headings = set()
+    footers = set()
+
+    for notebook in build.notebooks:
+        src_path = rel_to_src_base(notebook.src)
+        if not path.exists(src_path):
+            complain('Notebook "{}" does not exist.'.format(src_path))
+            errors += 1
+
+        master = notebook.master
+        if master and master.enabled:
+            if master.heading.enabled and (master.heading.path is not None):
+                headings.add(rel_to_build(master.heading.path))
+
+            if master.footer.enabled and (master.footer.path is not None):
+                footers.add(rel_to_build(master.footer.path))
+
+    for h in headings:
+        if not path.exists(h):
+            complain('Notebook heading "{}" does not exist.'.format(h))
+            errors += 1
+
+    for f in headings:
+        if not path.exists(f):
+            complain('Notebook footer "{}" does not exist.'.format(f))
+            errors += 1
+
+    for misc in build.misc_files:
+        src_path = rel_to_build(misc.src)
+        if not path.exists(src_path):
+            complain('misc_file "{}" does not exist.'.format(src_path))
+            errors += 1
+
+    if build.slides:
+        for slide in build.slides:
+            src_path = rel_to_src_base(slide.src)
+            if not path.exists(src_path):
+                complain('Slide "{}" does not exist.'.format(src_path))
+                errors += 1
+
+    if build.datasets:
+        for dataset in build.datasets:
+            src_path = joinpath(build.course_directory, dataset.src)
+            if not path.exists(src_path):
+                complain('Dataset "{}" does not exist.'.format(src_path))
+                errors += 1
+
+    if build.markdown and build.markdown.html_stylesheet:
+        if not path.exists(build.markdown.html_stylesheet):
+            complain('markdown.html_stylesheet "{}" does not exist.'.format(
+                build.markdown.html_stylesheet
+            ))
+            errors +=1
+
+    if errors == 1:
+        print("\n*** One error.")
+    elif errors > 1:
+        print("\n*** {} errors.".format(errors))
+
+    return errors
 
 # ---------------------------------------------------------------------------
 # Main program
@@ -2316,6 +2490,17 @@ def main():
     try:
 
         build = load_build_yaml(course_config)
+        errors = validate_build(build)
+
+        if opts['--check']:
+            if errors == 0:
+                print('\nNo errors.')
+                sys.exit(0)
+            else:
+                sys.exit(1)
+        elif errors > 0:
+            raise BuildError('')
+
         dest_dir = (
                 opts['--dest'] or
                 joinpath(os.getenv("HOME"), "tmp", "curriculum", build.course_id)

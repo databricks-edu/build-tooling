@@ -2,7 +2,7 @@
 
 ### Version 1.26.0
 
-- `bdc --upload` and `bdc --download` now supports multiple instances of a 
+- `bdc --upload` and `bdc --download` now support multiple instances of a 
   source file. The source file will be uploaded to all the target places.
   Upon download, only the first instance will be downloaded. **Use with care!**
 - The build file is now validated before a build, upload, or download is run.   

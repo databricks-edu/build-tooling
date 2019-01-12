@@ -4,7 +4,12 @@
 
 - `bdc --upload` and `bdc --download` now supports multiple instances of a 
   source file. The source file will be uploaded to all the target places.
-  Upon download, only the first instance will be downloaded. **Use with care!** 
+  Upon download, only the first instance will be downloaded. **Use with care!**
+- The build file is now validated before a build, upload, or download is run.   
+- Added `--check` (`-C`) argument that can be used to validate a build file
+  without running a build.
+- `markdown.html_stylesheet` path is now assumed to be relative to the build
+  file, unless it's absolute (which isn't recommended).
 
 ### Version 1.25.0
 

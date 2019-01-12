@@ -92,6 +92,21 @@ WARNING_PREFIX = "*** WARNING: "
 DEBUG_PREFIX = "(DEBUG) "
 
 # ---------------------------------------------------------------------------
+# Custom TextWrapper class
+# ---------------------------------------------------------------------------
+
+class BDCTextWrapper(TextWrapper):
+    def __init__(self, width=COLUMNS, subsequent_indent=''):
+        TextWrapper.__init__(self,
+                             width=width,
+                             subsequent_indent=subsequent_indent)
+
+    def fill(self, msg):
+        wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
+        return '\n'.join(wrapped)
+
+
+# ---------------------------------------------------------------------------
 # Module globals
 # ---------------------------------------------------------------------------
 
@@ -99,19 +114,17 @@ _verbose = False
 _verbose_prefix = ''
 
 # Text wrappers
-_warning_wrapper = TextWrapper(width=COLUMNS,
-                               subsequent_indent=' ' * len(WARNING_PREFIX))
+_warning_wrapper = BDCTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
 
-_verbose_wrapper = TextWrapper(width=COLUMNS)
+_verbose_wrapper = BDCTextWrapper()
 
-_error_wrapper = TextWrapper(width=COLUMNS)
+_error_wrapper = BDCTextWrapper()
 
-_info_wrapper = TextWrapper(width=COLUMNS, subsequent_indent=' ' * 4)
+_info_wrapper = BDCTextWrapper(subsequent_indent=' ' * 4)
 
-_debug_wrapper = TextWrapper(width=COLUMNS,
-                             subsequent_indent = ' ' * len(DEBUG_PREFIX))
+_debug_wrapper = BDCTextWrapper(subsequent_indent = ' ' * len(DEBUG_PREFIX))
 
-_generic_wrapper = TextWrapper(width=COLUMNS)
+_generic_wrapper = BDCTextWrapper()
 
 # ---------------------------------------------------------------------------
 # Public functions
@@ -132,8 +145,7 @@ def set_verbosity(verbose, verbose_prefix):
     _verbose = verbose
     if verbose_prefix:
         _verbose_prefix = verbose_prefix
-        _verbose_wrapper = TextWrapper(
-            width=COLUMNS,
+        _verbose_wrapper = BDCTextWrapper(
             subsequent_indent=' ' * len(verbose_prefix)
         )
 

@@ -59,6 +59,7 @@ USAGE = ("""
 Usage:
   {0} (--version)
   {0} --info [--shell] [BUILD_YAML]
+  {0} (-C | --check) [BUILD_YAML]
   {0} (-h | --help)
   {0} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
   {0} --list-notebooks [BUILD_YAML]
@@ -75,6 +76,8 @@ properly for --upload and --download to work.
 
 Options:
   -h --help                Show this screen.
+  -C --check               Parse the build file and validate that the referenced
+                           paths actually exist.
   -d DEST --dest DEST      Specify output destination. Defaults to
                            ~/tmp/curriculum/<course_id>
   -o --overwrite           Overwrite the destination directory, if it exists.
@@ -607,7 +610,7 @@ class BuildData(object, DefaultStrMixin):
         :param notebooks:             list of parsed Notebook objects
         :param slides:                parsed SlideInfo object
         :param datasets:              parsed DatasetData object
-        :param misc_files:            parsed MiscFilesData object
+        :param misc_files:            parsed MiscFileData object
         :param keep_lab_dirs:         value of keep_lab_dirs setting
         :param notebook_heading:      parsed NotebookHeading object
         :param markdown_cfg:          parsed MarkdownInfo object
@@ -626,7 +629,21 @@ class BuildData(object, DefaultStrMixin):
         self.output_info = output_info
         self.slides = slides
         self.datasets = datasets
-        self.markdown = markdown_cfg
+
+        if markdown_cfg.html_stylesheet:
+            if path.isabs(markdown_cfg.html_stylesheet):
+                self.markdown = markdown_cfg
+            else:
+                # Stylesheet is relative to the build directory. Resolve it
+                # here.
+                p = joinpath(path.dirname(build_file_path),
+                             markdown_cfg.html_stylesheet)
+                fields = markdown_cfg._asdict()
+                fields['html_stylesheet'] = p
+                self.markdown = MarkdownInfo(**fields)
+        else:
+            self.markdown = markdown_cfg
+
         self.misc_files = misc_files
         self.keep_lab_dirs = keep_lab_dirs
         self.notebook_type_map = notebook_type_map
@@ -695,7 +712,8 @@ MASTER_PARSE_DEFAULTS = {
 def error(msg):
     global errors
     errors += 1
-    emit_error(msg)
+    if msg:
+        emit_error(msg)
 
 
 def die(msg, show_usage=False):
@@ -2370,6 +2388,90 @@ def print_info(build, shell):
         print("Course name:    {}".format(build.name))
         print("Course version: {}".format(build.course_info.version))
 
+
+def validate_build(build):
+    # TODO: Path joins here duplicate logic elsewhere. Consolidate.
+    errors = 0
+    error_prefix = "ERROR: "
+    wrapper = BDCTextWrapper(subsequent_indent=' ' * len(error_prefix))
+    build_file_dir = path.dirname(path.abspath(build.build_file_path))
+
+    def complain(msg):
+        print(wrapper.fill(error_prefix + msg))
+
+    def rel_to_build(src):
+        return joinpath(build_file_dir, src)
+
+    def rel_to_src_base(src):
+        return joinpath(build.source_base, src)
+
+    if not path.exists(build.source_base):
+        complain('src_base "{}" does not exist.'.format(
+            path.abspath(build.source_base)
+        ))
+        errors += 1
+
+    headings = set()
+    footers = set()
+
+    for notebook in build.notebooks:
+        src_path = rel_to_src_base(notebook.src)
+        if not path.exists(src_path):
+            complain('Notebook "{}" does not exist.'.format(src_path))
+            errors += 1
+
+        master = notebook.master
+        if master and master.enabled:
+            if master.heading.enabled and (master.heading.path is not None):
+                headings.add(rel_to_build(master.heading.path))
+
+            if master.footer.enabled and (master.footer.path is not None):
+                footers.add(rel_to_build(master.footer.path))
+
+    for h in headings:
+        if not path.exists(h):
+            complain('Notebook heading "{}" does not exist.'.format(h))
+            errors += 1
+
+    for f in headings:
+        if not path.exists(f):
+            complain('Notebook footer "{}" does not exist.'.format(f))
+            errors += 1
+
+    for misc in build.misc_files:
+        src_path = rel_to_build(misc.src)
+        if not path.exists(src_path):
+            complain('misc_file "{}" does not exist.'.format(src_path))
+            errors += 1
+
+    if build.slides:
+        for slide in build.slides:
+            src_path = rel_to_src_base(slide.src)
+            if not path.exists(src_path):
+                complain('Slide "{}" does not exist.'.format(src_path))
+                errors += 1
+
+    if build.datasets:
+        for dataset in build.datasets:
+            src_path = joinpath(build.course_directory, dataset.src)
+            if not path.exists(src_path):
+                complain('Dataset "{}" does not exist.'.format(src_path))
+                errors += 1
+
+    if build.markdown and build.markdown.html_stylesheet:
+        if not path.exists(build.markdown.html_stylesheet):
+            complain('markdown.html_stylesheet "{}" does not exist.'.format(
+                build.markdown.html_stylesheet
+            ))
+            errors +=1
+
+    if errors == 1:
+        print("\n*** One error.")
+    elif errors > 1:
+        print("\n*** {} errors.".format(errors))
+
+    return errors
+
 # ---------------------------------------------------------------------------
 # Main program
 # ---------------------------------------------------------------------------
@@ -2388,6 +2490,17 @@ def main():
     try:
 
         build = load_build_yaml(course_config)
+        errors = validate_build(build)
+
+        if opts['--check']:
+            if errors == 0:
+                print('\nNo errors.')
+                sys.exit(0)
+            else:
+                sys.exit(1)
+        elif errors > 0:
+            raise BuildError('')
+
         dest_dir = (
                 opts['--dest'] or
                 joinpath(os.getenv("HOME"), "tmp", "curriculum", build.course_id)

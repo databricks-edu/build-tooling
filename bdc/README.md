@@ -1242,6 +1242,15 @@ Invoke bdc with no arguments to get a quick usage message.
 
 `bdc --version`
 
+### Check your `build.yaml` for errors
+
+Running `bdc --check` against a `build.yaml` file parses the file and
+checks it for obvious problems, without actually doing anything else.
+
+`bdc` performs that same validation _automatically_, when you run a
+build or use `--upload` or `--download`. But `--check` lets you force
+a validation check.
+
 ### Get a list of the notebooks in a course
 
 `bdc --list-notebooks [build-yaml]`

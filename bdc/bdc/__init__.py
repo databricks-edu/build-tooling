@@ -2499,11 +2499,12 @@ def main():
             else:
                 sys.exit(1)
         elif errors > 0:
+            # Abort the attempted operation.
             raise BuildError('')
 
         dest_dir = (
-                opts['--dest'] or
-                joinpath(os.getenv("HOME"), "tmp", "curriculum", build.course_id)
+            opts['--dest'] or
+            joinpath(os.getenv("HOME"), "tmp", "curriculum", build.course_id)
         )
 
         if opts['--list-notebooks']:

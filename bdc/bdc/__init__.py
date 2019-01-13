@@ -2433,7 +2433,7 @@ def validate_build(build):
             complain('Notebook heading "{}" does not exist.'.format(h))
             errors += 1
 
-    for f in headings:
+    for f in footers:
         if not path.exists(f):
             complain('Notebook footer "{}" does not exist.'.format(f))
             errors += 1

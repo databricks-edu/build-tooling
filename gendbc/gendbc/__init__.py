@@ -382,7 +382,7 @@ def gendbc(source_dir,  # type: str
         )
 
     notebook_paths = _find_notebooks(params.source_dir, params.encoding)
-    print(notebook_paths)
+
     if len(notebook_paths) == 0:
         _die('No source notebooks found under "{}".'.format(
             params.source_dir

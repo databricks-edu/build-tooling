@@ -589,7 +589,7 @@ def parse_source_notebook(path,     # type: str
         # the leading MAGIC indicator.
         m = magic.search(line)
         if m:
-            line = '{}{}'.format(m.group(1), m.group(2))
+            line = u'{}{}'.format(m.group(1), m.group(2))
 
         # If we didn't see the new cell marker, then keep accumulating the
         # current cell and move on to the next line.

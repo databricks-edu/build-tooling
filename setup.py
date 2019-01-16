@@ -17,7 +17,7 @@ import os
 import sys
 from contextlib import contextmanager
 
-VERSION = '1.8.0'
+VERSION = '1.9.0'
 
 @contextmanager
 def chdir(dir):
@@ -46,11 +46,7 @@ if (len(sys.argv) > 1 and
     print('Installing/upgrading databricks-cli')
     cmd('pip install --upgrade databricks-cli')
 
-    with chdir(os.path.join(top_dir, 'gendbc')):
-        print('Installing gendbc...')
-        cmd('bin/activator install')
-
-    for d in ('master_parse', 'bdc'):
+    for d in ('master_parse', 'bdc', 'gendbc'):
         print('Installing {0}...'.format(d))
         with chdir(os.path.join(top_dir, d)):
             cmd('python setup.py install')

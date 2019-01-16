@@ -95,6 +95,7 @@ class CellType(Enum):
     SQL        = 'sql'
     SH         = 'sh'
     FS         = 'fs'
+    RUN        = 'run'
     UNKNOWN    = '?'
 
     @classmethod

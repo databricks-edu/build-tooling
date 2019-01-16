@@ -5,6 +5,12 @@
 - Now uses `namedtuple._replace` to copy a `namedtuple` while replacing one
   value, instead of custom code.
 
+### Version 1.27.0
+
+- `gendbc` is now written in Python. Changed `bdc` to call it as a Python
+  function, instead of invoking the JVM to run the old command line Scala
+  version.
+
 ### Version 1.26.0
 
 - `bdc --upload` and `bdc --download` now support multiple instances of a 

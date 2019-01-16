@@ -30,6 +30,7 @@ from datetime import datetime
 from ConfigParser import SafeConfigParser, NoOptionError
 from enum import Enum
 import master_parse
+from gendbc import gendbc
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
@@ -46,7 +47,7 @@ from backports.tempfile import TemporaryDirectory
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.26.0"
+VERSION = "1.27.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1806,28 +1807,41 @@ def copy_instructor_notes(build, dest_root, profile):
                 continue
 
 
-def make_dbc(gendbc, build, labs_dir, dbc_path):
+def make_dbc(build, labs_dir, dbc_path):
     """
     Create a DBC file from the labs.
     """
-    wd = path.dirname(labs_dir)
-    with working_directory(wd):
-        simple_labs_dir = path.basename(labs_dir)
-        if verbosity_is_enabled():
-            cmd = "{0} {1} {2} {3} {4} {5}".format(
-                gendbc, "-v", "-f", build.top_dbc_folder_name, simple_labs_dir,
-                dbc_path
-            )
-        else:
-            cmd = "{0} {1} {2} {3} {4}".format(
-                gendbc, "-f", build.top_dbc_folder_name, simple_labs_dir,
-                dbc_path
-            )
+    try:
+        gendbc(source_dir=labs_dir,
+               encoding="utf-8",
+               dbc_path=dbc_path,
+               dbc_folder=build.top_dbc_folder_name,
+               flatten=False,
+               verbose=verbosity_is_enabled(),
+               debug=False)
+    #except Exception as e:
+    #    raise e #BuildError("Failed to create DBC: {}".format(e.message))
+    finally:
+        pass
 
-        verbose("\nIn {0}:\n{1}\n".format(wd, cmd))
-        rc = os.system(cmd)
-        if rc != 0:
-            raise BuildError("Failed to create DBC: " + cmd)
+    # wd = path.dirname(labs_dir)
+    # with working_directory(wd):
+    #     simple_labs_dir = path.basename(labs_dir)
+    #     if verbosity_is_enabled():
+    #         cmd = "{0} {1} {2} {3} {4} {5}".format(
+    #             gendbc, "-v", "-f", build.top_dbc_folder_name, simple_labs_dir,
+    #             dbc_path
+    #         )
+    #     else:
+    #         cmd = "{0} {1} {2} {3} {4}".format(
+    #             gendbc, "-f", build.top_dbc_folder_name, simple_labs_dir,
+    #             dbc_path
+    #         )
+    #
+    #     verbose("\nIn {0}:\n{1}\n".format(wd, cmd))
+    #     rc = os.system(cmd)
+    #     if rc != 0:
+    #         raise BuildError("Failed to create DBC: " + cmd)
 
 
 def copy_slides(build, dest_root):
@@ -1930,7 +1944,7 @@ def bundle_course(build, dest_dir, profile):
             z.write(src, dest)
 
 
-def do_build(build, gendbc, base_dest_dir, profile=None):
+def do_build(build, base_dest_dir, profile=None):
     if profile:
         dest_dir = joinpath(base_dest_dir, profile)
     else:
@@ -1960,8 +1974,7 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
     student_dbc = joinpath(
         dest_dir, build.output_info.student_dir, build.output_info.student_dbc
     )
-    make_dbc(gendbc=gendbc,
-             build=build,
+    make_dbc(build=build,
              labs_dir=labs_full_path,
              dbc_path=student_dbc)
 
@@ -1974,7 +1987,7 @@ def do_build(build, gendbc, base_dest_dir, profile=None):
             build.output_info.instructor_dbc
         )
         write_version_notebook(instructor_labs, version_notebook, version)
-        make_dbc(gendbc, build, instructor_labs, instructor_dbc)
+        make_dbc(build, instructor_labs, instructor_dbc)
 
     copy_slides(build, dest_dir)
     copy_misc_files(build, dest_dir, profile)
@@ -1996,8 +2009,6 @@ def build_course(opts, build, dest_dir):
             build.course_info.name
         ))
 
-    gendbc = find_in_path('gendbc')
-
     verbose('Publishing to "{0}"'.format(dest_dir))
     if path.isdir(dest_dir):
         if not opts['--overwrite']:
@@ -2007,12 +2018,12 @@ def build_course(opts, build, dest_dir):
         rm_rf(dest_dir)
 
     if not build.use_profiles:
-        do_build(build, gendbc, dest_dir, profile=None)
+        do_build(build, dest_dir, profile=None)
     else:
         for profile in VALID_PROFILES:
             info('')
             info("Building profile {}".format(profile))
-            do_build(build, gendbc, dest_dir, profile)
+            do_build(build, dest_dir, profile)
 
     if errors > 0:
         raise BuildError("{0} error(s).".format(errors))

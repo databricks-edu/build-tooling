@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.26.1
+
+- Now uses `namedtuple._replace` to copy a `namedtuple` while replacing one
+  value, instead of custom code.
+
 ### Version 1.26.0
 
 - `bdc --upload` and `bdc --download` now support multiple instances of a 

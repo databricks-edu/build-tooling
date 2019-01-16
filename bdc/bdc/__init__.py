@@ -638,9 +638,7 @@ class BuildData(object, DefaultStrMixin):
                 # here.
                 p = joinpath(path.dirname(build_file_path),
                              markdown_cfg.html_stylesheet)
-                fields = markdown_cfg._asdict()
-                fields['html_stylesheet'] = p
-                self.markdown = MarkdownInfo(**fields)
+                self.markdown = markdown_cfg._replace(html_stylesheet=p)
         else:
             self.markdown = markdown_cfg
 

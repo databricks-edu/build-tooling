@@ -1,5 +1,9 @@
 # Change Log for gendbc
 
+Version 2.0.0
+
+- Completely reimplemented in Python, instead of Scala.
+
 Version 1.4.0
 
 - Added `--version` command line option.

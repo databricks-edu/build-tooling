@@ -142,7 +142,7 @@ USAGE:
     course grep <pattern>    # Search for text in notebooks.
     course sed <commands>    # Search/replace text in notebooks using 'sed -E'.
     course xargs <command>   # Run the provided command once per notebook.
-    course set <conf>=<val>  # Configure and save an environment setting.
+    course set CONF=VAL      # Configure and save an environment setting.
 
 CONFIGURATION:
     A course name must be provided.  You can set a default course name using:

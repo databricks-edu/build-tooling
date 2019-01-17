@@ -360,6 +360,10 @@ def clean(cfg, course_repo, db_profile):
     # type: (dict, str, str) -> None
     (course_name, prefix, course_home) = course_config(cfg, course_repo)
     remote_target = course_remote_target(course_name, cfg)
+    # It's odd to ensure that the directory exists before removing it, but
+    # it's easier (and costs no more time, really) than to issue a REST call
+    # to check whether it exists in the first place. And "rm" will die if
+    # called on a nonexistent remote path.
     cmd('databricks --profile "{}" workspace mkdirs "{}"'.format(
         db_profile, remote_target
     ))
@@ -371,12 +375,12 @@ def clean(cfg, course_repo, db_profile):
 def clean_source(cfg, course_repo, db_profile):
     # type: (dict, str, str) -> None
     (course_name, prefix, course_home) = course_config(cfg, course_repo)
-    remote_target = course_remote_target(course_name, cfg)
+    remote_source = course_remote_source(course_name, cfg)
     cmd('databricks --profile "{}" workspace mkdirs "{}"'.format(
-        db_profile, course_remote_source
+        db_profile, remote_source
     ))
     cmd('databricks --profile "{}" workspace rm --recursive "{}"'.format(
-        db_profile, course_remote_source
+        db_profile, remote_source
     ))
 
 
@@ -390,8 +394,55 @@ def upload(cfg, course_repo, db_profile):
                    verbose=False)
 
 
-def build(cfg, course_repo):
-    # type: (dict, str) -> None
+def import_dbcs(cfg, course_name, build_dir, course_repo, db_profile):
+    # type: (dict, str, str, str, str) -> None
+
+    remote_target = course_remote_target(course_name, cfg)
+
+    def import_dbc(dbc):
+        # type: (str) -> None
+        '''
+        Import a single DBC.
+
+        Assumes (a) the working directory is the build output directory, and
+        (b) that the remote target path has already been created.
+
+        :param dbc:
+        :return:
+        '''
+        parent_subpath = os.path.dirname(dbc)
+        # Language is ignored by databricks, but it's a required option. <sigh>
+        cmd(
+            ('databricks --profile {} workspace import --format DBC ' +
+             '--language Python "{}" "{}/{}"').format(
+                db_profile, dbc, remote_target, parent_subpath
+
+            )
+        )
+
+    print('Importing all DBCs under "{}"'.format(build_dir))
+    dbcs = []
+    with working_directory(build_dir):
+        for dirpath, _, filenames in os.walk('.'):
+            for filename in filenames:
+                _, ext = os.path.splitext(filename)
+                if ext != '.dbc':
+                    continue
+                dbcs.append(os.path.normpath(os.path.join(dirpath, filename)))
+
+        if not dbcs:
+            print('WARNING: No DBCs found.')
+        else:
+            clean(cfg, course_repo, db_profile)
+            cmd('databricks --profile {} workspace mkdirs {}'.format(
+                db_profile, remote_target
+            ))
+            for dbc in dbcs:
+                import_dbc(dbc)
+
+
+def build(cfg, course_repo, db_profile):
+    # type: (dict, str, str) -> None
     (course_name, prefix, course_home) = course_config(cfg, course_repo)
     build_file = os.path.join(course_home, "build.yaml")
     if not os.path.exists(build_file):
@@ -401,6 +452,8 @@ def build(cfg, course_repo):
                          dest_dir='',
                          overwrite=True,
                          verbose=False)
+    build_dir = bdc.bdc_output_directory_for_build(build_file)
+    import_dbcs(cfg, course_name, build_dir, course_repo, db_profile)
 
 
 def install_tools():
@@ -558,7 +611,7 @@ def main():
                 upload(cfg, COURSE_REPO, DB_PROFILE)
 
             elif cmd == 'build':
-                build(cfg, COURSE_REPO)
+                build(cfg, COURSE_REPO, DB_PROFILE)
 
             elif cmd == 'clean':
                 clean(cfg, COURSE_REPO, DB_PROFILE)

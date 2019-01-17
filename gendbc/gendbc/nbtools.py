@@ -96,6 +96,7 @@ class CellType(Enum):
     SH         = 'sh'
     FS         = 'fs'
     RUN        = 'run'
+    TIMEIT     = 'timeit'
     UNKNOWN    = '?'
 
     @classmethod

@@ -2,6 +2,8 @@
 
 Version 2.0.0
 
+from __future__ import (absolute_import, division, print_function,
+                        unicode_literals)
 - Completely reimplemented in Python, instead of Scala.
 
 Version 1.4.0

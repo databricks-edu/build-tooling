@@ -10,6 +10,8 @@
 - `gendbc` is now written in Python. Changed `bdc` to call it as a Python
   function, instead of invoking the JVM to run the old command line Scala
   version.
+- Refactored `bdc` so that its functionality is available as a library, as
+  well as from the command line.
 
 ### Version 1.26.0
 

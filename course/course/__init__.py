@@ -14,24 +14,19 @@ from typing import Generator, Sequence
 VERSION = '2.0.0'
 PROG = os.path.basename(sys.argv[0])
 
-EDITOR = os.environ.get("EDITOR", "open -a textedit")
-PAGER = os.environ.get("PAGER", "less --RAW-CONTROL-CHARS")
-
-COURSE_REPO = os.environ.get(
-    "COURSE_REPO",
-    os.environ.get("REPO", os.path.expanduser("~/repos/training"))
-)
-DB_CONFIG_PATH = os.environ.get("DB_CONFIG_PATH",
-                                os.path.expanduser("~/.databricks.cfg"))
-DB_PROFILE = os.environ.get("DB_PROFILE", "DEFAULT")
-DB_SHARD_HOME = os.environ.get("DB_SHARD_HOME",
-                               "/Users/{}@databricks.com".format(os.getlogin()))
-
-PREFIX = os.environ.get("PREFIX", "")
-SOURCE = os.environ.get("SOURCE", "_Source")
-TARGET = os.environ.get("TARGET", "_Target")
-
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
+
+PAGER_DEFAULT = 'less --RAW-CONTROL-CHARS'
+EDITOR_DEFAULT = 'open -a textedit'
+SOURCE_DEFAULT = '_Source'
+TARGET_DEFAULT = 'Target'
+AWS_PROFILE_DEFAULT = 'default'
+DB_PROFILE_DEFAULT = 'DEFAULT'
+COURSE_REPO_DEFAULT = os.path.expanduser('~/repos/training')
+DB_SHARD_HOME_DEFAULT = '/Users/{}@databricks.com'.format(os.getlogin())
+DB_CONFIG_PATH_DEFAULT = os.path.expanduser('~/.databrickscfg')
+OPEN_DIR_DEFAULT = 'open' # Mac-specific, but can be configured.
+
 USAGE = '''
 {0}, version {VERSION}
 
@@ -40,12 +35,12 @@ Usage:
   {0} <subcommand> ...
   
 Description:
-  "course" is a build workflow tool, sitting on top of "bdc".
+  "course" is a build_and_upload workflow tool, sitting on top of "bdc".
    
   Many subcommands can be chained. For instance:
   
-      course upload build
-      course work-on Delta build 
+      course upload build_and_upload
+      course work-on Delta build_and_upload 
 
   Some commands end the chain, because they consume all remaining arguments.
   Examples include "sed" and "xargs".
@@ -78,12 +73,12 @@ Subcommands:
 
   {0} --help             Show abbreviated usage
   {0} help               Show the full help page (this output)
-  {0} install-tools    * Install the build tools.
-  {0} work-on <name>     Specify and remember the course to build,
+  {0} install-tools    * Install the build_and_upload tools.
+  {0} work-on <name>     Specify and remember the course to build_and_upload,
                          upload, etc.
   {0} which              Print the name of the currently selected course.
   {0} download           Download from SOURCE
-  {0} build              Build from local files and upload build to TARGET
+  {0} build_and_upload              Build from local files and upload build_and_upload to TARGET
   {0} upload             Upload local sources (from your Git repo) to SOURCE
   {0} clean              Remove TARGET (built artifact) from Databricks             
   {0} clean-source       Remove SOURCE (built artifact) from Databricks
@@ -99,9 +94,12 @@ Subcommands:
   {0} repo             * Open the root of the training repo in git.
   {0} yaml             * Edit the build.yaml.
   {0} config           * Edit your course script configuration file.
+  {0} showconfig         Print the in-memory configuration, which is the
+                         parsed configuration file and possible environment
+                         overrides.
   {0} guide            * Open the instructor guide.               
-  {0} stage              Deploy a build to the S3 staging area.               
-  {0} release            Deploy a build to the S3 release area.               
+  {0} stage              Deploy a build_and_upload to the S3 staging area.               
+  {0} release            Deploy a build_and_upload to the S3 release area.               
   {0} deploy-images      Deploy the course images to S3.
   {0} set VAR=VALUE      Configure and save a setting. Note that the keys are
                          not currently validated, so spelling matters.  
@@ -112,58 +110,56 @@ Subcommands:
   {0} sed <commands>     Search/replace text in notebooks using "sed -E"
   {0} xargs <command>    Run <command> once per notebook.
 
-Environment variables used:
+  The following settings are honored. They are first read from the environment.
+  If not there, {0} looks for them in the configuration file, located at
+  "{CONFIG_PATH}".
+  
   DB_CONFIG_PATH: Path to .databrickscfg
-    Default: ~/.databrickscfg
-    Current: {DB_CONFIG_PATH}
+    Default: {DB_CONFIG_PATH_DEFAULT}
   DB_PROFILE: Profile to use within .databrickscfg profile
-    Default: "DEFAULT"
-    Current: {DB_PROFILE}
+    Default: {DB_PROFILE_DEFAULT}
   DB_SHARD_HOME: Workspace path for home folder
-    Default: /Users/[Username]
-    Current: {DB_SHARD_HOME}
-  COURSE_NAME: Name of the course you wish to build.
+    Default: {DB_SHARD_HOME_DEFAULT}
+  COURSE_NAME: Name of the course you wish to build_and_upload.
     Default: This must be provided, but can default from the stored config.
   COURSE_REPO: Path to git repo
-    Default: ~/repos/training
-    Current: {COURSE_REPO}
+    Default: {COURSE_REPO_DEFAULT}
   COURSE_HOME: Path to course in git repo
-    Default: {COURSE_REPO}/courses/<course-name>
+    Default: <COURSE_REPO>/courses/<course-name>
   COURSE_YAML: Path to the build.yaml
-    Default: {COURSE_REPO}/courses/<course-name>/build.yaml
+    Default: <COURSE_HOME>/build.yaml
   COURSE_MODULES: Path to modules in git repo
-    Default: {COURSE_REPO}/modules/<course-name>
+    Default: <COURSE_REPO>/modules/<course-name>
   COURSE_REMOTE_SOURCE: Workspace path for course source
-    Default: {DB_SHARD_HOME}/{SOURCE}/<course-name>
+    Default: <DB_SHARD_HOME>/<SOURCE>/<course-name>
   COURSE_REMOTE_TARGET: Workspace path for built course
-    Default: {DB_SHARD_HOME}/{TARGET}/<course-name>
-  PREFIX: Path to append to course names in git, such as /self-paced
-    Default: "", unless it's a self-paced course.
+    Default: <DB_SHARD_HOME>/<TARGET>/<course-name>
+  COURSE_AWS_PROFILE: AWS authentication profile to use when uploading to S3. 
+    Default: {AWS_PROFILE_DEFAULT}
   SOURCE: Prefix for uploading/downloading source files.
-    Default: _Source
-    Current: {SOURCE}
+    Default: {SOURCE_DEFAULT}
   TARGET: Prefix for uploading/downloading built files.
-    Default: _Target
-    Current: {TARGET}
+    Default: {TARGET_DEFAULT}
   EDITOR: Text editor program
-    Default: open -a textedit
-    Current: {EDITOR}
+    Default: {EDITOR_DEFAULT}
   PAGER: Program to scroll text output
-    Default: less --RAW-CONTROL-CHARS
-    Current: {PAGER}
+    Default: {PAGER_DEFAULT}
+  OPEN_DIR: Program to use to open a folder
+    Default: {OPEN_DIR_DEFAULT}
 '''.format(
     PROG,
     CONFIG_PATH=CONFIG_PATH,
     VERSION=VERSION,
-    DB_CONFIG_PATH=DB_CONFIG_PATH,
-    DB_PROFILE=DB_PROFILE,
-    DB_SHARD_HOME=DB_SHARD_HOME,
-    COURSE_REPO=COURSE_REPO,
-    PREFIX=PREFIX,
-    SOURCE=SOURCE,
-    TARGET=TARGET,
-    EDITOR=EDITOR,
-    PAGER=PAGER
+    PAGER_DEFAULT=PAGER_DEFAULT,
+    DB_CONFIG_PATH_DEFAULT=DB_CONFIG_PATH_DEFAULT,
+    DB_PROFILE_DEFAULT=DB_PROFILE_DEFAULT,
+    DB_SHARD_HOME_DEFAULT=DB_SHARD_HOME_DEFAULT,
+    COURSE_REPO_DEFAULT=COURSE_REPO_DEFAULT,
+    AWS_PROFILE_DEFAULT=AWS_PROFILE_DEFAULT,
+    SOURCE_DEFAULT=SOURCE_DEFAULT,
+    TARGET_DEFAULT=TARGET_DEFAULT,
+    EDITOR_DEFAULT=EDITOR_DEFAULT,
+    OPEN_DIR_DEFAULT=OPEN_DIR_DEFAULT
 )
 
 # -----------------------------------------------------------------------------
@@ -213,7 +209,7 @@ def cmd(shell_command):
         raise CourseError('"{}" exited with {}.'.format(shell_command, rc))
 
 
-def parse_config(config_path):
+def load_config(config_path):
     # type: (str) -> dict
     bad = False
     comment = re.compile("^\s*#.*$")
@@ -239,20 +235,41 @@ def parse_config(config_path):
         if bad:
             raise CourseError("Configuration error(s).")
 
+    setting_keys_and_defaults = (
+        # The second item in each tuple is a default value. If the default
+        # value is '', that generally means it can be overridden on the
+        # command line (or depends on something else that can be), so it's
+        # checked at runtime.
+        ('DB_CONFIG_PATH', DB_CONFIG_PATH_DEFAULT),
+        ('DB_PROFILE', DB_PROFILE_DEFAULT),
+        ('DB_SHARD_HOME', DB_SHARD_HOME_DEFAULT),
+        ('PREFIX', ''),                              # set later
+        ('COURSE_NAME', ''),                         # can be overridden
+        ('COURSE_REPO', COURSE_REPO_DEFAULT),
+        ('COURSE_HOME', ''),                         # depends on COURSE_NAME
+        ('COURSE_YAML', ''),                         # depends on COURSE_NAME
+        ('COURSE_MODULES', ''),                      # depends on COURSE_NAME
+        ('COURSE_REMOTE_SOURCE', ''),                # depends on COURSE_NAME
+        ('COURSE_REMOTE_TARGET', ''),                # depends on COURSE_NAME
+        ('COURSE_AWS_PROFILE',  AWS_PROFILE_DEFAULT),
+        ('SOURCE', SOURCE_DEFAULT),
+        ('TARGET', TARGET_DEFAULT),
+        ('EDITOR', EDITOR_DEFAULT),
+        ('PAGER', PAGER_DEFAULT),
+        ('OPEN_DIR', OPEN_DIR_DEFAULT),
+    )
+
+    # Apply environment overrides. Then, check for missing ones where
+    # appropriate, and apply defaults.
+    for e, default in setting_keys_and_defaults:
+        v = os.environ.get(e)
+        if v:
+            cfg[e] = v
+
+        if (not cfg.get(e)) and default:
+            cfg[e] = default
+
     return cfg
-
-
-def config_val(config, var, default=None):
-    # type: (dict, str, str) -> str
-    """
-    :param config:
-    :param var:
-    :param default:
-    :return:
-    """
-    # Try the environment first. Then, fall back to the configuration.
-    # If that fails, use the default.
-    return os.environ.get(var, config.get(var, default))
 
 
 def get_self_paced_courses(course_repo):
@@ -269,66 +286,47 @@ def get_self_paced_courses(course_repo):
         yield f
 
 
-def course_config(config, course_repo):
-    # type: (dict, str) -> (str, str, str)
-    for name in [os.environ.get('COURSE_NAME'),
-                 config.get('COURSE_NAME')]:
-        if name:
-            prefix = os.environ.get("PREFIX")
-            if not prefix:
-                if name in get_self_paced_courses(course_repo):
-                    prefix = "Self-Paced"
-                else:
-                    prefix = ""
-            course_home = os.environ.get(
-                "COURSE_HOME",
-                os.path.join(course_repo, 'courses', prefix, name)
-            )
-            return (name, prefix, course_home)
+def update_config(cfg):
+    # type: (dict) -> dict
+    '''
+    Update the configuration, setting values that depend on course name,
+    which is assumed to be set in the configuration.
 
-    die("Course name not specified and not in the environment or config.")
+    :param cfg: current configuration
 
+    :return: possibly adjusted configuration
+    '''
+    course_name = cfg['COURSE_NAME']
+    from os.path import join, normpath
 
-def course_home(course_name):
-    home = os.environ.get('COURSE_HOME')
-    if not home:
-        possible_paths = [
-            os.path.join(COURSE_REPO, 'courses', course_name),
-            os.path.join(COURSE_REPO, 'courses', 'self-paced', course_name)
-        ]
+    adj = cfg.copy()
+    repo = adj['COURSE_REPO']
 
-        for p in possible_paths:
-            if os.path.exists(p) and os.path.isdir(p):
-                home = p
-                break
-    if not home:
-        raise CourseError('Cannot determine home for course "{}"'.format(home))
+    self_paced = get_self_paced_courses(repo)
+    prefix = 'Self-Paced' if course_name in self_paced else ''
 
-    return home
-
-
-def course_remote_source(course_name, cfg):
-    return config_val(
-        cfg,
-        "COURSE_REMOTE_SOURCE",
-        "{}/{}/{}".format(DB_SHARD_HOME, SOURCE, course_name)
+    adj['PREFIX'] = prefix
+    adj['COURSE_HOME'] = normpath(join(repo, 'courses', prefix, course_name))
+    adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
+    adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course_name)
+    adj['COURSE_REMOTE_SOURCE'] = '{}/{}/{}'.format(
+        adj['DB_SHARD_HOME'], adj['SOURCE'], course_name
+    )
+    adj['COURSE_REMOTE_TARGET'] = '{}/{}/{}'.format(
+        adj['DB_SHARD_HOME'], adj['TARGET'], course_name
     )
 
 
-def course_remote_target(course_name, cfg):
-    return config_val(
-        cfg,
-        "COURSE_REMOTE_TARGET",
-        "{}/{}/{}".format(DB_SHARD_HOME, TARGET, course_name)
-
-    )
+    return adj
 
 
-def build_file_path(course_name):
-    # type: (str) -> str
-    return os.environ.get('COURSE_YAML', os.path.join(
-        course_home(course_name), 'build.yaml'
-    ))
+def build_file_path(cfg):
+    # type: (dict) -> str
+    res = cfg.get('COURSE_YAML')
+    if not res:
+        res = os.path.join(cfg['COURSE_HOME'], 'build.yaml')
+
+    return res
 
 
 def configure(cfg, key, value, config_path):
@@ -337,7 +335,7 @@ def configure(cfg, key, value, config_path):
     # Don't update from the in-memory config, because it might not match
     # what's in the file. (It can be modified on the fly, based on the command
     # line, and those ephemeral changes should not be saved.)
-    stored_cfg = parse_config(config_path)
+    stored_cfg = load_config(config_path)
     stored_cfg[key] = value
     with open(config_path, 'w') as f:
         for k, v in stored_cfg.items():
@@ -346,8 +344,8 @@ def configure(cfg, key, value, config_path):
     return cfg
 
 
-def work_on(course_name, cfg, config_path):
-    # type: (str, dict, str) -> dict
+def work_on(cfg, course_name, config_path):
+    # type: (dict, str, str) -> dict
     return configure(cfg, 'COURSE_NAME', course_name, config_path)
 
 
@@ -356,10 +354,12 @@ def show_course_name(cfg):
     print(cfg['COURSE_NAME'])
 
 
-def clean(cfg, course_repo, db_profile):
-    # type: (dict, str, str) -> None
-    (course_name, prefix, course_home) = course_config(cfg, course_repo)
-    remote_target = course_remote_target(course_name, cfg)
+def clean(cfg):
+    # type: (dict) -> None
+    db_profile = cfg['DB_PROFILE']
+    course_name = cfg['COURSE_NAME']
+    remote_target = cfg['COURSE_REMOTE_TARGET']
+
     # It's odd to ensure that the directory exists before removing it, but
     # it's easier (and costs no more time, really) than to issue a REST call
     # to check whether it exists in the first place. And "rm" will die if
@@ -372,10 +372,12 @@ def clean(cfg, course_repo, db_profile):
     ))
 
 
-def clean_source(cfg, course_repo, db_profile):
-    # type: (dict, str, str) -> None
-    (course_name, prefix, course_home) = course_config(cfg, course_repo)
-    remote_source = course_remote_source(course_name, cfg)
+def clean_source(cfg):
+    # type: (dict) -> None
+    db_profile = cfg['DB_PROFILE']
+    course_name = cfg['COURSE_NAME']
+    remote_source = cfg['COURSE_REMOTE_SOURCE']
+
     cmd('databricks --profile "{}" workspace mkdirs "{}"'.format(
         db_profile, remote_source
     ))
@@ -384,27 +386,44 @@ def clean_source(cfg, course_repo, db_profile):
     ))
 
 
-def upload(cfg, course_repo, db_profile):
-    # type: (dict, str, str) -> None
-    (course_name, prefix, course_home) = course_config(cfg, course_repo)
+def download(cfg):
+    # type: (dict) -> None
+    course_repo = cfg['COURSE_REPO']
+    db_profile = cfg['DB_PROFILE']
+    course_name = cfg['COURSE_NAME']
 
-    bdc.bdc_upload(build_file=build_file_path(course_name),
-                   shard_path=course_remote_source(course_name, cfg),
+    bdc.bdc_download(build_file=build_file_path(cfg),
+                     shard_path=cfg['COURSE_REMOTE_SOURCE'],
+                     databricks_profile=db_profile,
+                     verbose=False)
+
+
+def upload(cfg):
+    # type: (dict) -> None
+    course_repo = cfg['COURSE_REPO']
+    db_profile = cfg['DB_PROFILE']
+    course_name = cfg['COURSE_NAME']
+
+    bdc.bdc_upload(build_file=build_file_path(cfg),
+                   shard_path=cfg['COURSE_REMOTE_SOURCE'],
                    databricks_profile=db_profile,
                    verbose=False)
 
 
-def import_dbcs(cfg, course_name, build_dir, course_repo, db_profile):
-    # type: (dict, str, str, str, str) -> None
+def import_dbcs(cfg, build_dir):
+    # type: (dict, str) -> None
 
-    remote_target = course_remote_target(course_name, cfg)
+    remote_target = cfg['COURSE_REMOTE_TARGET']
+    course_name = cfg['COURSE_NAME']
+    db_profile = cfg['DB_PROFILE']
+    course_repo = cfg['COURSE_REPO']
 
     def import_dbc(dbc):
         # type: (str) -> None
         '''
         Import a single DBC.
 
-        Assumes (a) the working directory is the build output directory, and
+        Assumes (a) the working directory is the build_and_upload output directory, and
         (b) that the remote target path has already been created.
 
         :param dbc:
@@ -433,7 +452,7 @@ def import_dbcs(cfg, course_name, build_dir, course_repo, db_profile):
         if not dbcs:
             print('WARNING: No DBCs found.')
         else:
-            clean(cfg, course_repo, db_profile)
+            clean(cfg)
             cmd('databricks --profile {} workspace mkdirs {}'.format(
                 db_profile, remote_target
             ))
@@ -441,84 +460,92 @@ def import_dbcs(cfg, course_name, build_dir, course_repo, db_profile):
                 import_dbc(dbc)
 
 
-def build(cfg, course_repo, db_profile):
-    # type: (dict, str, str) -> None
-    (course_name, prefix, course_home) = course_config(cfg, course_repo)
-    build_file = os.path.join(course_home, "build.yaml")
-    if not os.path.exists(build_file):
-        die('Build file "{}" does not exist.'.format(build_file))
+def build_only(course_name, build_file):
+    # type: (str, str) -> None
     print("\nBuilding {}".format(course_name))
     bdc.bdc_build_course(build_file,
                          dest_dir='',
                          overwrite=True,
                          verbose=False)
+
+
+def build_and_upload(cfg):
+    # type: (dict) -> None
+    course_name = cfg['COURSE_NAME']
+
+    build_file = build_file_path(cfg)
+    if not os.path.exists(build_file):
+        die('Build file "{}" does not exist.'.format(build_file))
+    build_only(course_name, build_file)
     build_dir = bdc.bdc_output_directory_for_build(build_file)
-    import_dbcs(cfg, course_name, build_dir, course_repo, db_profile)
+    import_dbcs(cfg, build_dir)
 
 
-def install_tools():
+def install_tools(cfg):
+    # type: (dict) -> None
     check_for_docker("install-tools")
 
 
-def download(cfg, course_repo, db_profile):
+def browse_directory(cfg, path, subcommand):
+    # (dict, str, str) -> None
+    check_for_docker(subcommand)
+    cmd('{} "{}"'.format(cfg['OPEN_DIR'], path))
+
+
+def edit_file(cfg, path, subcommand):
     # type: (dict, str, str) -> None
-    (course_name, prefix, course_home) = course_config(cfg, course_repo)
-    bdc.bdc_download(build_file=build_file_path(course_name),
-                     shard_path=course_remote_source(course_name, cfg),
-                     databricks_profile=db_profile,
-                     verbose=False)
-
-
-def open_home(cfg):
-    # type: (dict) -> None
-    check_for_docker('home')
-
-
-def open_modules(cfg):
-    # type: (dict) -> None
-    check_for_docker('modules')
-
-
-def open_repo(cfg):
-    # type: (dict) -> None
-    check_for_docker('repo')
-
-
-def edit_build_file(cfg):
-    # type: (dict) -> None
-    check_for_docker('yaml')
+    check_for_docker(subcommand)
+    cmd('{} "{}"'.format(cfg['EDITOR'], path))
 
 
 def edit_config(cfg):
-    # type: (dict) -> None
-    check_for_docker('config')
-
-
-def edit_guide(cfg):
     # type: (dict) -> dict
-    check_for_docker('guide')
-    return cfg
+    edit_file(cfg, CONFIG_PATH, 'config')
+    return load_config(CONFIG_PATH)
+
+
+def push_release(cfg, course_repo, deploy_type):
+    # type: (dict, str, str) -> None
+    if deploy_type is None:
+        deploy_type = "latest"
+
+    course_home = cfg['COURSE_HOME']
+
+    deploy_sh = os.path.join(course_home, 'deploy.sh')
+    if os.path.exists(deploy_sh):
+        # There's a course-specific deployment script. Run it.
+        os.environ['DEPLOY_TYPE'] = deploy_type
+        cmd(deploy_sh)
+        del os.environ['DEPLOY_TYPE']
+    else:
+        # More to come
+        pass
 
 
 def copy_to_staging(cfg):
     # type: (dict) -> None
+    course_repo = cfg['COURSE_REPO']
     pass
 
 
 def copy_to_release(cfg):
     # type: (dict) -> None
+    course_repo = cfg['COURSE_REPO']
     pass
 
 
-def git_status(cfg, course_repo):
-    # type: (dict, str) -> None
+def git_status(cfg):
+    # type: (dict) -> None
+    course_repo = cfg['COURSE_REPO']
     print('+ cd {}'.format(course_repo))
     with working_directory(course_repo):
         cmd("git status")
 
 
-def git_diff(cfg, course_repo, pager):
-    # type: (dict, str, str) -> None
+def git_diff(cfg):
+    # type: (dict) -> None
+    course_repo = cfg['COURSE_REPO']
+    pager = cfg['PAGER']
     with working_directory(course_repo):
         if len(pager.strip()) == 0:
             cmd("git status")
@@ -526,15 +553,17 @@ def git_diff(cfg, course_repo, pager):
             cmd("git status | {}".format(pager))
 
 
-def git_difftool(cfg, course_repo):
-    # type: (dict, str) -> None
+def git_difftool(cfg):
+    # type: (dict) -> None
+    course_repo = cfg['COURSE_REPO']
     check_for_docker("difftool")
     with working_directory(course_repo):
         cmd("git difftool --tool=opendiff --no-prompt")
 
 
-def deploy_images(cfg, course_repo):
-    # type: (dict, str) -> None
+def deploy_images(cfg):
+    # type: (dict) -> None
+    course_repo = cfg['COURSE_REPO']
     pass
 
 
@@ -559,27 +588,29 @@ def run_command_on_notebooks(cfg, args):
 
 def main():
     try:
+        cfg = load_config(CONFIG_PATH)
+
         # Update the environment, for subprocesses we need to invoke.
 
-        os.environ['EDITOR'] = EDITOR
-        os.environ['PAGER'] = PAGER
-
-        cfg = parse_config(CONFIG_PATH)
+        os.environ['EDITOR'] = cfg['EDITOR']
+        os.environ['PAGER'] = cfg['PAGER']
 
         # Loop over the argument list, since we need to support chaining some
-        # commands (e.g., "course download build"). This logic emulates
+        # commands (e.g., "course download build_and_upload"). This logic emulates
         # what was in the original shell script version, and it's not easily
         # handled by Python's argparse or docopt. So, ugly as it is, we go
         # with manual parsing.
 
         if len(sys.argv) == 1:
-            args = "help"
+            args = ["help"]
         else:
             args = sys.argv[1:]
 
         i = 0
         while i < len(args):
             cmd = args[i]
+            cfg = update_config(cfg)
+
             if cmd in ('-n', '--name'):
                 try:
                     i += 1
@@ -594,7 +625,7 @@ def main():
             elif cmd in ('work-on', 'workon'):
                 try:
                     i += 1
-                    work_on(args[i], cfg, CONFIG_PATH)
+                    work_on(cfg, args[i], CONFIG_PATH)
                 except IndexError:
                     die('Expected course name after "work-on".')
 
@@ -602,52 +633,54 @@ def main():
                 show_course_name(cfg)
 
             elif cmd == 'install_tools':
-                install_tools()
+                install_tools(cfg)
 
             elif cmd == 'download':
-                download(cfg, COURSE_REPO, DB_PROFILE)
+                download(cfg)
 
             elif cmd == 'upload':
-                upload(cfg, COURSE_REPO, DB_PROFILE)
+                upload(cfg)
 
             elif cmd == 'build':
-                build(cfg, COURSE_REPO, DB_PROFILE)
+                build_and_upload(cfg)
 
             elif cmd == 'clean':
-                clean(cfg, COURSE_REPO, DB_PROFILE)
+                clean(cfg)
 
             elif cmd in ('clean-source', 'cleansource'):
-                clean_source(cfg, COURSE_REPO, DB_PROFILE)
+                clean_source(cfg)
 
             elif cmd == 'status':
-                git_status(cfg, COURSE_REPO)
+                git_status(cfg)
 
             elif cmd == 'diff':
-                git_diff(cfg, COURSE_REPO, PAGER)
+                git_diff(cfg)
 
             elif cmd == 'difftool':
-                git_difftool(cfg, COURSE_REPO)
+                git_difftool(cfg)
 
             elif cmd == 'home':
-                open_home(cfg)
+                browse_directory(cfg, cfg['COURSE_HOME'], 'home')
 
             elif cmd == 'modules':
-                open_modules(cfg)
+                browse_directory(cfg, cfg['COURSE_MODULES'], 'modules')
 
             elif cmd == 'repo':
-                open_repo(cfg)
+                browse_directory(cfg, cfg['COURSE_REPO'], 'repo')
 
             elif cmd == 'config':
                 cfg = edit_config(cfg)
 
             elif cmd == 'yaml':
-                edit_build_file(cfg)
+                edit_file(cfg, build_file_path(cfg), 'yaml')
 
             elif cmd == 'guide':
-                edit_guide(cfg)
+                edit_file(cfg,
+                          os.path.join(cfg['COURSE_HOME'], 'Teaching-Guide.md'),
+                          'guide')
 
             elif cmd == ('deploy-images', 'deployimages'):
-                deploy_images(cfg, COURSE_REPO)
+                deploy_images(cfg)
 
             elif cmd == 'release':
                 copy_to_release(cfg)
@@ -695,6 +728,14 @@ def main():
                 except IndexError:
                     die('Missing CONF=VAL argument to "set".')
 
+            elif cmd == "showconfig":
+                hdr = "Current configuration"
+                print('-' * len(hdr))
+                print(hdr)
+                print('-' * len(hdr))
+                for key in sorted(cfg.keys()):
+                    print('{}="{}"'.format(key, cfg[key]))
+
             else:
                 die('"{}" is not a valid "course" subcommand.'.format(cmd))
 
@@ -702,6 +743,9 @@ def main():
 
     except CourseError as e:
         printerr(e.message)
+
+    except KeyboardInterrupt:
+        printerr('\n*** Interrupted.')
 
 if __name__ == '__main__':
     main()

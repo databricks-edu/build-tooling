@@ -1,4 +1,13 @@
 #!/bin/sh
+#
+# NOTE: You can override the way pip installs the build tools by specifying
+# a PIP_TARGET. This is useful during development. For example, to load
+# the tools from bmc's fork, using branch "coursework", you can do this:
+#
+# PIP_TARGET=git+https://github.com/bmc/build-tooling.git@coursework ./create_image.sh rebuild
+#
+# By default, it uses the master branch of the databricks-edu/build-tooling
+# repo.
 
 USAGE="$0 build|rebuild"
 

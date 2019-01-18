@@ -27,7 +27,7 @@ setup(
     name='course',
     packages=['course'],
     version=version,
-    description='Build Databricks Course (curriculum build_and_upload tool)',
+    description='Workflow management tool for Databricks curriculum development',
     install_requires=[
         'future >= 0.16.0',
         'markdown2 >= 2.3.5',

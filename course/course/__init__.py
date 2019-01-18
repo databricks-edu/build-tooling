@@ -16,6 +16,7 @@ PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
 
+USER = os.environ['USER'] # required
 PAGER_DEFAULT = 'less --RAW-CONTROL-CHARS'
 EDITOR_DEFAULT = 'open -a textedit'
 SOURCE_DEFAULT = '_Source'
@@ -23,7 +24,7 @@ TARGET_DEFAULT = 'Target'
 AWS_PROFILE_DEFAULT = 'default'
 DB_PROFILE_DEFAULT = 'DEFAULT'
 COURSE_REPO_DEFAULT = os.path.expanduser('~/repos/training')
-DB_SHARD_HOME_DEFAULT = '/Users/{}@databricks.com'.format(os.getlogin())
+DB_SHARD_HOME_DEFAULT = '/Users/{}@databricks.com'.format(USER)
 DB_CONFIG_PATH_DEFAULT = os.path.expanduser('~/.databrickscfg')
 OPEN_DIR_DEFAULT = 'open' # Mac-specific, but can be configured.
 
@@ -308,7 +309,7 @@ def update_config(cfg):
     adj['PREFIX'] = prefix
     adj['COURSE_HOME'] = normpath(join(repo, 'courses', prefix, course_name))
     adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
-    adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course_name)
+    adj['COURSE_MODULES'] = join(repo, 'modules', prefix,course_name)
     adj['COURSE_REMOTE_SOURCE'] = '{}/{}/{}'.format(
         adj['DB_SHARD_HOME'], adj['SOURCE'], course_name
     )

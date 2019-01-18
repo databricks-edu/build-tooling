@@ -8,8 +8,10 @@ from contextlib import contextmanager
 from typing import Generator, Sequence, Pattern
 from tempfile import NamedTemporaryFile
 from termcolor import colored
-from functools import partial
 from string import Template as StringTemplate
+import functools
+from subprocess import Popen
+from textwrap import TextWrapper
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -82,41 +84,52 @@ SUBCOMMANDS
   {0} (--help, -h, help) Show the full help page (this output)
   {0} (--version, -V)    Display version and exit
   {0} install-tools    * Install the build tools.
-  {0} work-on <name>     Specify and remember the course to build, upload, etc.
-  {0} which              Print the name of the currently selected course.
+  {0} work-on <name>     Specify and remember the course to build, 
+                         upload, etc.
+  {0} which              Print the name of the current course.
   {0} download           Download from SOURCE
-  {0} build              Build from local files and upload build to TARGET
-  {0} upload             Upload local sources (from your Git repo) to SOURCE
-  {0} clean              Remove TARGET (built artifact) from Databricks             
+  {0} build              Build course from local files and upload built
+  {1}                    artifacts to Databricks.
+  {0} build-local        Build course from local files without 
+  {1}                    uploading artifacts.
+  {0} upload             Upload local sources (from your Git repo) to 
+  {1}                    SOURCE.
+  {0} upload-built       Upload built artifacts. Assumes you already
+  {1}                    ran "{0} buildlocal".
+  {0} clean              Remove TARGET (built artifact) from Databricks            
   {0} clean-source       Remove SOURCE (built artifact) from Databricks
-  {0} status             Run a "git status" on the local repository clone.
-  {0} diff               Run a "git diff" on the local repository clone, and
-                         pipe the output through the PAGER (usually "more" or
-                         "less"). If PAGER isn't set, the diff output is just
-                         dumped to standard output.
-  {0} difftool         * Run "git difftool" (with "opendiff") on the local
-                         repository clone. 
+  {0} status             Run a "git status" on the local repository 
+  {1}                    clone.
+  {0} diff               Run a "git diff" on the local repository,
+  {1}                    clone and pipe the output through PAGER. 
+  {1}                    PAGER isn't set, the diff output is just
+  {1}                    dumped to standard output.
+  {0} difftool         * Run "git difftool" (with "opendiff") on
+  {1}                    the repository clone. 
   {0} home             * Open the folder containing the build.yaml.
   {0} modules          * Open the folder containing the course modules.
   {0} repo             * Open the root of the training repo in git.
   {0} yaml               Edit the build.yaml.
   {0} config             Edit your course script configuration file.
-  {0} showconfig         Print the in-memory configuration, which is the
-                         parsed configuration file and possible environment
-                         overrides.
-  {0} guide            * Open the instructor guide.               
-  {0} deploy-images      Deploy the course images to S3. NOTE: This subcommand
-                         is a stub. It will be implemented in a later release.
-  {0} set VAR=VALUE      Configure and save a setting. Note that the keys are
-                         not currently validated, so spelling matters.  
-  {0} grep [-i] <re>     Search for a regular expression in course notebooks.
-                         The grep is done internally (in Python), so any
-                         regular expression accepted by Python is suitable.
-                         Use "-i" to specify case-blind matching.
-  {0} sed <command>      Search/replace text in notebooks using "sed -i -E".
-                         Takes a single "sed" argument and requires a version
-                         of "sed" that supports the "-i" (inplace edit) option.
-                         (The stock "sed" on the Mac and on Linux both qualify.)
+  {0} showconfig         Print the in-memory configuration, which is
+  {1}                    the parsed configuration file and possible
+  {1}                    environment overrides.
+  {0} guide            * Edit the instructor guide.               
+  {0} deploy-images      Deploy the course images to S3. NOTE: This
+  {1}                    command is a stub. It will be implemented in 
+  {1}                    a later release.
+  {0} set VAR=VALUE      Configure and save a setting. Note that the 
+  {1}                    keys are not validated. Spelling matters!
+  {0} grep [-i] <re>     Search for a regular expression in course 
+  {1}                    notebooks. The grep is done internally (in
+  {1}                    Python), so any regular expression accepted
+  {1}                    by Python is suitable. Use "-i" to specify
+  {1}                    case-blind matching.
+  {0} sed <command>      Search/replace text in notebooks using 
+  {1}                    "sed -i -E". Takes a single "sed" argument
+  {1}                    and requires a version of "sed" that supports
+  {1}                    the "-i" (inplace edit) option. (The stock
+  {1}                    ("sed" on the Mac and on Linux both qualify.)
 
   The following subcommands consume all remaining arguments and end the chain.
 
@@ -166,6 +179,7 @@ SUBCOMMANDS
     Default: {OPEN_DIR_DEFAULT}
 '''.format(
     PROG,
+    ' ' * len(PROG),
     CONFIG_PATH=CONFIG_PATH,
     VERSION=VERSION,
     PAGER_DEFAULT=PAGER_DEFAULT,
@@ -181,12 +195,32 @@ SUBCOMMANDS
     SELF_PACED_PATH_DEFAULT=SELF_PACED_PATH_DEFAULT
 )
 
+WARNING_PREFIX = 'WARNING: '
+COLUMNS = int(os.environ.get('COLUMNS', '80')) - 1
+
 # -----------------------------------------------------------------------------
 # Classes
 # -----------------------------------------------------------------------------
 
 class CourseError(Exception):
     pass
+
+class LocalTextWrapper(TextWrapper):
+    def __init__(self, width=COLUMNS, subsequent_indent=''):
+        TextWrapper.__init__(self,
+                             width=width,
+                             subsequent_indent=subsequent_indent)
+
+    def fill(self, msg):
+        wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
+        return '\n'.join(wrapped)
+
+
+# -----------------------------------------------------------------------------
+# Globals
+# -----------------------------------------------------------------------------
+
+warning_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
 
 # -----------------------------------------------------------------------------
 # Internal functions
@@ -199,6 +233,10 @@ def printerr(msg):
 def die(msg):
     printerr(msg)
     sys.exit(1)
+
+
+def warn(msg):
+    print(warning_wrapper.fill(WARNING_PREFIX + msg))
 
 
 @contextmanager
@@ -239,15 +277,15 @@ def pager(cfg):
 
     :returns: the file descriptior (as a yield)
     """
-    from subprocess import Popen
-
     # Dump to a temporary file if the pager is defined. This allows the pager
     # to use stdin to read from the terminal.
     the_pager = cfg.get('PAGER')
     if the_pager:
         opener = NamedTemporaryFile
     else:
-        opener = partial(noop, sys.stdout)
+        # If this confuses you, go here:
+        # https://docs.python.org/2/library/functools.html#functools.partial
+        opener = functools.partial(noop, sys.stdout)
 
     with opener(mode='w') as out:
         yield out
@@ -269,16 +307,23 @@ def check_for_docker(command):
         )
 
 
-def cmd(shell_command, quiet=False):
-    if not quiet:
+def cmd(shell_command, quiet=False, dryrun=False):
+    # type: (str, bool, bool) -> None
+    """
+    Run a shell command.
+
+    :param shell_command: the string containing the command and args
+    :param quiet:         True: don't echo the command before running it.
+    :param dryrun:        echo the command, but don't run it
+    :raises CourseError: If the command exits with a non-zero status
+    """
+    if dryrun or (not quiet):
         print("+ {}".format(shell_command))
 
-    rc = os.system(shell_command)
-    if rc != 0:
-        if quiet:
-            print('WARNING: "{}" exited with {}.'.format(shell_command, rc))
-        else:
-            print('WARNING: Command exited with {}'.format(rc))
+    if not dryrun:
+        rc = os.system(shell_command)
+        if rc != 0:
+            raise CourseError('Command exited with {}'.format(rc))
 
 
 def quote_shell_arg(arg):
@@ -434,7 +479,7 @@ def update_config(cfg):
     adj['PREFIX'] = prefix
     adj['COURSE_HOME'] = normpath(join(repo, 'courses', prefix, course_name))
     adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
-    adj['COURSE_MODULES'] = join(repo, 'modules', prefix,course_name)
+    adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course_name)
     adj['COURSE_REMOTE_SOURCE'] = '{}/{}/{}'.format(
         adj['DB_SHARD_HOME'], adj['SOURCE'], course_name
     )
@@ -484,7 +529,7 @@ def configure(cfg, config_path, key, value):
     stored_cfg = load_config(config_path)
     stored_cfg[key] = value
     with open(config_path, 'w') as f:
-        for k, v in stored_cfg.items():
+        for k, v in sorted(stored_cfg.items()):
             f.write('{}={}\n'.format(k, v))
 
     return new_cfg
@@ -566,7 +611,6 @@ def download(cfg):
     :return: Nothing
     """
     db_profile = cfg['DB_PROFILE']
-
     bdc.bdc_download(build_file=build_file_path(cfg),
                      shard_path=cfg['COURSE_REMOTE_SOURCE'],
                      databricks_profile=db_profile,
@@ -585,7 +629,6 @@ def upload(cfg):
     :return: Nothing
     """
     db_profile = cfg['DB_PROFILE']
-
     bdc.bdc_upload(build_file=build_file_path(cfg),
                    shard_path=cfg['COURSE_REMOTE_SOURCE'],
                    databricks_profile=db_profile,
@@ -606,9 +649,7 @@ def import_dbcs(cfg, build_dir):
     """
 
     remote_target = cfg['COURSE_REMOTE_TARGET']
-    course_name = cfg['COURSE_NAME']
     db_profile = cfg['DB_PROFILE']
-    course_repo = cfg['COURSE_REPO']
 
     def import_dbc(dbc):
         # type: (str) -> None
@@ -622,9 +663,11 @@ def import_dbcs(cfg, build_dir):
         :return:
         '''
         parent_subpath = os.path.dirname(dbc)
+        cmd('databricks --profile {} workspace mkdirs "{}/{}"'.format(
+            db_profile, remote_target, os.path.dirname(parent_subpath)
+        ))
         # Language is ignored by databricks, but it's a required option. <sigh>
-        cmd(
-            ('databricks --profile {} workspace import --format DBC ' +
+        cmd(('databricks --profile {} workspace import --format DBC ' +
              '--language Python "{}" "{}/{}"').format(
                 db_profile, dbc, remote_target, parent_subpath
 
@@ -642,30 +685,38 @@ def import_dbcs(cfg, build_dir):
                 dbcs.append(os.path.normpath(os.path.join(dirpath, filename)))
 
         if not dbcs:
-            print('WARNING: No DBCs found.')
+            warn('No DBCs found.')
         else:
             clean(cfg)
             cmd('databricks --profile {} workspace mkdirs {}'.format(
                 db_profile, remote_target
             ))
             for dbc in dbcs:
+                print('\nImporting {}\n'.format(os.path.join(build_dir, dbc)))
                 import_dbc(dbc)
 
 
-def build_only(course_name, build_file):
-    # type: (str, str) -> None
+def build_local(cfg):
+    # type: (dict) -> str
     """
     Build a course without uploading the results.
 
-    :param course_name: the course name
-    :param build_file:  the path to the build file
-    :return:
+    :param cfg: the loaded config
+
+    :return: the path to the build file, for convenience
     """
+    course_name = cfg['COURSE_NAME']
+    build_file = build_file_path(cfg)
+    if not os.path.exists(build_file):
+        die('Build file "{}" does not exist.'.format(build_file))
+
     print("\nBuilding {}".format(course_name))
     bdc.bdc_build_course(build_file,
                          dest_dir='',
                          overwrite=True,
                          verbose=False)
+
+    return build_file
 
 
 def build_and_upload(cfg):
@@ -679,11 +730,23 @@ def build_and_upload(cfg):
 
     :return: Nothing
     """
+    build_file = build_local(cfg)
+    build_dir = bdc.bdc_output_directory_for_build(build_file)
+    import_dbcs(cfg, build_dir)
+
+
+def upload_build(cfg):
+    # type: (dict) -> None
+    """
+    Upload an already-built course.
+
+    :param cfg: The config. COURSE_NAME, COURSE_REMOTE_TARGET, and
+                DB_PROFILE are assumed to be set.
+
+    :return: None
+    """
     course_name = cfg['COURSE_NAME']
     build_file = build_file_path(cfg)
-    if not os.path.exists(build_file):
-        die('Build file "{}" does not exist.'.format(build_file))
-    build_only(course_name, build_file)
     build_dir = bdc.bdc_output_directory_for_build(build_file)
     import_dbcs(cfg, build_dir)
 
@@ -781,6 +844,7 @@ def git_diff(cfg):
 
 
 def git_difftool(cfg):
+    # type: (dict) -> None
     """
     Runs a "git difftool", using "opendiff", against the local Git repository.
     Does not work inside a Docker container.
@@ -789,7 +853,6 @@ def git_difftool(cfg):
 
     :return: Nothing
     """
-    # type: (dict) -> None
     course_repo = cfg['COURSE_REPO']
     check_for_docker("difftool")
     with working_directory(course_repo):
@@ -807,7 +870,7 @@ def deploy_images(cfg):
 
     :return: Nothing
     """
-    print("*** WARNING: 'deploy-images' is not yet implemented.")
+    warn("'deploy-images' is not yet implemented.")
 
 
 def grep(cfg, pattern, case_blind=False):
@@ -845,13 +908,16 @@ def grep(cfg, pattern, case_blind=False):
                 if not m:
                     continue
 
-                # Colorize the match.
-                s = m.start()
-                e = m.end()
-                matches.append(
-                    line[:s] +
-                    colored(line[s:e], 'red', attrs=['bold']) +
-                    line[e:])
+                # If there's a pager, colorize the match.
+                if cfg.get('PAGER'):
+                    s = m.start()
+                    e = m.end()
+                    matches.append(
+                        line[:s] +
+                        colored(line[s:e], 'red', attrs=['bold']) +
+                        line[e:])
+                else:
+                    matches.append(line)
 
         if matches:
             out.write('\n\n=== {}\n\n'.format(printable_path))
@@ -925,10 +991,14 @@ def run_command_on_notebooks(cfg, command, args):
         else:
             shell_command = '{} {}'.format(command, nb)
 
-        cmd("{}".format(shell_command))
+        try:
+            cmd("{}".format(shell_command))
+        except CourseError as e:
+            warn(e.message)
 
 
 def help(cfg):
+    # type: (dict) -> None
     with pager(cfg) as out:
         out.write(USAGE)
 
@@ -998,8 +1068,14 @@ def main():
             elif cmd == 'upload':
                 upload(cfg)
 
+            elif cmd in ('upload-built', 'uploadbuilt'):
+                upload_build(cfg)
+
             elif cmd == 'build':
                 build_and_upload(cfg)
+
+            elif cmd in ('build-local', 'buildlocal'):
+                build_local(cfg)
 
             elif cmd == 'clean':
                 clean(cfg)

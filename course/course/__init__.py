@@ -93,8 +93,8 @@ Subcommands:
   {0} home             * Open the folder containing the build.yaml.
   {0} modules          * Open the folder containing the course modules.
   {0} repo             * Open the root of the training repo in git.
-  {0} yaml             * Edit the build.yaml.
-  {0} config           * Edit your course script configuration file.
+  {0} yaml               Edit the build.yaml.
+  {0} config             Edit your course script configuration file.
   {0} showconfig         Print the in-memory configuration, which is the
                          parsed configuration file and possible environment
                          overrides.
@@ -495,7 +495,6 @@ def browse_directory(cfg, path, subcommand):
 
 def edit_file(cfg, path, subcommand):
     # type: (dict, str, str) -> None
-    check_for_docker(subcommand)
     cmd('{} "{}"'.format(cfg['EDITOR'], path))
 
 

@@ -43,12 +43,12 @@ USAGE
   
 DESCRIPTION
 
-  "course" is a build_and_upload workflow tool, sitting on top of "bdc".
+  "course" is a build workflow tool, sitting on top of "bdc".
    
   Many subcommands can be chained. For instance:
   
-      course upload build_and_upload
-      course work-on Delta build_and_upload 
+      course upload build
+      course work-on Delta build
 
   Some commands end the chain, because they consume all remaining arguments.
   Examples include "sed" and "xargs".
@@ -81,12 +81,11 @@ SUBCOMMANDS
 
   {0} (--help, -h, help) Show the full help page (this output)
   {0} (--version, -V)    Display version and exit
-  {0} install-tools    * Install the build_and_upload tools.
-  {0} work-on <name>     Specify and remember the course to build_and_upload,
-                         upload, etc.
+  {0} install-tools    * Install the build tools.
+  {0} work-on <name>     Specify and remember the course to build, upload, etc.
   {0} which              Print the name of the currently selected course.
   {0} download           Download from SOURCE
-  {0} build_and_upload              Build from local files and upload build_and_upload to TARGET
+  {0} build              Build from local files and upload build to TARGET
   {0} upload             Upload local sources (from your Git repo) to SOURCE
   {0} clean              Remove TARGET (built artifact) from Databricks             
   {0} clean-source       Remove SOURCE (built artifact) from Databricks
@@ -133,7 +132,7 @@ SUBCOMMANDS
     Default: {DB_PROFILE_DEFAULT}
   DB_SHARD_HOME: Workspace path for home folder
     Default: {DB_SHARD_HOME_DEFAULT}
-  COURSE_NAME: Name of the course you wish to build_and_upload.
+  COURSE_NAME: Name of the course you wish to work on.
     Default: This must be provided, but can default from the stored config.
   COURSE_REPO: Path to git repo
     Default: {COURSE_REPO_DEFAULT}
@@ -616,7 +615,7 @@ def import_dbcs(cfg, build_dir):
         '''
         Import a single DBC.
 
-        Assumes (a) the working directory is the build_and_upload output directory, and
+        Assumes (a) the working directory is the build directory, and
         (b) that the remote target path has already been created.
 
         :param dbc:
@@ -950,7 +949,7 @@ def main():
         os.environ['PAGER'] = cfg['PAGER']
 
         # Loop over the argument list, since we need to support chaining some
-        # commands (e.g., "course download build_and_upload"). This logic emulates
+        # commands (e.g., "course download build"). This logic emulates
         # what was in the original shell script version, and it's not easily
         # handled by Python's argparse or docopt. So, ugly as it is, we go
         # with manual parsing.

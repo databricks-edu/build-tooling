@@ -21,7 +21,6 @@ PAGER_DEFAULT = 'less --RAW-CONTROL-CHARS'
 EDITOR_DEFAULT = 'open -a textedit'
 SOURCE_DEFAULT = '_Source'
 TARGET_DEFAULT = 'Target'
-AWS_PROFILE_DEFAULT = 'default'
 DB_PROFILE_DEFAULT = 'DEFAULT'
 COURSE_REPO_DEFAULT = os.path.expanduser('~/repos/training')
 DB_SHARD_HOME_DEFAULT = '/Users/{}@databricks.com'.format(USER)
@@ -99,8 +98,6 @@ Subcommands:
                          parsed configuration file and possible environment
                          overrides.
   {0} guide            * Open the instructor guide.               
-  {0} stage              Deploy a build_and_upload to the S3 staging area.               
-  {0} release            Deploy a build_and_upload to the S3 release area.               
   {0} deploy-images      Deploy the course images to S3.
   {0} set VAR=VALUE      Configure and save a setting. Note that the keys are
                          not currently validated, so spelling matters.  
@@ -135,8 +132,6 @@ Subcommands:
     Default: <DB_SHARD_HOME>/<SOURCE>/<course-name>
   COURSE_REMOTE_TARGET: Workspace path for built course
     Default: <DB_SHARD_HOME>/<TARGET>/<course-name>
-  COURSE_AWS_PROFILE: AWS authentication profile to use when uploading to S3. 
-    Default: {AWS_PROFILE_DEFAULT}
   SOURCE: Prefix for uploading/downloading source files.
     Default: {SOURCE_DEFAULT}
   TARGET: Prefix for uploading/downloading built files.
@@ -156,7 +151,6 @@ Subcommands:
     DB_PROFILE_DEFAULT=DB_PROFILE_DEFAULT,
     DB_SHARD_HOME_DEFAULT=DB_SHARD_HOME_DEFAULT,
     COURSE_REPO_DEFAULT=COURSE_REPO_DEFAULT,
-    AWS_PROFILE_DEFAULT=AWS_PROFILE_DEFAULT,
     SOURCE_DEFAULT=SOURCE_DEFAULT,
     TARGET_DEFAULT=TARGET_DEFAULT,
     EDITOR_DEFAULT=EDITOR_DEFAULT,
@@ -252,7 +246,6 @@ def load_config(config_path):
         ('COURSE_MODULES', ''),                      # depends on COURSE_NAME
         ('COURSE_REMOTE_SOURCE', ''),                # depends on COURSE_NAME
         ('COURSE_REMOTE_TARGET', ''),                # depends on COURSE_NAME
-        ('COURSE_AWS_PROFILE',  AWS_PROFILE_DEFAULT),
         ('SOURCE', SOURCE_DEFAULT),
         ('TARGET', TARGET_DEFAULT),
         ('EDITOR', EDITOR_DEFAULT),
@@ -504,36 +497,6 @@ def edit_config(cfg):
     return load_config(CONFIG_PATH)
 
 
-def push_release(cfg, course_repo, deploy_type):
-    # type: (dict, str, str) -> None
-    if deploy_type is None:
-        deploy_type = "latest"
-
-    course_home = cfg['COURSE_HOME']
-
-    deploy_sh = os.path.join(course_home, 'deploy.sh')
-    if os.path.exists(deploy_sh):
-        # There's a course-specific deployment script. Run it.
-        os.environ['DEPLOY_TYPE'] = deploy_type
-        cmd(deploy_sh)
-        del os.environ['DEPLOY_TYPE']
-    else:
-        # More to come
-        pass
-
-
-def copy_to_staging(cfg):
-    # type: (dict) -> None
-    course_repo = cfg['COURSE_REPO']
-    pass
-
-
-def copy_to_release(cfg):
-    # type: (dict) -> None
-    course_repo = cfg['COURSE_REPO']
-    pass
-
-
 def git_status(cfg):
     # type: (dict) -> None
     course_repo = cfg['COURSE_REPO']
@@ -559,12 +522,6 @@ def git_difftool(cfg):
     check_for_docker("difftool")
     with working_directory(course_repo):
         cmd("git difftool --tool=opendiff --no-prompt")
-
-
-def deploy_images(cfg):
-    # type: (dict) -> None
-    course_repo = cfg['COURSE_REPO']
-    pass
 
 
 def grep(cfg, args):
@@ -678,15 +635,6 @@ def main():
                 edit_file(cfg,
                           os.path.join(cfg['COURSE_HOME'], 'Teaching-Guide.md'),
                           'guide')
-
-            elif cmd == ('deploy-images', 'deployimages'):
-                deploy_images(cfg)
-
-            elif cmd == 'release':
-                copy_to_release(cfg)
-
-            elif cmd == 'stage':
-                copy_to_staging(cfg)
 
             elif cmd == 'grep':
                 # All the remaining arguments go to grep.

@@ -34,6 +34,7 @@ from gendbc import gendbc
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
+from typing import Sequence
 
 
 # We're using backports.tempfile, instead of tempfile, so we can use
@@ -2533,7 +2534,7 @@ def default_output_directory_for_build(build):
 # ---------------------------------------------------------------------------
 
 def bdc_check_build(build_file, verbose=False):
-    # type: (str, bool) -> bool
+    # type: (str, bool) -> None
     """
     :param build_file:
     :param verbose:
@@ -2568,22 +2569,40 @@ def bdc_list_notebooks(build_file):
     '''
     Print the paths of notebooks in a build file to standard output. Notebooks
     that appear multiple times in a build are only listed once.
-    
+
     :param build_file: the build out.
     :return: Nothing
     '''
-    for p in bdc_get_notebook_paths(build):
+    for p in bdc_get_notebook_paths(build_file):
         print(p)
 
 
 def bdc_print_info(build_file, shell_format=False):
     # type: (str, bool) -> None
+    """
+    Display information about the build file to standard output.
+
+    :param build_file:    the path to the build file
+    :param shell_format:  whether to print the info as shell assignments (True)
+                          or in human-readable form (False).
+    :return: Nothing
+    """
     build = load_and_validate(build_file)
     print_info(build, shell_format)
 
 
 def bdc_upload(build_file, shard_path, databricks_profile=None, verbose=False):
     # type: (str, str, str, bool) -> None
+    """
+    Upload a course's source notebooks to Databricks.
+
+    :param build_file:          the path to the build file for the course
+    :param shard_path:          the Databricks path to which to upload them
+    :param databricks_profile:  the Databricks authentication profile to use
+    :param verbose:             whether or not to display verbose messages
+
+    :return: Nothing
+    """
     init_verbosity(verbose)
     build = load_and_validate(build_file)
     upload_notebooks(build, shard_path, databricks_profile)
@@ -2591,6 +2610,17 @@ def bdc_upload(build_file, shard_path, databricks_profile=None, verbose=False):
 
 def bdc_download(build_file, shard_path, databricks_profile=None, verbose=False):
     # type: (str, str, str, bool) -> None
+    """
+    Download a course's source notebooks from Databricks and copy them back
+    over top of the notebooks on the local disk.
+
+    :param build_file:          the path to the build file for the course
+    :param shard_path:          the Databricks path from which to download them
+    :param databricks_profile:  the Databricks authentication profile to use
+    :param verbose:             whether or not to display verbose messages
+
+    :return: Nothing
+    """
     init_verbosity(verbose)
     build = load_and_validate(build_file)
     download_notebooks(build, shard_path, databricks_profile)
@@ -2598,12 +2628,34 @@ def bdc_download(build_file, shard_path, databricks_profile=None, verbose=False)
 
 def bdc_output_directory_for_build(build_file):
     # type: (str) -> str
+    """
+    Determine the default output directory for a particular course.
+
+    :param build_file: the build file for the course
+
+    :return: the path to the output directory
+    """
     build = load_and_validate(build_file)
     return default_output_directory_for_build(build)
 
 
 def bdc_build_course(build_file, dest_dir, overwrite, verbose=False):
     # type: (str, str, bool, bool) -> None
+    """
+    Build a course.
+
+    :param build_file: the path to the build file
+    :param dest_dir:   the destination directory for the build, or None to use
+                       the default
+    :param overwrite:  If the destination directory exists already, and this
+                       parameter is True, then the destination directory will
+                       be recursively removed before the build is run. If the
+                       directory is there and this parameter is False, the
+                       function will raise an exception.
+    :param verbose:    whether or not to display verbose messages
+
+    :return: Nothing
+    """
     init_verbosity(verbose)
     build = load_and_validate(build_file)
     if not dest_dir:

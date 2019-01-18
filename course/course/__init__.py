@@ -9,6 +9,7 @@ from typing import Generator, Sequence, Pattern
 from tempfile import NamedTemporaryFile
 from termcolor import colored
 from functools import partial
+from string import Template as StringTemplate
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -30,6 +31,7 @@ COURSE_REPO_DEFAULT = os.path.expanduser('~/repos/training')
 DB_SHARD_HOME_DEFAULT = '/Users/{}@databricks.com'.format(USER)
 DB_CONFIG_PATH_DEFAULT = os.path.expanduser('~/.databrickscfg')
 OPEN_DIR_DEFAULT = 'open' # Mac-specific, but can be configured.
+SELF_PACED_PATH_DEFAULT = os.path.join('courses', 'Self-Paced')
 
 USAGE = '''
 {0}, version {VERSION}
@@ -145,6 +147,12 @@ Subcommands:
     Default: <DB_SHARD_HOME>/<TARGET>/<course-name>
   COURSE_AWS_PROFILE: AWS authentication profile to use when uploading to S3. 
     Default: {AWS_PROFILE_DEFAULT}
+  SELF_PACED_PATH: A Unix-style path of directories to search for self-paced
+                   classes. Each directory is relative to <COURSE_REPO>.
+                   "course" searches each of these directories for 
+                   subdirectories that contain "build.yaml" files, and it
+                   assumes each of those subdirectories is a self-paced course.
+    Default: {SELF_PACED_PATH_DEFAULT}
   SOURCE: Prefix for uploading/downloading source files.
     Default: {SOURCE_DEFAULT}
   TARGET: Prefix for uploading/downloading built files.
@@ -168,7 +176,8 @@ Subcommands:
     SOURCE_DEFAULT=SOURCE_DEFAULT,
     TARGET_DEFAULT=TARGET_DEFAULT,
     EDITOR_DEFAULT=EDITOR_DEFAULT,
-    OPEN_DIR_DEFAULT=OPEN_DIR_DEFAULT
+    OPEN_DIR_DEFAULT=OPEN_DIR_DEFAULT,
+    SELF_PACED_PATH_DEFAULT=SELF_PACED_PATH_DEFAULT
 )
 
 # -----------------------------------------------------------------------------
@@ -299,10 +308,11 @@ def load_config(config_path):
             raise CourseError("Configuration error(s).")
 
     setting_keys_and_defaults = (
-        # The second item in each tuple is a default value. If the default
-        # value is '', that generally means it can be overridden on the
-        # command line (or depends on something else that can be), so it's
-        # checked at runtime.
+        # The second item in each tuple is a default value. The default
+        # is treated as a Python string template, so it can substitute values
+        # from previous entries in the list. If the default value is '', that
+        # generally means it can be overridden on the command line (or depends
+        # on something else that can be), so it's checked at runtime.
         ('DB_CONFIG_PATH', DB_CONFIG_PATH_DEFAULT),
         ('DB_PROFILE', DB_PROFILE_DEFAULT),
         ('DB_SHARD_HOME', DB_SHARD_HOME_DEFAULT),
@@ -315,6 +325,7 @@ def load_config(config_path):
         ('COURSE_REMOTE_SOURCE', None),              # depends on COURSE_NAME
         ('COURSE_REMOTE_TARGET', None),              # depends on COURSE_NAME
         ('COURSE_AWS_PROFILE',  AWS_PROFILE_DEFAULT),
+        ('SELF_PACED_PATH', SELF_PACED_PATH_DEFAULT),
         ('SOURCE', SOURCE_DEFAULT),
         ('TARGET', TARGET_DEFAULT),
         ('EDITOR', EDITOR_DEFAULT),
@@ -330,31 +341,38 @@ def load_config(config_path):
             cfg[e] = v
 
         if (cfg.get(e) is None) and default:
-            cfg[e] = default
+            t = StringTemplate(default)
+            cfg[e] = t.substitute(cfg)
 
     return cfg
 
 
-def get_self_paced_courses(course_repo):
-    # type: (str) -> Sequence[str]
+def get_self_paced_courses(cfg):
+    # type: (dict) -> Sequence[str]
     """
     Find the names of all self-paced courses by querying the local Git repo
     clone.
 
-    :param course_repo: the path to the Git repository
+    :param cfg  the loaded config. COURSE_REPO and SELF_PACED_PATH must be
+                set
+
     :return: the names of all self-paced courses (as simple directory names)
     """
-    self_paced_dir = os.path.join(course_repo, "courses", "Self-Paced")
-    for f in os.listdir(self_paced_dir):
-        if f[0] == '.':
-            continue
-        full_path = os.path.join(self_paced_dir, f)
-        if not os.path.isdir(full_path):
-            continue
-        build = os.path.join(full_path, "build.yaml")
-        if not os.path.exists(build):
-            continue
-        yield f
+
+    self_paced_path = cfg['SELF_PACED_PATH']
+
+    for rel_path in self_paced_path.split(':'):
+        self_paced_dir = os.path.join(cfg['COURSE_REPO'], rel_path)
+        for f in os.listdir(self_paced_dir):
+            if f[0] == '.':
+                continue
+            full_path = os.path.join(self_paced_dir, f)
+            if not os.path.isdir(full_path):
+                continue
+            build = os.path.join(full_path, "build.yaml")
+            if not os.path.exists(build):
+                continue
+            yield f
 
 
 def update_config(cfg):
@@ -373,7 +391,7 @@ def update_config(cfg):
     adj = cfg.copy()
     repo = adj['COURSE_REPO']
 
-    self_paced = get_self_paced_courses(repo)
+    self_paced = get_self_paced_courses(cfg)
     prefix = 'Self-Paced' if course_name in self_paced else ''
 
     adj['PREFIX'] = prefix
@@ -386,7 +404,6 @@ def update_config(cfg):
     adj['COURSE_REMOTE_TARGET'] = '{}/{}/{}'.format(
         adj['DB_SHARD_HOME'], adj['TARGET'], course_name
     )
-
 
     return adj
 
@@ -933,14 +950,14 @@ def main():
             elif cmd in ('work-on', 'workon'):
                 try:
                     i += 1
-                    work_on(cfg, args[i], CONFIG_PATH)
+                    cfg = work_on(cfg, args[i], CONFIG_PATH)
                 except IndexError:
                     die('Expected course name after "work-on".')
 
             elif cmd == 'which':
                 print(cfg['COURSE_NAME'])
 
-            elif cmd == 'install_tools':
+            elif cmd in ('install-tools', 'installtools'):
                 install_tools()
 
             elif cmd == 'download':
@@ -994,7 +1011,6 @@ def main():
                 deploy_images(cfg)
 
             elif cmd == 'grep':
-                # All the remaining arguments go to grep.
                 try:
                     i += 1
                     pattern = args[i]
@@ -1006,7 +1022,6 @@ def main():
                         case_blind = False
 
                     grep(cfg, pattern, case_blind)
-                    break
                 except IndexError:
                     die('Missing grep argument(s).')
 

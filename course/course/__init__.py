@@ -110,10 +110,13 @@ Subcommands:
                          The grep is done internally (in Python), so any
                          regular expression accepted by Python is suitable.
                          Use "-i" to specify case-blind matching.
+  {0} sed <command>      Search/replace text in notebooks using "sed -i -E".
+                         Takes a single "sed" argument and requires a version
+                         of "sed" that supports the "-i" (inplace edit) option.
+                         (The stock "sed" on the Mac and on Linux both qualify.)
 
   The following subcommands consume all remaining arguments and end the chain.
 
-  {0} sed <commands>     Search/replace text in notebooks using "sed -E"
   {0} xargs <command>    Run <command> once per notebook.
 
   The following settings are honored. They are first read from the environment.
@@ -220,8 +223,10 @@ def check_for_docker(command):
         )
 
 
-def cmd(shell_command):
-    print("+ {}".format(shell_command))
+def cmd(shell_command, quiet=False):
+    if not quiet:
+        print("+ {}".format(shell_command))
+
     rc = os.system(shell_command)
     if rc != 0:
         raise CourseError('"{}" exited with {}.'.format(shell_command, rc))
@@ -611,9 +616,30 @@ def grep(cfg, pattern, case_blind=False):
             p.wait()
 
 
-def sed(cfg, args):
-    # type: (dict, Sequence[str]) -> None
-    pass
+def sed(cfg, sed_cmd):
+    # type: (dict, str) -> None
+    for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
+        # Quote the argument.
+        quoted = ''
+        q = sed_cmd[0]
+        if q in ('"', "'"):
+            # Already quoted, hopefully.
+            if sed_cmd[-1] != q:
+                raise CourseError(
+                'Mismatched quotes in sed argument: {}'.format(sed_cmd)
+                )
+            quoted = sed_cmd
+        elif ('"' in sed_cmd) and ("'" in sed_cmd):
+            raise CourseError(
+                ('"sed" argument cannot be quoted, since it contains ' +
+                 'single AND double quotes: {}').format(sed_cmd)
+             )
+        elif "'" in sed_cmd:
+            quoted = '"' + sed_cmd + '"'
+        else:
+            quoted = "'" + arg + "'"
+
+        cmd('sed -E -i "" -e {} "{}"'.format(quoted, nb))
 
 
 def run_command_on_notebooks(cfg, args):
@@ -742,13 +768,11 @@ def main():
                     die('Missing grep argument(s).')
 
             elif cmd == 'sed':
-                # All the remaining arguments go to sed.
                 try:
                     i += 1
-                    sed(cfg, args[i:])
-                    break
+                    sed(cfg, args[i])
                 except IndexError:
-                    die('Missing sed arguments.')
+                    die('Missing sed argument.')
 
             elif cmd == 'xargs':
                 # All the remaining arguments go to the command.

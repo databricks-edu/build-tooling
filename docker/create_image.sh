@@ -57,7 +57,7 @@ echo "Creating $DOCKERFILE"
 
 echo "FROM python:2" >$DOCKERFILE
 echo "RUN pip install $PIP_TARGET" >> $DOCKERFILE
-echo 'RUN apt-get update && apt-get install -y less zip unzip vim' >> $DOCKERFILE
+echo 'RUN apt-get update && apt-get install -y less zip unzip vim nano' >> $DOCKERFILE
 echo 'RUN curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"' >> $DOCKERFILE
 echo 'RUN unzip awscli-bundle.zip' >> $DOCKERFILE
 echo 'RUN ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws' >> $DOCKERFILE

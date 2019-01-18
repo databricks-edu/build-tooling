@@ -229,11 +229,51 @@ def cmd(shell_command, quiet=False):
 
     rc = os.system(shell_command)
     if rc != 0:
-        raise CourseError('"{}" exited with {}.'.format(shell_command, rc))
+        if quiet:
+            print('WARNING: "{}" exited with {}.'.format(shell_command, rc))
+        else:
+            print('WARNING: Command exited with {}'.format(rc))
+
+
+def quote_shell_arg(arg):
+    # type: (str) -> str
+    """
+    Ensure that an argument to be passed to a shell command is quoted.
+
+    :param arg:
+    :return: possibly changed argument
+    """
+    quoted = ''
+    q = arg[0]
+    if q in ('"', "'"):
+        # Already quoted, hopefully.
+        if arg[-1] != q:
+            raise CourseError(
+                'Mismatched quotes in shell argument: {}'.format(arg)
+            )
+        quoted = arg
+    elif ('"' in arg) and ("'" in arg):
+        raise CourseError(
+            ('Shell argument cannot be quoted, since it contains ' +
+             'single AND double quotes: {}').format(arg)
+        )
+    elif "'" in arg:
+        quoted = '"' + arg + '"'
+    else:
+        quoted = "'" + arg + "'"
+
+    return quoted
 
 
 def load_config(config_path):
     # type: (str) -> dict
+    """
+    Load the configuration file.
+
+    :param config_path: path to the configuration file
+
+    :return: A dictionary of configuration items
+    """
     bad = False
     comment = re.compile("^\s*#.*$")
     cfg = {}
@@ -296,6 +336,14 @@ def load_config(config_path):
 
 
 def get_self_paced_courses(course_repo):
+    # type: (str) -> Sequence[str]
+    """
+    Find the names of all self-paced courses by querying the local Git repo
+    clone.
+
+    :param course_repo: the path to the Git repository
+    :return: the names of all self-paced courses (as simple directory names)
+    """
     self_paced_dir = os.path.join(course_repo, "courses", "Self-Paced")
     for f in os.listdir(self_paced_dir):
         if f[0] == '.':
@@ -311,14 +359,14 @@ def get_self_paced_courses(course_repo):
 
 def update_config(cfg):
     # type: (dict) -> dict
-    '''
+    """
     Update the configuration, setting values that depend on course name,
     which is assumed to be set in the configuration.
 
     :param cfg: current configuration
 
     :return: possibly adjusted configuration
-    '''
+    """
     course_name = cfg['COURSE_NAME']
     from os.path import join, normpath
 
@@ -345,6 +393,14 @@ def update_config(cfg):
 
 def build_file_path(cfg):
     # type: (dict) -> str
+    """
+    Return the path to the build file for the current course.
+
+    :param cfg: the configuration. At a minimum, "COURSE_HOME" must be set.
+                COURSE_YAML is also examined.
+
+    :return: the path to the build file
+    """
     res = cfg.get('COURSE_YAML')
     if not res:
         res = os.path.join(cfg['COURSE_HOME'], 'build.yaml')
@@ -352,9 +408,22 @@ def build_file_path(cfg):
     return res
 
 
-def configure(cfg, key, value, config_path):
+def configure(cfg, config_path, key, value):
     # type: (dict, str, str, str) -> dict
-    cfg[key] = value
+    """
+    Add or update a key=value setting in both the in-memory configuration and
+    the stored configuration.
+
+    :param cfg:         the in-memory config
+    :param config_path: the path to the stored configuration
+    :param key:         the key to add or update
+    :param value:       the new value
+
+    :return: the adjusted in-memory configuration, which is a copy of the
+             one passed in
+    """
+    new_cfg = cfg.copy()
+    new_cfg[key] = value
     # Don't update from the in-memory config, because it might not match
     # what's in the file. (It can be modified on the fly, based on the command
     # line, and those ephemeral changes should not be saved.)
@@ -364,23 +433,35 @@ def configure(cfg, key, value, config_path):
         for k, v in stored_cfg.items():
             f.write('{}={}\n'.format(k, v))
 
-    return cfg
+    return new_cfg
 
 
 def work_on(cfg, course_name, config_path):
     # type: (dict, str, str) -> dict
-    return configure(cfg, 'COURSE_NAME', course_name, config_path)
+    """
+    Change the course name in the configuration. Implicitly updates the
+    in-memory configuration by calling update_config().
 
-
-def show_course_name(cfg):
-    # type: (dict) -> None
-    print(cfg['COURSE_NAME'])
+    :param cfg:
+    :param course_name:
+    :param config_path:
+    :return:
+    """
+    return update_config(configure(cfg, config_path, 'COURSE_NAME', course_name))
 
 
 def clean(cfg):
     # type: (dict) -> None
+    """
+    The guts of the "clean" command, this function deletes the built (target)
+    notebooks for current course from the remote Databricks instance.
+
+    :param cfg: The config. COURSE_NAME, COURSE_REMOTE_TARGET, and DB_PROFILE
+                are assumed to be set.
+
+    :return: Nothing
+    """
     db_profile = cfg['DB_PROFILE']
-    course_name = cfg['COURSE_NAME']
     remote_target = cfg['COURSE_REMOTE_TARGET']
 
     # It's odd to ensure that the directory exists before removing it, but
@@ -397,6 +478,15 @@ def clean(cfg):
 
 def clean_source(cfg):
     # type: (dict) -> None
+    """
+    The guts of the "clean-source" command, this function deletes the source
+    notebooks for current course from the remote Databricks instance.
+
+    :param cfg: The config. COURSE_NAME, COURSE_REMOTE_SOURCE, and DB_PROFILE
+                are assumed to be set.
+
+    :return: Nothing
+    """
     db_profile = cfg['DB_PROFILE']
     course_name = cfg['COURSE_NAME']
     remote_source = cfg['COURSE_REMOTE_SOURCE']
@@ -411,9 +501,17 @@ def clean_source(cfg):
 
 def download(cfg):
     # type: (dict) -> None
-    course_repo = cfg['COURSE_REPO']
+    """
+    Download the source notebooks for the current course from the Databricks
+    instance and put them back into the local Git repository. Delegates the
+    actual download to bdc.
+
+    :param cfg: The config. COURSE_HOME (and, by implication, COURSE_NAME) and
+                DB_PROFILE are assumed to be set.
+
+    :return: Nothing
+    """
     db_profile = cfg['DB_PROFILE']
-    course_name = cfg['COURSE_NAME']
 
     bdc.bdc_download(build_file=build_file_path(cfg),
                      shard_path=cfg['COURSE_REMOTE_SOURCE'],
@@ -423,9 +521,16 @@ def download(cfg):
 
 def upload(cfg):
     # type: (dict) -> None
-    course_repo = cfg['COURSE_REPO']
+    """
+    Upload the source notebooks for the current course from the local Git
+    repository to the Databricks instance. Delegates the actual upload to bdc.
+
+    :param cfg: The config. COURSE_HOME (and, by implication, COURSE_NAME),
+                COURSE_REMOTE_SOURCE, and DB_PROFILE are assumed to be set.
+
+    :return: Nothing
+    """
     db_profile = cfg['DB_PROFILE']
-    course_name = cfg['COURSE_NAME']
 
     bdc.bdc_upload(build_file=build_file_path(cfg),
                    shard_path=cfg['COURSE_REMOTE_SOURCE'],
@@ -435,6 +540,16 @@ def upload(cfg):
 
 def import_dbcs(cfg, build_dir):
     # type: (dict, str) -> None
+    """
+    Find all DBC files under the build output directory for the current course,
+    and upload them (import them) into the Databricks instance.
+
+    :param cfg:       The config. COURSE_NAME, COURSE_REMOTE_TARGET, and
+                      DB_PROFILE are assumed to be set.
+    :param build_dir: The path to the build directory.
+
+    :return: NOthing
+    """
 
     remote_target = cfg['COURSE_REMOTE_TARGET']
     course_name = cfg['COURSE_NAME']
@@ -485,6 +600,13 @@ def import_dbcs(cfg, build_dir):
 
 def build_only(course_name, build_file):
     # type: (str, str) -> None
+    """
+    Build a course without uploading the results.
+
+    :param course_name: the course name
+    :param build_file:  the path to the build file
+    :return:
+    """
     print("\nBuilding {}".format(course_name))
     bdc.bdc_build_course(build_file,
                          dest_dir='',
@@ -494,8 +616,16 @@ def build_only(course_name, build_file):
 
 def build_and_upload(cfg):
     # type: (dict) -> None
-    course_name = cfg['COURSE_NAME']
+    """
+    Build the current course and upload (import) the built artifacts to the
+    Databricks instance.
 
+    :param cfg:  The config. COURSE_NAME, COURSE_REMOTE_TARGET, and
+                 DB_PROFILE are assumed to be set.
+
+    :return: Nothing
+    """
+    course_name = cfg['COURSE_NAME']
     build_file = build_file_path(cfg)
     if not os.path.exists(build_file):
         die('Build file "{}" does not exist.'.format(build_file))
@@ -504,31 +634,73 @@ def build_and_upload(cfg):
     import_dbcs(cfg, build_dir)
 
 
-def install_tools(cfg):
-    # type: (dict) -> None
+def install_tools():
+    # type: () -> None
+    """
+    Install the build tools. Doesn't work inside a Docker container.
+    """
     check_for_docker("install-tools")
-    cmd('pip install git+https://github.com/$FORK/build-tooling')
+    cmd('pip install git+https://github.com/databricks-edu/build-tooling')
 
 
 def browse_directory(cfg, path, subcommand):
     # (dict, str, str) -> None
+    """
+    Browse a directory, using whatever tool is configured as OPEN_DIR.
+    Does not work inside Docker.
+
+    :param cfg:         the loaded configuration
+    :param path:        the path to the directory
+    :param subcommand:  the "course" subcommand, for errors.
+
+    :return: Nothing.
+    """
     check_for_docker(subcommand)
     cmd('{} "{}"'.format(cfg['OPEN_DIR'], path))
 
 
 def edit_file(cfg, path, subcommand):
     # type: (dict, str, str) -> None
+    """
+    Edit a file, using the configured EDITOR. Works inside Docker, provided
+    EDITOR is set to something installed in the Docker instance (such as
+    "vim").
+
+    :param cfg:         the loaded configuration
+    :param path:        the path to the file
+    :param subcommand:  the "course" subcommand, for errors.
+
+    :return: Nothing
+    """
     cmd('{} "{}"'.format(cfg['EDITOR'], path))
 
 
 def edit_config(cfg):
     # type: (dict) -> dict
+    """
+    Edit the "course" configuration file, using the configured EDITOR. Works
+    inside Docker, provided EDITOR is set to something installed in the Docker
+    instance (such as "vim").
+
+    Automatically reloads the configuration after the edit.
+
+    :param cfg: the loaded configuration
+
+    :return: The possibly modified configuration
+    """
     edit_file(cfg, CONFIG_PATH, 'config')
     return load_config(CONFIG_PATH)
 
 
 def git_status(cfg):
     # type: (dict) -> None
+    """
+    Runs a "git status" against the local Git repository.
+
+    :param cfg: the loaded config. COURSE_REPO must be set.
+
+    :return: Nothing
+    """
     course_repo = cfg['COURSE_REPO']
     print('+ cd {}'.format(course_repo))
     with working_directory(course_repo):
@@ -537,16 +709,32 @@ def git_status(cfg):
 
 def git_diff(cfg):
     # type: (dict) -> None
+    """
+    Runs a "git diff" against the local Git repository.
+
+    :param cfg: the loaded config. COURSE_REPO must be set. PAGER will be
+                used if it is set.
+
+    :return: Nothing
+    """
     course_repo = cfg['COURSE_REPO']
     pager = cfg['PAGER']
     with working_directory(course_repo):
-        if len(pager.strip()) == 0:
+        if not pager:
             cmd("git status")
         else:
             cmd("git status | {}".format(pager))
 
 
 def git_difftool(cfg):
+    """
+    Runs a "git difftool", using "opendiff", against the local Git repository.
+    Does not work inside a Docker container.
+
+    :param cfg: the loaded config. COURSE_REPO must be set.
+
+    :return: Nothing
+    """
     # type: (dict) -> None
     course_repo = cfg['COURSE_REPO']
     check_for_docker("difftool")
@@ -556,11 +744,35 @@ def git_difftool(cfg):
 
 def deploy_images(cfg):
     # type: (dict) -> None
+    """
+    Deploy the images for a course to the appropriate S3 location.
+
+    STUB. NOT CURRENTLY IMPLEMENTED.
+
+    :param cfg: the loaded configuration
+
+    :return: Nothing
+    """
     print("*** WARNING: 'deploy-images' is not yet implemented.")
 
 
 def grep(cfg, pattern, case_blind=False):
     # type: (dict, str, bool) -> None
+    """
+    Searches for the specified regular expression in every notebook within
+    the current course, printing the colorized matches to standard output.
+    If PAGER is set, the matches will be piped through the pager.
+
+    Note that this function does NOT use grep(1). It implements the
+    regular expression matching and colorization entirely within Python.
+
+    :param cfg:          The config.
+    :param pattern:      The regular expression (a string, not a compiled
+                         pattern) to find
+    :param case_blind:   Whether or not to use case-blind matching
+
+    :return: Nothing
+    """
 
     def grep_one(path, r, out):
         # type: (str, Pattern, file) -> None
@@ -582,7 +794,10 @@ def grep(cfg, pattern, case_blind=False):
                 # Colorize the match.
                 s = m.start()
                 e = m.end()
-                matches.append(line[:s] + colored(line[s:e], 'green') + line[e:])
+                matches.append(
+                    line[:s] +
+                    colored(line[s:e], 'red', attrs=['bold']) +
+                    line[e:])
 
         if matches:
             out.write('\n\n=== {}\n\n'.format(printable_path))
@@ -618,6 +833,16 @@ def grep(cfg, pattern, case_blind=False):
 
 def sed(cfg, sed_cmd):
     # type: (dict, str) -> None
+    """
+    Runs an in-place "sed" edit against every notebook in the course, using
+    "sed -E". Requires a version of "sed" that supports the "-i" (in-place
+    edit) option.
+
+    :param cfg:     the loaded configuration
+    :param sed_cmd: the "sed" command, which may or may not be quoted.
+
+    :return: Nothing
+    """
     for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
         # Quote the argument.
         quoted = ''
@@ -637,14 +862,30 @@ def sed(cfg, sed_cmd):
         elif "'" in sed_cmd:
             quoted = '"' + sed_cmd + '"'
         else:
-            quoted = "'" + arg + "'"
+            quoted = "'" + sed_cmd + "'"
 
         cmd('sed -E -i "" -e {} "{}"'.format(quoted, nb))
 
 
-def run_command_on_notebooks(cfg, args):
-    # type: (dict, Sequence[str]) -> None
-    pass
+def run_command_on_notebooks(cfg, command, args):
+    # type: (dict, str, Sequence[str]) -> None
+    """
+    Runs a command on every notebook in the current course.
+
+    :param cfg:      the loaded configuration.
+    :param command:  the command to run
+    :param args:     any command arguments, as a list
+
+    :return: Nothing
+    """
+    for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
+        if args:
+            quoted = [quote_shell_arg(arg) for arg in args]
+            shell_command = '{} {} {}'.format(command, ' '.join(quoted), nb)
+        else:
+            shell_command = '{} {}'.format(command, nb)
+
+        cmd("{}".format(shell_command))
 
 
 # -----------------------------------------------------------------------------
@@ -653,7 +894,9 @@ def run_command_on_notebooks(cfg, args):
 
 def main():
     try:
-        cfg = load_config(CONFIG_PATH)
+        # Load the configuration and then run it through update_config() to
+        # ensure that course name-related settings are updated, if necessary.
+        cfg = update_config(load_config(CONFIG_PATH))
 
         # Update the environment, for subprocesses we need to invoke.
 
@@ -674,12 +917,12 @@ def main():
         i = 0
         while i < len(args):
             cmd = args[i]
-            cfg = update_config(cfg)
 
             if cmd in ('-n', '--name'):
                 try:
                     i += 1
                     cfg['COURSE_NAME'] = args[i]
+                    cfg = update_config(cfg)
                 except IndexError:
                     die("Saw -n or --name without subsequent course name.")
 
@@ -695,10 +938,10 @@ def main():
                     die('Expected course name after "work-on".')
 
             elif cmd == 'which':
-                show_course_name(cfg)
+                print(cfg['COURSE_NAME'])
 
             elif cmd == 'install_tools':
-                install_tools(cfg)
+                install_tools()
 
             elif cmd == 'download':
                 download(cfg)
@@ -778,10 +1021,17 @@ def main():
                 # All the remaining arguments go to the command.
                 try:
                     i += 1
-                    run_command_on_notebooks(cfg, args[i:])
+                    command = args[i]
+                    if i < len(args):
+                        i += 1
+                        command_args = args[i:]
+                    else:
+                        command_args = []
+
+                    run_command_on_notebooks(cfg, command, command_args)
                     break
                 except IndexError:
-                    die('Missing argument(s) to xargs.')
+                    die('Missing command to run.')
 
             elif cmd == 'set':
                 try:
@@ -792,7 +1042,7 @@ def main():
                         die('Argument to "set" must be of the form CONF=VAL.')
                     key, value = fields
                     value = value.replace('"', '')
-                    cfg = configure(cfg, key, value, CONFIG_PATH)
+                    cfg = configure(cfg, CONFIG_PATH, key, value)
                 except IndexError:
                     die('Missing CONF=VAL argument to "set".')
 

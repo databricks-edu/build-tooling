@@ -36,11 +36,13 @@ SELF_PACED_PATH_DEFAULT = os.path.join('courses', 'Self-Paced')
 USAGE = '''
 {0}, version {VERSION}
 
-Usage:
+USAGE
+
   {0} (-h | --help | help | usage)
   {0} <subcommand> ...
   
-Description:
+DESCRIPTION
+
   "course" is a build_and_upload workflow tool, sitting on top of "bdc".
    
   Many subcommands can be chained. For instance:
@@ -72,13 +74,13 @@ Description:
   it's running inside Docker, and it'll refuse to run those commands. See below
   for the commands that aren't Docker-able.
       
-Subcommands:
+SUBCOMMANDS
 
   The various "course" commands are listed below. Those marked with "*"
   will NOT work in a Docker container.
 
-  {0} --help             Show abbreviated usage
-  {0} help               Show the full help page (this output)
+  {0} (--help, -h, help) Show the full help page (this output)
+  {0} (--version, -V)    Display version and exit
   {0} install-tools    * Install the build_and_upload tools.
   {0} work-on <name>     Specify and remember the course to build_and_upload,
                          upload, etc.
@@ -927,6 +929,11 @@ def run_command_on_notebooks(cfg, command, args):
         cmd("{}".format(shell_command))
 
 
+def help(cfg):
+    with pager(cfg) as out:
+        out.write(USAGE)
+
+
 # -----------------------------------------------------------------------------
 # Main program
 # -----------------------------------------------------------------------------
@@ -957,6 +964,10 @@ def main():
         while i < len(args):
             cmd = args[i]
 
+            if cmd in ('--version', '-V'):
+                print(VERSION)
+                break
+
             if cmd in ('-n', '--name'):
                 try:
                     i += 1
@@ -966,7 +977,7 @@ def main():
                     die("Saw -n or --name without subsequent course name.")
 
             elif cmd in ('-h', '--help', 'help', 'usage'):
-                print(USAGE)
+                help(cfg)
                 break
 
             elif cmd in ('work-on', 'workon'):

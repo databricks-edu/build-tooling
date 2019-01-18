@@ -42,11 +42,12 @@ case $# in
 esac
 
 : ${FORK:=databricks-edu}
+: ${PIP_TARGET:=git+https://github.com/$FORK/build-tooling}
 
 echo "Creating $DOCKERFILE"
 
 echo "FROM python:2" >$DOCKERFILE
-echo "RUN pip install git+https://github.com/$FORK/build-tooling" >> $DOCKERFILE
+echo "RUN pip install $PIP_TARGET" >> $DOCKERFILE
 echo 'RUN apt-get update && apt-get install -y less zip unzip vim' >> $DOCKERFILE
 echo 'RUN curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"' >> $DOCKERFILE
 echo 'RUN unzip awscli-bundle.zip' >> $DOCKERFILE

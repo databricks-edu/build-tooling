@@ -281,12 +281,12 @@ class CourseInfo(DefaultStrMixin):
 
 class Bundle(DefaultStrMixin):
     def __init__(self, zipfile, files=None):
-        '''
+        """
         Parsed bundle information.
 
         :param zipfile:  the zip file for the bundle
         :param files:    a list of BundleFile objects
-        '''
+        """
         self.files = files or []
         self.zipfile = zipfile
 
@@ -530,7 +530,7 @@ class NotebookData(object, DefaultStrMixin):
                  master=None,
                  variables=None,
                  only_in_profile=None):
-        '''
+        """
         Captures parsed notebook data.
 
         :param src:             Partial or full path to the notebook
@@ -544,7 +544,7 @@ class NotebookData(object, DefaultStrMixin):
         :param variables:       Any variables for the notebook.
         :param only_in_profile: Profile to which notebook is restricted, if
                                 any.
-        '''
+        """
         super(NotebookData, self).__init__()
         self.src = src
         self.dest = dest
@@ -1486,7 +1486,7 @@ def _get_type(f):
     return None
 
 def _convert_and_copy_info_file(src, dest, build):
-    '''
+    """
     Workhorse function: Takes the source and target, looks up how to process
     them, and processes them.
 
@@ -1494,7 +1494,7 @@ def _convert_and_copy_info_file(src, dest, build):
     :param dest:   the destination file (not directory)
     :param build:  the parsed build information
 
-    '''
+    """
     src_type = _get_type(src)
     dest_type = _get_type(dest)
 
@@ -2248,7 +2248,7 @@ def get_sources_and_targets(build):
 
 
 def check_for_multiple_upload_download_mappings(notebooks):
-    '''
+    """
     Check the result returned by get_sources_and_targets() for sources that
     map to multiple targets.
 
@@ -2256,7 +2256,7 @@ def check_for_multiple_upload_download_mappings(notebooks):
 
     :return: A sequence of (source, targets) tuples of only those results that
              map to multiple targets. The iterator might be empty.
-    '''
+    """
     res = {}
     for src, targets in notebooks.items():
         if len(targets) == 1:
@@ -2551,14 +2551,14 @@ def bdc_check_build(build_file, verbose=False):
 
 def bdc_get_notebook_paths(build_file):
     # type: (str) -> Sequence[str]
-    '''
+    """
     Get the paths of all source notebooks in a build file. Notebooks that
     are used multiple times are only listed once.
 
     :param build_file: the build file to load
 
     :return: the notebook paths, as absolute paths
-    '''
+    """
     build = load_and_validate(build_file)
     return sorted(list(set([joinpath(build.source_base, notebook.src)
                        for notebook in build.notebooks])))
@@ -2566,13 +2566,13 @@ def bdc_get_notebook_paths(build_file):
 
 def bdc_list_notebooks(build_file):
     # type: (str) -> None
-    '''
+    """
     Print the paths of notebooks in a build file to standard output. Notebooks
     that appear multiple times in a build are only listed once.
 
     :param build_file: the build out.
     :return: Nothing
-    '''
+    """
     for p in bdc_get_notebook_paths(build_file):
         print(p)
 

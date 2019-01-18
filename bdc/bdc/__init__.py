@@ -2398,12 +2398,6 @@ def download_notebooks(build, shard_path, db_profile):
             ))
 
 
-def list_notebooks(build):
-    for notebook in build.notebooks:
-        src_path = joinpath(build.source_base, notebook.src)
-        print(src_path)
-
-
 def print_info(build, shell):
     # type: (BuildData, bool) -> None
     """
@@ -2554,10 +2548,32 @@ def bdc_check_build(build_file, verbose=False):
         raise BuildError('There are problems with "{}".'.format(build_file))
 
 
+def bdc_get_notebook_paths(build_file):
+    # type: (str) -> Sequence[str]
+    '''
+    Get the paths of all source notebooks in a build file. Notebooks that
+    are used multiple times are only listed once.
+
+    :param build_file: the build file to load
+
+    :return: the notebook paths, as absolute paths
+    '''
+    build = load_and_validate(build_file)
+    return sorted(list(set([joinpath(build.source_base, notebook.src)
+                       for notebook in build.notebooks])))
+
+
 def bdc_list_notebooks(build_file):
     # type: (str) -> None
-    build = load_and_validate(build_file)
-    list_notebooks(build)
+    '''
+    Print the paths of notebooks in a build file to standard output. Notebooks
+    that appear multiple times in a build are only listed once.
+    
+    :param build_file: the build out.
+    :return: Nothing
+    '''
+    for p in bdc_get_notebook_paths(build):
+        print(p)
 
 
 def bdc_print_info(build_file, shell_format=False):

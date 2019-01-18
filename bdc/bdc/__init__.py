@@ -2528,6 +2528,12 @@ def init_verbosity(verbose):
     else:
         set_verbosity(False, verbose_prefix='')
 
+
+def default_output_directory_for_build(build):
+    # type: (BuildData) -> str
+    return joinpath(os.getenv("HOME"), "tmp", "curriculum",
+                    build.course_id)
+
 # ---------------------------------------------------------------------------
 # Exported functions
 # ---------------------------------------------------------------------------
@@ -2572,6 +2578,12 @@ def bdc_download(build_file, shard_path, databricks_profile=None, verbose=False)
     init_verbosity(verbose)
     build = load_and_validate(build_file)
     download_notebooks(build, shard_path, databricks_profile)
+
+
+def bdc_output_directory_for_build(build_file):
+    # type: (str) -> str
+    build = load_and_validate(build_file)
+    return default_output_directory_for_build(build)
 
 
 def bdc_build_course(build_file, dest_dir, overwrite, verbose=False):

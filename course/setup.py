@@ -32,6 +32,7 @@ setup(
         'future >= 0.16.0',
         'markdown2 >= 2.3.5',
         'backports.tempfile >= 1.0',
+        'termcolor >= 1.1.0',
     ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

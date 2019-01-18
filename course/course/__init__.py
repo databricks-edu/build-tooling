@@ -5,7 +5,10 @@ import sys
 import bdc
 import re
 from contextlib import contextmanager
-from typing import Generator, Sequence
+from typing import Generator, Sequence, Pattern
+from tempfile import NamedTemporaryFile
+from termcolor import colored
+from functools import partial
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -103,10 +106,13 @@ Subcommands:
                          is a stub. It will be implemented in a later release.
   {0} set VAR=VALUE      Configure and save a setting. Note that the keys are
                          not currently validated, so spelling matters.  
+  {0} grep [-i] <re>     Search for a regular expression in course notebooks.
+                         The grep is done internally (in Python), so any
+                         regular expression accepted by Python is suitable.
+                         Use "-i" to specify case-blind matching.
 
   The following subcommands consume all remaining arguments and end the chain.
-  
-  {0} grep <pattern>     Search for a regular expression in course notebooks.
+
   {0} sed <commands>     Search/replace text in notebooks using "sed -E"
   {0} xargs <command>    Run <command> once per notebook.
 
@@ -193,6 +199,18 @@ def working_directory(dir):
         os.chdir(cur)
 
 
+@contextmanager
+def noop(result, *args, **kw):
+    '''
+    A no-op context manager, with is occasionally useful. Yields its first
+    positional parameter. Ignores all the others.
+
+    :param result: what to yield
+    :param args:   remaining positional parameters (ignored)
+    :param kw:     keyword parameters. Ignored.
+    '''
+    yield result
+
 def check_for_docker(command):
     if os.environ.get("DOCKER", "") == "true":
         raise CourseError(
@@ -244,13 +262,13 @@ def load_config(config_path):
         ('DB_PROFILE', DB_PROFILE_DEFAULT),
         ('DB_SHARD_HOME', DB_SHARD_HOME_DEFAULT),
         ('PREFIX', ''),                              # set later
-        ('COURSE_NAME', ''),                         # can be overridden
+        ('COURSE_NAME', None),                       # can be overridden
         ('COURSE_REPO', COURSE_REPO_DEFAULT),
-        ('COURSE_HOME', ''),                         # depends on COURSE_NAME
-        ('COURSE_YAML', ''),                         # depends on COURSE_NAME
-        ('COURSE_MODULES', ''),                      # depends on COURSE_NAME
-        ('COURSE_REMOTE_SOURCE', ''),                # depends on COURSE_NAME
-        ('COURSE_REMOTE_TARGET', ''),                # depends on COURSE_NAME
+        ('COURSE_HOME', None),                       # depends on COURSE_NAME
+        ('COURSE_YAML', None),                       # depends on COURSE_NAME
+        ('COURSE_MODULES', None),                    # depends on COURSE_NAME
+        ('COURSE_REMOTE_SOURCE', None),              # depends on COURSE_NAME
+        ('COURSE_REMOTE_TARGET', None),              # depends on COURSE_NAME
         ('COURSE_AWS_PROFILE',  AWS_PROFILE_DEFAULT),
         ('SOURCE', SOURCE_DEFAULT),
         ('TARGET', TARGET_DEFAULT),
@@ -263,10 +281,10 @@ def load_config(config_path):
     # appropriate, and apply defaults.
     for e, default in setting_keys_and_defaults:
         v = os.environ.get(e)
-        if v:
+        if v is not None:
             cfg[e] = v
 
-        if (not cfg.get(e)) and default:
+        if (cfg.get(e) is None) and default:
             cfg[e] = default
 
     return cfg
@@ -484,6 +502,7 @@ def build_and_upload(cfg):
 def install_tools(cfg):
     # type: (dict) -> None
     check_for_docker("install-tools")
+    cmd('pip install git+https://github.com/$FORK/build-tooling')
 
 
 def browse_directory(cfg, path, subcommand):
@@ -535,9 +554,61 @@ def deploy_images(cfg):
     print("*** WARNING: 'deploy-images' is not yet implemented.")
 
 
-def grep(cfg, args):
-    # type: (dict, Sequence[str]) -> None
-    pass
+def grep(cfg, pattern, case_blind=False):
+    # type: (dict, str, bool) -> None
+
+    def grep_one(path, r, out):
+        # type: (str, Pattern, file) -> None
+        home = os.environ['HOME']
+        if home:
+            printable_path = os.path.join(
+                '~', path[len(home)+1:]
+            )
+        else:
+            printable_path = path
+
+        matches = []
+        with open(path) as f:
+            for line in f.readlines():
+                m = r.search(line)
+                if not m:
+                    continue
+
+                # Colorize the match.
+                s = m.start()
+                e = m.end()
+                matches.append(line[:s] + colored(line[s:e], 'green') + line[e:])
+
+        if matches:
+            out.write('\n\n=== {}\n\n'.format(printable_path))
+            out.write(''.join(matches))
+
+    r = None
+    try:
+        flags = 0 if not case_blind else re.IGNORECASE
+        r = re.compile(pattern, flags=flags)
+    except Exception as e:
+        die('Cannot compile regular expression "{}": {}'.format(
+            pattern, e.message
+        ))
+
+    from subprocess import Popen, PIPE
+    pager = cfg.get('PAGER')
+    if pager:
+        opener = NamedTemporaryFile
+    else:
+        opener = partial(noop, sys.stdout)
+
+    with opener(mode='w') as out:
+        for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
+            grep_one(nb, r, out)
+
+        out.flush()
+
+        if pager:
+            # In this case, we know we have a NamedTemporaryFile
+            p = Popen("{} <{}".format(pager, out.name), shell=True)
+            p.wait()
 
 
 def sed(cfg, args):
@@ -657,10 +728,18 @@ def main():
                 # All the remaining arguments go to grep.
                 try:
                     i += 1
-                    grep(cfg, args[i:])
+                    pattern = args[i]
+                    if pattern == '-i':
+                        case_blind = True
+                        i += 1
+                        pattern = args[i]
+                    else:
+                        case_blind = False
+
+                    grep(cfg, pattern, case_blind)
                     break
                 except IndexError:
-                    die('Missing grep arguments.')
+                    die('Missing grep argument(s).')
 
             elif cmd == 'sed':
                 # All the remaining arguments go to sed.

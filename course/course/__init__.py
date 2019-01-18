@@ -213,15 +213,51 @@ def working_directory(dir):
 
 @contextmanager
 def noop(result, *args, **kw):
-    '''
+    """
     A no-op context manager, with is occasionally useful. Yields its first
     positional parameter. Ignores all the others.
 
     :param result: what to yield
     :param args:   remaining positional parameters (ignored)
     :param kw:     keyword parameters. Ignored.
-    '''
+    """
     yield result
+
+
+@contextmanager
+def pager(cfg):
+    # type: (dict) -> file
+    """
+    Provides a convenient way to write output to a pager. This context
+    manager yields a file descriptor you can use to write to the pager.
+    If the pager isn't defined, the file descriptor will just be stdout.
+    This function manages cleanup and ensures that the pager has proper
+    access to the terminal.
+
+    :param cfg: the loaded configuration
+
+    :returns: the file descriptior (as a yield)
+    """
+    from subprocess import Popen
+
+    # Dump to a temporary file if the pager is defined. This allows the pager
+    # to use stdin to read from the terminal.
+    the_pager = cfg.get('PAGER')
+    if the_pager:
+        opener = NamedTemporaryFile
+    else:
+        opener = partial(noop, sys.stdout)
+
+    with opener(mode='w') as out:
+        yield out
+        out.flush()
+
+        if the_pager:
+            # In this case, we know we have a NamedTemporaryFile. We can
+            # send the temporary file to the pager.
+            p = Popen('{} <{}'.format(the_pager, out.name), shell=True)
+            p.wait()
+
 
 def check_for_docker(command):
     if os.environ.get("DOCKER", "") == "true":
@@ -829,23 +865,9 @@ def grep(cfg, pattern, case_blind=False):
             pattern, e.message
         ))
 
-    from subprocess import Popen, PIPE
-    pager = cfg.get('PAGER')
-    if pager:
-        opener = NamedTemporaryFile
-    else:
-        opener = partial(noop, sys.stdout)
-
-    with opener(mode='w') as out:
+    with pager(cfg) as out:
         for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
             grep_one(nb, r, out)
-
-        out.flush()
-
-        if pager:
-            # In this case, we know we have a NamedTemporaryFile
-            p = Popen("{} <{}".format(pager, out.name), shell=True)
-            p.wait()
 
 
 def sed(cfg, sed_cmd):

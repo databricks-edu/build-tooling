@@ -1,3 +1,5 @@
+# NOTE: Make sure build caching is OFF, or Docker may not pick up the
+# latest version of the tools.
 FROM python:2
 RUN touch /etc/in-docker
 RUN pip install git+https://github.com/databricks-edu/build-tooling

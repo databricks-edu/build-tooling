@@ -10,8 +10,7 @@ curriculum development within the Education department at Databricks.
 * `master_parse`: The master notebook parse tool and module. See the
   `master_parse` [README](master_parse/README.md) for full details.
 * `course`: An optional curriculum workflow management tool that sits on top
-  of `bdc`. There's no README for `course`. Just install it (or symlink to
-  it), and run `course help`.
+  of `bdc`. Run `course help` for usage details.
 
 Unless you're actually developing the build tools, you'll probably never run
 `master_parse` or `gendbc` manually; `bdc` will do that for you.

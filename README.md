@@ -101,25 +101,12 @@ new command window.**
 
 #### Installing the Tools
 
-##### The `course` tool
 
-If you're using `course`, which helps you automate your workflow, start by
-installing that tool. The easiest solution:
+##### Updating the build tools with `course`
 
-* Choose a directory that is already in your path (e.g., `$HOME/bin`,
-  `/usr/local/bin`)
+If you've previously installed the tools, and you're not using Docker,
+you can just use `course` to reinstall them.
 
-* `cd` to that directory
-
-* Create a symbolic link to `course` in that directory:
-
-```
-$ ln -s /path/to/repos/build-tooling/course .
-```
-
-##### Installing the rest of the build tools with `course`
-
-If you're using `course`, you can just type:
 
 ```
 course install-tools
@@ -153,6 +140,7 @@ This installation script will install:
 * `master_parse`
 * `gendbc`
 * `databricks-cli`
+* `course`
 
 It'll take a few minutes, but it will download and install all three pieces.
 

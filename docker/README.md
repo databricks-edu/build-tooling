@@ -1,15 +1,40 @@
 # Build Tool Docker Image
 
-A Docker image capable defining a container capable of running the build tool
-and its high-level wrapper `course` must have both Python 2.7 and the JDK.
-Each of these exist as core images maintained by the Docker Team and available
-via Docker Hub ([here](https://hub.docker.com/_/python/) and
-[here](https://hub.docker.com/_/openjdk/)); however, as we require both, a
-custom image must be built.
+## Install or update the Docker-based build tools
 
-In order to be able to use the images maintained by the Docker Team, a script
-is included that merges the two images, `create_image.sh`. Alternatively, this
-script will also build the image for you.
+To install or update your Docker-based build tools, just run:
+
+```
+curl https://raw.githubusercontent.com/databricks-edu/build-tooling/master/docker/install.sh | bash
+```
+
+This command:
+
+- Pulls down the prebuilt Docker image (`databrickseducation/build-tool`)
+  from Docker Hub.
+- Updates your local Docker image, if necessary.
+- Pulls down the build tool aliases and installs them in
+  `$HOME/.build-tools-aliases.sh`
+
+All you have to do is ensure that Docker is installed (see below) and that
+you have this command in your `.bashrc` or `.zshrc`:
+
+```
+. ~/.build-tools-aliases.sh
+```
+
+## Cleaning up "dangling" images
+
+Over time, as you update your Docker image, you might find you're
+accumulating a bunch of dangling (stale) Docker images. If you run
+`docker images`, you may see a bunch with labels like `<none>`. 
+_Some_ of these _might_ be stale, and stale images can consume disk space.
+
+Consider running the following command periodically to clean things up:
+
+```
+docker rmi $(docker images -f "dangling=true" -q)
+```
 
 ## Install Docker
 

@@ -305,7 +305,7 @@ def pager(cfg):
 def check_for_docker(command):
     # Note: This path is created by the shell script (../docker/create-image.sh)
     # specifically so we can test for it.
-    if os.path.exists("/etc/inside-docker"):
+    if os.path.exists("/etc/in-docker"):
         raise CourseError(
             '"{} {}" does not work inside a Docker container.'.format(
               PROG, command

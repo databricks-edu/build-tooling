@@ -50,17 +50,19 @@ case $# in
         ;;
 esac
 
-: ${FORK:=databricks-edu}
-: ${PIP_TARGET:=git+https://github.com/$FORK/build-tooling}
+: ${PIP_TARGET:=git+https://github.com/databricks-edu/build-tooling}
 
 echo "Creating $DOCKERFILE"
 
 echo "FROM python:2" >$DOCKERFILE
+# This file is used by the tooling to tell that it is inside Docker.
+echo 'RUN touch /etc/in-docker' >>$DOCKERFILE
 echo "RUN pip install $PIP_TARGET" >> $DOCKERFILE
 echo 'RUN apt-get update && apt-get install -y less zip unzip vim nano' >> $DOCKERFILE
 echo 'RUN curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"' >> $DOCKERFILE
 echo 'RUN unzip awscli-bundle.zip' >> $DOCKERFILE
 echo 'RUN ./awscli-bundle/install -i /usr/local/aws -b /usr/local/bin/aws' >> $DOCKERFILE
+
 
 USAGE=
 
@@ -68,10 +70,13 @@ case "$op" in
     "")
         ;;
     "build")
+        echo 'Building Docker image "build-tool"'
         docker build -t build-tool $DOCKERFILEDIR
         ;;
     "rebuild")
+        echo 'Removing existing 'build-tool' Docker image'
         docker rmi build-tool
+        echo 'Building "build-tool" Docker image'
         docker build --no-cache -t build-tool $DOCKERFILEDIR
         ;;
 esac

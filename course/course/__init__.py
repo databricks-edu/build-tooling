@@ -763,7 +763,8 @@ def install_tools():
     Install the build tools. Doesn't work inside a Docker container.
     """
     check_for_docker("install-tools")
-    cmd('pip install git+https://github.com/databricks-edu/build-tooling')
+    cmd('pip install --upgrade git+https://github.com/databricks-edu/build-tooling')
+    cmd('pip install --upgrade databricks-cli')
 
 
 def browse_directory(cfg, path, subcommand):

@@ -473,7 +473,10 @@ def update_config(cfg):
 
     :return: possibly adjusted configuration
     """
-    course_name = cfg['COURSE_NAME']
+    course_name = cfg.get('COURSE_NAME')
+    if not course_name:
+        return cfg
+
     from os.path import join, normpath
 
     adj = cfg.copy()

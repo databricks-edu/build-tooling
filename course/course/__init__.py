@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+'''
+This is the "course" curriculum development workflow tool. Run "course help"
+for complete documentation.
+'''
 
 import os
 import sys
@@ -299,7 +303,9 @@ def pager(cfg):
 
 
 def check_for_docker(command):
-    if os.environ.get("DOCKER", "") == "true":
+    # Note: This path is created by the shell script (../docker/create-image.sh)
+    # specifically so we can test for it.
+    if os.path.exists("/etc/inside-docker"):
         raise CourseError(
             '"{} {}" does not work inside a Docker container.'.format(
               PROG, command

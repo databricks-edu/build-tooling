@@ -21,7 +21,7 @@ from textwrap import TextWrapper
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -362,12 +362,16 @@ def quote_shell_arg(arg):
     return quoted
 
 
-def load_config(config_path):
-    # type: (str) -> dict
+def load_config(config_path, apply_defaults=True, show_warnings=False):
+    # type: (str, bool, bool) -> dict
     """
     Load the configuration file.
 
-    :param config_path: path to the configuration file
+    :param config_path:    path to the configuration file
+    :param apply_defaults: If True (default), apply all known default values.
+                           If False, just return what's in the config file.
+    :param show_warnings:  Warn about some things. Generally only desirable
+                           at program startup.
 
     :return: A dictionary of configuration items
     """
@@ -398,13 +402,13 @@ def load_config(config_path):
     setting_keys_and_defaults = (
         # The second item in each tuple is a default value. The default
         # is treated as a Python string template, so it can substitute values
-        # from previous entries in the list. If the default value is '', that
+        # from previous entries in the list. If the default value is None, that
         # generally means it can be overridden on the command line (or depends
         # on something else that can be), so it's checked at runtime.
         ('DB_CONFIG_PATH', DB_CONFIG_PATH_DEFAULT),
         ('DB_PROFILE', DB_PROFILE_DEFAULT),
         ('DB_SHARD_HOME', DB_SHARD_HOME_DEFAULT),
-        ('PREFIX', ''),                              # set later
+        ('PREFIX', None),                            # set later
         ('COURSE_NAME', None),                       # can be overridden
         ('COURSE_REPO', COURSE_REPO_DEFAULT),
         ('COURSE_HOME', None),                       # depends on COURSE_NAME
@@ -421,16 +425,29 @@ def load_config(config_path):
         ('OPEN_DIR', OPEN_DIR_DEFAULT),
     )
 
-    # Apply environment overrides. Then, check for missing ones where
-    # appropriate, and apply defaults.
-    for e, default in setting_keys_and_defaults:
-        v = os.environ.get(e)
-        if v is not None:
-            cfg[e] = v
+    # Anything with an empty or None default should not be in the configuration
+    # file -- except for COURSE_NAME.
 
-        if (cfg.get(e) is None) and default:
-            t = StringTemplate(default)
-            cfg[e] = t.substitute(cfg)
+    for e, default in setting_keys_and_defaults:
+        if (default is not None) or (e is 'COURSE_NAME'):
+            continue
+        if cfg.get(e):
+            if show_warnings:
+                warn(('''Ignoring "{}" in the configuration file, because ''' +
+                      '''it's calculated at run-time.''').format(e))
+            del cfg[e]
+
+    if apply_defaults:
+        # Apply environment overrides. Then, check for missing ones where
+        # appropriate, and apply defaults.
+        for e, default in setting_keys_and_defaults:
+            v = os.environ.get(e)
+            if v is not None:
+                cfg[e] = v
+
+            if (cfg.get(e) is None) and default:
+                t = StringTemplate(default)
+                cfg[e] = t.substitute(cfg)
 
     return cfg
 
@@ -535,7 +552,7 @@ def configure(cfg, config_path, key, value):
     # Don't update from the in-memory config, because it might not match
     # what's in the file. (It can be modified on the fly, based on the command
     # line, and those ephemeral changes should not be saved.)
-    stored_cfg = load_config(config_path)
+    stored_cfg = load_config(config_path, apply_defaults=False)
     stored_cfg[key] = value
     with open(config_path, 'w') as f:
         for k, v in sorted(stored_cfg.items()):
@@ -816,7 +833,7 @@ def edit_config(cfg):
     :return: The possibly modified configuration
     """
     edit_file(cfg, CONFIG_PATH, 'config')
-    return load_config(CONFIG_PATH)
+    return load_config(CONFIG_PATH, show_warnings=True)
 
 
 def git_status(cfg):
@@ -1021,7 +1038,7 @@ def main():
     try:
         # Load the configuration and then run it through update_config() to
         # ensure that course name-related settings are updated, if necessary.
-        cfg = update_config(load_config(CONFIG_PATH))
+        cfg = update_config(load_config(CONFIG_PATH, show_warnings=True))
 
         # Update the environment, for subprocesses we need to invoke.
 

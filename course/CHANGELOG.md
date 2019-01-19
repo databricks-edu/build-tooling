@@ -1,5 +1,16 @@
 # Change log for `course`
 
+Version 2.0.1
+
+- Fixed a bug that caused an abort in `course work-on` if `COURSE_NAME`
+  wasn't already set in the config.
+- Updated configuration handling so that `course work-on` _only_ updates
+  `COURSE_NAME`-related items in the stored configuration file. All 
+  other values in the file are left untouched.
+- Updated configuration handling so that values calculated at runtime from
+  `COURSE_NAME` (e.g., `COURSE_HOME`, `COURSE_REMOTE_SOURCE`) are ignored
+  in the configuration file, even if they're there.
+
 Version 2.0.0
 
 - Completely reimplemented in Python. `bdc` functionality is now invoked via

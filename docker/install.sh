@@ -6,10 +6,19 @@
 IMAGE='databrickseducation/build-tool'
 
 echo "Pulling $IMAGE ..."
+echo ""
 docker pull $IMAGE
 
+echo ""
 echo "Updating aliases ..."
-curl -o $HOME/.build-tools-aliases.sh https://raw.githubusercontent.com/databricks-edu/build-tooling/master/docker/aliases.sh
+echo ""
+curl -s -o $HOME/.build-tools-aliases.sh https://raw.githubusercontent.com/databricks-edu/build-tooling/master/docker/aliases.sh
 
 echo "Done!"
+cat <<EOF
+
+If you haven't already done so, add the following to your .bashrc or .zshrc:
+
+. ~/.build-tools-aliases.sh
+EOF
 

@@ -1,5 +1,10 @@
 # Change log for `course`
 
+Version 2.0.2:
+
+- No longer bails if a directory in the SELF_PACED_PATH does not exist.
+- Added COURSE_DEBUG environment variable, mostly to help debug this thing.
+
 Version 2.0.1
 
 - Fixed a bug that caused an abort in `course work-on` if `COURSE_NAME`

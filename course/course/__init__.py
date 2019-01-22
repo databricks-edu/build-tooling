@@ -21,7 +21,7 @@ from textwrap import TextWrapper
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.0.1'
+VERSION = '2.0.2'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -87,6 +87,7 @@ SUBCOMMANDS
 
   {0} (--help, -h, help) Show the full help page (this output)
   {0} (--version, -V)    Display version and exit
+  {0} --debug            Enable debug messages.
   {0} install-tools    * Install the build tools.
   {0} work-on <name>     Specify and remember the course to build, 
                          upload, etc.
@@ -149,6 +150,8 @@ SUBCOMMANDS
     Default: {DB_PROFILE_DEFAULT}
   DB_SHARD_HOME: Workspace path for home folder
     Default: {DB_SHARD_HOME_DEFAULT}
+  COURSE_DEBUG: Set to 'true' (in environment) to enable debug messages.
+    Default: false
   COURSE_NAME: Name of the course you wish to work on.
     Default: This must be provided, but can default from the stored config.
   COURSE_REPO: Path to git repo
@@ -200,6 +203,7 @@ SUBCOMMANDS
 )
 
 WARNING_PREFIX = 'WARNING: '
+DEBUG_PREFIX = '(DEBUG) '
 COLUMNS = int(os.environ.get('COLUMNS', '80')) - 1
 
 # -----------------------------------------------------------------------------
@@ -225,6 +229,8 @@ class LocalTextWrapper(TextWrapper):
 # -----------------------------------------------------------------------------
 
 warning_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
+debug_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
+debugging = False
 
 # -----------------------------------------------------------------------------
 # Internal functions
@@ -241,6 +247,11 @@ def die(msg):
 
 def warn(msg):
     print(warning_wrapper.fill(WARNING_PREFIX + msg))
+
+
+def debug(msg):
+    if debugging:
+        print(debug_wrapper.fill(DEBUG_PREFIX + msg))
 
 
 @contextmanager
@@ -466,8 +477,15 @@ def get_self_paced_courses(cfg):
 
     self_paced_path = cfg['SELF_PACED_PATH']
 
+    print('COURSE_REPO={}'.format(cfg['COURSE_REPO']))
     for rel_path in self_paced_path.split(':'):
         self_paced_dir = os.path.join(cfg['COURSE_REPO'], rel_path)
+        if not os.path.isdir(self_paced_dir):
+            debug('Directory "{}" (in SELF_PACED_PATH) does not exist.'.format(
+                self_paced_dir
+            ))
+            continue
+
         for f in os.listdir(self_paced_dir):
             if f[0] == '.':
                 continue
@@ -1035,6 +1053,10 @@ def help(cfg):
 # -----------------------------------------------------------------------------
 
 def main():
+    global debugging
+    if os.environ.get('COURSE_DEBUG', 'false') == 'true':
+        debugging = True
+
     try:
         # Load the configuration and then run it through update_config() to
         # ensure that course name-related settings are updated, if necessary.

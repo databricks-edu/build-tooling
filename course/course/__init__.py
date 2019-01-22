@@ -477,7 +477,6 @@ def get_self_paced_courses(cfg):
 
     self_paced_path = cfg['SELF_PACED_PATH']
 
-    print('COURSE_REPO={}'.format(cfg['COURSE_REPO']))
     for rel_path in self_paced_path.split(':'):
         self_paced_dir = os.path.join(cfg['COURSE_REPO'], rel_path)
         if not os.path.isdir(self_paced_dir):

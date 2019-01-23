@@ -30,7 +30,7 @@ __all__ = ['Config', 'GendbcError', 'gendbc']
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 
 PROG = os.path.basename(sys.argv[0])
 

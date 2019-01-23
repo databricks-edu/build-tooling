@@ -49,6 +49,19 @@ class NotebookLanguage(Enum):
     PYTHON     = 'py'
     SQL        = 'sql'
 
+    def for_json(self):
+        # type: () -> str
+        '''
+        Get the notebook language as it should be rendered in JSON.
+
+        :returns: the language
+        '''
+        print('NOTEBOOK LANGUAGE: {}'.format(self))
+        print('NOTEBOOK LANGUAGE value: {}'.format(self.value))
+        if self == NotebookLanguage.PYTHON:
+            return 'python'
+        return self.value
+
     @classmethod
     def from_path(cls, path):
         # type: (str) -> NotebookLanguage
@@ -171,46 +184,49 @@ class NotebookCell(_NotebookCell):
         :return: a JSON-ready dict.
         """
         return {
-            'bindings':           {},
-            'collapsed':          False,
-            'command':            self.command,
-            'commandTitle':       '',
-            'commandType':        'auto',
-            'commandVersion':     0,
-            'commentThread':      [],
-            'commentsVisible':    False,
-            'customPlotOptions':  {},
-            'diffDeletes':        [],
-            'diffInserts':        [],
-            'displayType':        'table',
-            'error':              None,
-            'errorSummary':       None,
-            'finishTime':         0,
-            'globalVars':         {},
-            'guid':               str(self.guid),
-            'height':             'auto',
-            'hideCommandCode':    False,
-            'hideCommandResult':  False,
-            'iPythonMetadata':    None,
-            'inputWidgets':       {},
-            'latestUser':         '',
-            'nuid':               str(uuid.uuid4()),
-            'origId':             0,
-            'parentHierarchy':    [],
-            'pivotAggregation':   None,
-            'pivotColumns':       None,
-            'position':           self.position,
-            'results':            None,
-            'showCommandTitle':   False,
-            'startTime':          0,
-            'state':              'finished',
-            'submitTime':         0,
-            'subtype':            'command',
-            'version':            'CommandV1',
-            'width':              'auto',
-            'workflows':          [],
-            'xColumns':           None,
-            'yColumns':           None,
+            'bindings':                     {},
+            'collapsed':                    False,
+            'command':                      self.command,
+            'commandTitle':                 '',
+            'commandType':                  'auto',
+            'commandVersion':               0,
+            'commentThread':                [],
+            'commentsVisible':              False,
+            'customPlotOptions':            {},
+            'datasetPreviewNameToCmdIdMap': {},
+            'diffDeletes':                  [],
+            'diffInserts':                  [],
+            'displayType':                  'table',
+            'error':                        None,
+            'errorSummary':                 None,
+            'finishTime':                   0,
+            'globalVars':                   {},
+            'guid':                         str(self.guid),
+            'height':                       'auto',
+            'hideCommandCode':              False,
+            'hideCommandResult':            False,
+            'iPythonMetadata':              None,
+            'inputWidgets':                 {},
+            'latestUser':                   '',
+            'latestUserId':                 None,
+            'nuid':                         str(uuid.uuid4()),
+            'origId':                       0,
+            'parentHierarchy':              [],
+            'pivotAggregation':             None,
+            'pivotColumns':                 None,
+            'position':                     self.position,
+            'results':                      None,
+            'showCommandTitle':             False,
+            'startTime':                    0,
+            'state':                        'finished',
+            'streamStates':                 {},
+            'submitTime':                   0,
+            'subtype':                      'command',
+            'version':                      'CommandV1',
+            'width':                        'auto',
+            'workflows':                    [],
+            'xColumns':                     None,
+            'yColumns':                     None,
         }
 
     def __repr__(self):
@@ -291,7 +307,7 @@ class Notebook(Copyable):
         name, _ = os.path.splitext(os.path.basename(path))
 
         self._name     = name
-        self._guid     = uuid.uuid4(),
+        self._guid     = uuid.uuid4()
         self._cells    = cells
         self._language = NotebookLanguage.from_path(path)
         self._path     = path
@@ -421,10 +437,10 @@ class Notebook(Copyable):
                 'commands':        cell_hashes,
                 'dashboards':      [],
                 'globalVars':      {},
-                'guid':            str(self.guid),
+                'guid':            str(self._guid),
                 'iPythonMetadata': None,
                 'inputWidgets':    {},
-                'language':        self.language.value,
+                'language':        self.language.for_json(),
                 'name':            self.name,
                 'origId':          0,
                 'version':         'NotebookV1',

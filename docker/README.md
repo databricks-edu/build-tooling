@@ -5,6 +5,12 @@
 To install or update your Docker-based build tools, just run:
 
 ```
+curl -L https://git.io/fhaLg | bash
+```
+
+If you prefer the non-shortened version, use this:
+
+```
 curl https://raw.githubusercontent.com/databricks-edu/build-tooling/master/docker/install.sh | bash
 ```
 

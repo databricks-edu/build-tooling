@@ -1,5 +1,10 @@
 # Change log for `course`
 
+Version 2.0.3:
+
+- Added `course toolversions` command to display versions of `course`,
+  `bdc`, `gendbc`, and `master_parse`.
+
 Version 2.0.2:
 
 - No longer bails if a directory in the SELF_PACED_PATH does not exist.

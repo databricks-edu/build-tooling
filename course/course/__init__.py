@@ -21,7 +21,7 @@ from textwrap import TextWrapper
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.0.2'
+VERSION = '2.0.3'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -87,7 +87,8 @@ SUBCOMMANDS
 
   {0} (--help, -h, help) Show the full help page (this output)
   {0} (--version, -V)    Display version and exit
-  {0} --debug            Enable debug messages.
+  {0} toolversions       Display course, bdc, gendbc, and master_parse versions
+                         and exit.
   {0} install-tools    * Install the build tools.
   {0} work-on <name>     Specify and remember the course to build, 
                          upload, etc.
@@ -1047,6 +1048,17 @@ def help(cfg):
         out.write(USAGE)
 
 
+def print_tool_versions():
+    # type: () -> None
+    import gendbc
+    import master_parse
+
+    print("course:       {}".format(VERSION))
+    print("bdc:          {}".format(bdc.VERSION))
+    print("gendbc:       {}".format(gendbc.VERSION))
+    print("master_parse: {}".format(master_parse.VERSION))
+
+
 # -----------------------------------------------------------------------------
 # Main program
 # -----------------------------------------------------------------------------
@@ -1083,6 +1095,10 @@ def main():
 
             if cmd in ('--version', '-V'):
                 print(VERSION)
+                break
+
+            if cmd in ('toolversions', 'tool-versions'):
+                print_tool_versions()
                 break
 
             if cmd in ('-n', '--name'):

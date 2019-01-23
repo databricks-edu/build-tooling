@@ -56,8 +56,6 @@ class NotebookLanguage(Enum):
 
         :returns: the language
         '''
-        print('NOTEBOOK LANGUAGE: {}'.format(self))
-        print('NOTEBOOK LANGUAGE value: {}'.format(self.value))
         if self == NotebookLanguage.PYTHON:
             return 'python'
         return self.value

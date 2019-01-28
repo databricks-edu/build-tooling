@@ -21,7 +21,7 @@ from textwrap import TextWrapper
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.0.3'
+VERSION = '2.0.4'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -412,38 +412,46 @@ def load_config(config_path, apply_defaults=True, show_warnings=False):
             raise CourseError("Configuration error(s).")
 
     setting_keys_and_defaults = (
-        # The second item in each tuple is a default value. The default
-        # is treated as a Python string template, so it can substitute values
-        # from previous entries in the list. If the default value is None, that
-        # generally means it can be overridden on the command line (or depends
-        # on something else that can be), so it's checked at runtime.
-        ('DB_CONFIG_PATH', DB_CONFIG_PATH_DEFAULT),
-        ('DB_PROFILE', DB_PROFILE_DEFAULT),
-        ('DB_SHARD_HOME', DB_SHARD_HOME_DEFAULT),
-        ('PREFIX', None),                            # set later
-        ('COURSE_NAME', None),                       # can be overridden
-        ('COURSE_REPO', COURSE_REPO_DEFAULT),
-        ('COURSE_HOME', None),                       # depends on COURSE_NAME
-        ('COURSE_YAML', None),                       # depends on COURSE_NAME
-        ('COURSE_MODULES', None),                    # depends on COURSE_NAME
-        ('COURSE_REMOTE_SOURCE', None),              # depends on COURSE_NAME
-        ('COURSE_REMOTE_TARGET', None),              # depends on COURSE_NAME
-        ('COURSE_AWS_PROFILE',  AWS_PROFILE_DEFAULT),
-        ('SELF_PACED_PATH', SELF_PACED_PATH_DEFAULT),
-        ('SOURCE', SOURCE_DEFAULT),
-        ('TARGET', TARGET_DEFAULT),
-        ('EDITOR', EDITOR_DEFAULT),
-        ('PAGER', PAGER_DEFAULT),
-        ('OPEN_DIR', OPEN_DIR_DEFAULT),
+        # The second item in each tuple is a default value. The third item
+        # indicates whether it can be overridden in the configuration or
+        # the environment.
+        #
+        # The default is treated as a Python string template, so it can
+        # substitute values from previous entries in the list. If the default
+        # value is None, that generally means it can be overridden on the
+        # command line (or depends on something else that can be), so it's
+        # checked at runtime.
+        ('DB_CONFIG_PATH', DB_CONFIG_PATH_DEFAULT, True),
+        ('DB_PROFILE', DB_PROFILE_DEFAULT, True),
+        ('DB_SHARD_HOME', DB_SHARD_HOME_DEFAULT, True),
+        ('PREFIX', None, True),                      # set later
+        ('COURSE_NAME', None, True),                 # can be overridden
+        ('COURSE_REPO', COURSE_REPO_DEFAULT, True),
+        ('COURSE_HOME', None, False),                # depends on COURSE_NAME
+        ('COURSE_YAML', None, True),
+        ('COURSE_MODULES', None, False),             # depends on COURSE_NAME
+        ('COURSE_REMOTE_SOURCE', None, False),       # depends on COURSE_NAME
+        ('COURSE_REMOTE_TARGET', None, False),       # depends on COURSE_NAME
+        ('COURSE_AWS_PROFILE',  AWS_PROFILE_DEFAULT, True),
+        ('SELF_PACED_PATH', SELF_PACED_PATH_DEFAULT, True),
+        ('SOURCE', SOURCE_DEFAULT, True),
+        ('TARGET', TARGET_DEFAULT, True),
+        ('EDITOR', EDITOR_DEFAULT, True),
+        ('PAGER', PAGER_DEFAULT, True),
+        ('OPEN_DIR', OPEN_DIR_DEFAULT, True),
     )
 
-    # Anything with an empty or None default should not be in the configuration
-    # file -- except for COURSE_NAME.
+    # Remove anything that cannot be overridden.
 
-    for e, default in setting_keys_and_defaults:
-        if (default is not None) or (e is 'COURSE_NAME'):
+    for e, default, allow_override in setting_keys_and_defaults:
+        if (default is not None):
             continue
-        if cfg.get(e):
+
+        v = cfg.get(e)
+        if not v:
+            continue
+
+        if not allow_override:
             if show_warnings:
                 warn(('''Ignoring "{}" in the configuration file, because ''' +
                       '''it's calculated at run-time.''').format(e))
@@ -452,7 +460,7 @@ def load_config(config_path, apply_defaults=True, show_warnings=False):
     if apply_defaults:
         # Apply environment overrides. Then, check for missing ones where
         # appropriate, and apply defaults.
-        for e, default in setting_keys_and_defaults:
+        for e, default, _ in setting_keys_and_defaults:
             v = os.environ.get(e)
             if v is not None:
                 cfg[e] = v
@@ -522,7 +530,8 @@ def update_config(cfg):
 
     adj['PREFIX'] = prefix
     adj['COURSE_HOME'] = normpath(join(repo, 'courses', prefix, course_name))
-    adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
+    if not adj.get('COURSE_YAML'):
+        adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
     adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course_name)
     adj['COURSE_REMOTE_SOURCE'] = '{}/{}/{}'.format(
         adj['DB_SHARD_HOME'], adj['SOURCE'], course_name

@@ -1,5 +1,10 @@
 # Change log for `course`
 
+Version 2.0.4:
+
+- Restored ability to override `COURSE_YAML` in the configuration file. If
+  it isn't in the configuration file, it's calculated from `COURSE_NAME`.
+
 Version 2.0.3:
 
 - Added `course toolversions` command to display versions of `course`,

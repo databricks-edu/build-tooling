@@ -21,7 +21,7 @@ from textwrap import TextWrapper
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.0.4'
+VERSION = '2.0.5'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -34,7 +34,6 @@ TARGET_DEFAULT = 'Target'
 AWS_PROFILE_DEFAULT = 'default'
 DB_PROFILE_DEFAULT = 'DEFAULT'
 COURSE_REPO_DEFAULT = os.path.expanduser('~/repos/training')
-DB_SHARD_HOME_DEFAULT = '/Users/{}@databricks.com'.format(USER)
 DB_CONFIG_PATH_DEFAULT = os.path.expanduser('~/.databrickscfg')
 OPEN_DIR_DEFAULT = 'open' # Mac-specific, but can be configured.
 SELF_PACED_PATH_DEFAULT = os.path.join('courses', 'Self-Paced')
@@ -149,8 +148,7 @@ SUBCOMMANDS
     Default: {DB_CONFIG_PATH_DEFAULT}
   DB_PROFILE: Profile to use within .databrickscfg profile
     Default: {DB_PROFILE_DEFAULT}
-  DB_SHARD_HOME: Workspace path for home folder
-    Default: {DB_SHARD_HOME_DEFAULT}
+  DB_SHARD_HOME: Workspace path for home folder in Databricks. Required.
   COURSE_DEBUG: Set to 'true' (in environment) to enable debug messages.
     Default: false
   COURSE_NAME: Name of the course you wish to work on.
@@ -193,7 +191,6 @@ SUBCOMMANDS
     PAGER_DEFAULT=PAGER_DEFAULT,
     DB_CONFIG_PATH_DEFAULT=DB_CONFIG_PATH_DEFAULT,
     DB_PROFILE_DEFAULT=DB_PROFILE_DEFAULT,
-    DB_SHARD_HOME_DEFAULT=DB_SHARD_HOME_DEFAULT,
     COURSE_REPO_DEFAULT=COURSE_REPO_DEFAULT,
     AWS_PROFILE_DEFAULT=AWS_PROFILE_DEFAULT,
     SOURCE_DEFAULT=SOURCE_DEFAULT,
@@ -204,6 +201,7 @@ SUBCOMMANDS
 )
 
 WARNING_PREFIX = 'WARNING: '
+ERROR_PREFIX = 'ERROR: '
 DEBUG_PREFIX = '(DEBUG) '
 COLUMNS = int(os.environ.get('COLUMNS', '80')) - 1
 
@@ -231,6 +229,7 @@ class LocalTextWrapper(TextWrapper):
 
 warning_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
 debug_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
+error_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(ERROR_PREFIX))
 debugging = False
 
 # -----------------------------------------------------------------------------
@@ -238,19 +237,47 @@ debugging = False
 # -----------------------------------------------------------------------------
 
 def printerr(msg):
-    sys.stderr.write("{}\n".format(msg))
+    # type: (str) -> None
+    """
+    Emit an error message, with wrapping.
+
+    :param msg: the message
+    :return: Nothing
+    """
+    sys.stderr.write(error_wrapper.fill(ERROR_PREFIX + msg) + '\n')
 
 
 def die(msg):
+    # type: (str) -> None
+    """
+    Emit an error message, with wrapping. Then, abort the program.
+
+    :param msg: the message
+    :return: Nothing
+    """
     printerr(msg)
     sys.exit(1)
 
 
 def warn(msg):
+    # type: (str) -> None
+    """
+    Emit a warning message, with wrapping.
+
+    :param msg: the message
+    :return: Nothing
+    """
     print(warning_wrapper.fill(WARNING_PREFIX + msg))
 
 
 def debug(msg):
+    # type: (str) -> None
+    """
+    Emit a debug message, with wrapping.
+
+    :param msg: the message
+    :return: Nothing
+    """
     if debugging:
         print(debug_wrapper.fill(DEBUG_PREFIX + msg))
 
@@ -258,6 +285,15 @@ def debug(msg):
 @contextmanager
 def working_directory(dir):
     # type: (str) -> Generator
+    """
+    Run a block of code (in a "with" statement) within a specific working
+    directory. When the "with" statement ends, cd back to the original
+    directory.
+
+    :param dir:  the directory
+
+    :return: None
+    """
     cur = os.getcwd()
     os.chdir(dir)
     try:
@@ -423,7 +459,7 @@ def load_config(config_path, apply_defaults=True, show_warnings=False):
         # checked at runtime.
         ('DB_CONFIG_PATH', DB_CONFIG_PATH_DEFAULT, True),
         ('DB_PROFILE', DB_PROFILE_DEFAULT, True),
-        ('DB_SHARD_HOME', DB_SHARD_HOME_DEFAULT, True),
+        ('DB_SHARD_HOME', None, True),
         ('PREFIX', None, True),                      # set later
         ('COURSE_NAME', None, True),                 # can be overridden
         ('COURSE_REPO', COURSE_REPO_DEFAULT, True),
@@ -515,6 +551,7 @@ def update_config(cfg):
     :param cfg: current configuration
 
     :return: possibly adjusted configuration
+    :raises CourseError: Configuration error.
     """
     course_name = cfg.get('COURSE_NAME')
     if not course_name:
@@ -533,14 +570,41 @@ def update_config(cfg):
     if not adj.get('COURSE_YAML'):
         adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
     adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course_name)
-    adj['COURSE_REMOTE_SOURCE'] = '{}/{}/{}'.format(
-        adj['DB_SHARD_HOME'], adj['SOURCE'], course_name
-    )
-    adj['COURSE_REMOTE_TARGET'] = '{}/{}/{}'.format(
-        adj['DB_SHARD_HOME'], adj['TARGET'], course_name
-    )
+    db_shard_home = adj.get('DB_SHARD_HOME')
+    if db_shard_home:
+        adj['COURSE_REMOTE_SOURCE'] = '{}/{}/{}'.format(
+            db_shard_home, adj['SOURCE'], course_name
+        )
+        adj['COURSE_REMOTE_TARGET'] = '{}/{}/{}'.format(
+            db_shard_home, adj['TARGET'], course_name
+        )
 
     return adj
+
+
+def check_config(cfg, *keys):
+    # type: (dict, str) -> None
+    """
+    Check the configuration, aborting if required items (COURSE_NAME,
+    DB_SHARD_HOME, COURSE_REPO) are missing. Only useful for commands that
+    actual do work.
+
+    :param cfg:  the configuration
+    :param keys: the keys to require. If not specified, defaults to the
+                 ones listed above.
+
+    :return: None
+
+    :raises ConfigError: on error
+    """
+    if not keys:
+        keys = ('COURSE_NAME', 'DB_SHARD_HOME', 'COURSE_REPO')
+    for key in keys:
+        if not cfg.get(key):
+            raise CourseError(
+                ('{} must be set, either in the environment or in the ' +
+                 'configuration file.').format(key)
+            )
 
 
 def build_file_path(cfg):
@@ -613,6 +677,7 @@ def clean(cfg):
 
     :return: Nothing
     """
+    check_config(cfg)
     db_profile = cfg['DB_PROFILE']
     remote_target = cfg['COURSE_REMOTE_TARGET']
 
@@ -639,8 +704,8 @@ def clean_source(cfg):
 
     :return: Nothing
     """
+    check_config(cfg)
     db_profile = cfg['DB_PROFILE']
-    course_name = cfg['COURSE_NAME']
     remote_source = cfg['COURSE_REMOTE_SOURCE']
 
     cmd('databricks --profile "{}" workspace mkdirs "{}"'.format(
@@ -663,6 +728,7 @@ def download(cfg):
 
     :return: Nothing
     """
+    check_config(cfg)
     db_profile = cfg['DB_PROFILE']
     bdc.bdc_download(build_file=build_file_path(cfg),
                      shard_path=cfg['COURSE_REMOTE_SOURCE'],
@@ -681,6 +747,7 @@ def upload(cfg):
 
     :return: Nothing
     """
+    check_config(cfg)
     db_profile = cfg['DB_PROFILE']
     bdc.bdc_upload(build_file=build_file_path(cfg),
                    shard_path=cfg['COURSE_REMOTE_SOURCE'],
@@ -700,7 +767,7 @@ def import_dbcs(cfg, build_dir):
 
     :return: NOthing
     """
-
+    check_config(cfg)
     remote_target = cfg['COURSE_REMOTE_TARGET']
     db_profile = cfg['DB_PROFILE']
 
@@ -758,6 +825,7 @@ def build_local(cfg):
 
     :return: the path to the build file, for convenience
     """
+    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
     course_name = cfg['COURSE_NAME']
     build_file = build_file_path(cfg)
     if not os.path.exists(build_file):
@@ -783,6 +851,7 @@ def build_and_upload(cfg):
 
     :return: Nothing
     """
+    check_config(cfg)
     build_file = build_local(cfg)
     build_dir = bdc.bdc_output_directory_for_build(build_file)
     import_dbcs(cfg, build_dir)
@@ -798,7 +867,7 @@ def upload_build(cfg):
 
     :return: None
     """
-    course_name = cfg['COURSE_NAME']
+    check_config(cfg)
     build_file = build_file_path(cfg)
     build_dir = bdc.bdc_output_directory_for_build(build_file)
     import_dbcs(cfg, build_dir)
@@ -843,6 +912,7 @@ def edit_file(cfg, path, subcommand):
 
     :return: Nothing
     """
+    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
     cmd('{} "{}"'.format(cfg['EDITOR'], path))
 
 
@@ -888,6 +958,7 @@ def git_diff(cfg):
 
     :return: Nothing
     """
+    check_config(cfg, 'COURSE_REPO')
     course_repo = cfg['COURSE_REPO']
     pager = cfg['PAGER']
     with working_directory(course_repo):
@@ -907,6 +978,7 @@ def git_difftool(cfg):
 
     :return: Nothing
     """
+    check_config(cfg, 'COURSE_REPO')
     course_repo = cfg['COURSE_REPO']
     check_for_docker("difftool")
     with working_directory(course_repo):
@@ -986,6 +1058,7 @@ def grep(cfg, pattern, case_blind=False):
             pattern, e.message
         ))
 
+    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
     with pager(cfg) as out:
         for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
             grep_one(nb, r, out)
@@ -1003,9 +1076,9 @@ def sed(cfg, sed_cmd):
 
     :return: Nothing
     """
+    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
     for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
         # Quote the argument.
-        quoted = ''
         q = sed_cmd[0]
         if q in ('"', "'"):
             # Already quoted, hopefully.
@@ -1038,6 +1111,7 @@ def run_command_on_notebooks(cfg, command, args):
 
     :return: Nothing
     """
+    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
     for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
         if args:
             quoted = [quote_shell_arg(arg) for arg in args]
@@ -1066,6 +1140,15 @@ def print_tool_versions():
     print("bdc:          {}".format(bdc.VERSION))
     print("gendbc:       {}".format(gendbc.VERSION))
     print("master_parse: {}".format(master_parse.VERSION))
+
+
+def which(cfg):
+    # type: (dict) -> None
+    course_name = cfg.get('COURSE_NAME')
+    if course_name:
+        print(cfg['COURSE_NAME'])
+    else:
+        print('No course has been set.')
 
 
 # -----------------------------------------------------------------------------
@@ -1130,7 +1213,7 @@ def main():
                     die('Expected course name after "work-on".')
 
             elif cmd == 'which':
-                print(cfg['COURSE_NAME'])
+                which(cfg)
 
             elif cmd in ('install-tools', 'installtools'):
                 install_tools()

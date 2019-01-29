@@ -1,5 +1,11 @@
 # Change log for `course`
 
+Version 2.0.5:
+
+- `DB_SHARD_HOME` is now required, either in the configuration file or in
+  the environment. The code can't reasonably infer a default, and any default
+  it assumes is likely to be confusing. 
+
 Version 2.0.4:
 
 - Restored ability to override `COURSE_YAML` in the configuration file. If

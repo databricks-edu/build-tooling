@@ -7,4 +7,4 @@
 here=`pwd`
 up=`(cd ..; pwd)`
 
-PYTHONPATH=.:$up/master_parse:$up/gendbc python bdc/__init__.py "$@"
+PYTHONPATH=.:$up/notebooktools:$up/master_parse:$up/gendbc python bdc/__init__.py "$@"

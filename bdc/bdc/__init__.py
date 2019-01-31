@@ -31,6 +31,7 @@ from ConfigParser import SafeConfigParser, NoOptionError
 from enum import Enum
 import master_parse
 from gendbc import gendbc
+from notebooktools import parse_source_notebook, NotebookError
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
@@ -2417,7 +2418,7 @@ def print_info(build, shell):
 
 
 def validate_build(build):
-    # type: (BuildData) -> None
+    # type: (BuildData) -> BuildData
     """
     :param build:
     :return:
@@ -2447,11 +2448,37 @@ def validate_build(build):
     headings = set()
     footers = set()
 
+    new_notebooks = []
+
     for notebook in build.notebooks:
         src_path = rel_to_src_base(notebook.src)
         if not path.exists(src_path):
             complain('Notebook "{}" does not exist.'.format(src_path))
             errors += 1
+            continue
+
+        if os.stat(src_path).st_size == 0:
+            complain('Notebook "{}" is an empty file. Ignoring it.'.format(
+                src_path
+            ))
+            continue
+
+        # Attempt to parse the notebook. If it has no cells, ignore it.
+        try:
+            nb = parse_source_notebook(src_path, encoding='UTF-8', debug=False)
+            if len(nb.cells) == 0:
+                complain('Notebook "{}" has no cells. Ignoring it.'.format(
+                    src_path
+                ))
+                continue
+        except NotebookError as e:
+            complain('Notebook "{}" cannot be parsed: {}'.format(
+                src_path, e.message
+            ))
+            errors += 1
+            continue
+
+        new_notebooks.append(notebook)
 
         master = notebook.master
         if master and master.enabled:
@@ -2460,6 +2487,8 @@ def validate_build(build):
 
             if master.footer.enabled and (master.footer.path is not None):
                 footers.add(rel_to_build(master.footer.path))
+
+    build.notebooks = new_notebooks
 
     for h in headings:
         if not path.exists(h):
@@ -2506,14 +2535,13 @@ def validate_build(build):
     if errors > 0:
         raise BuildConfigError("Build file validation failure.")
 
-    return
+    return build
 
 
 def load_and_validate(build_file):
     # type: (str) -> BuildData
     build = load_build_yaml(build_file)
-    validate_build(build)
-    return build
+    return validate_build(build)
 
 
 def init_verbosity(verbose):

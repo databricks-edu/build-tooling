@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+### Version 1.27.0
+
+- `bdc` now ignores notebooks that are empty files or contain no cells,
+  spitting out a warning.
+
 ### Version 1.26.1
 
 - Now uses `namedtuple._replace` to copy a `namedtuple` while replacing one

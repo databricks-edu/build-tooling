@@ -14,6 +14,11 @@ from typing import Callable, Sequence, Pattern, Generator
 import json
 from abc import abstractmethod
 
+VERSION = '1.0.0'
+
+__all__ = ('NotebookError', 'NotebookParseError', 'NotebookLanguage',
+           'CellType', 'NotebookCell', 'Notebook', 'parse_source_notebook')
+
 # -----------------------------------------------------------------------------
 # Classes
 # -----------------------------------------------------------------------------
@@ -631,9 +636,14 @@ def parse_source_notebook(path,     # type: str
             )
             continue
 
-        # Magic line as first cell. Extract cell type, if it exists.
-        emit_debug("Line {}: Magic".format(line_num))
+        # Magic line as first line in cell. If it's an empty magic line, skip it.
         token = m.group(1).strip()
+        if not token:
+            emit_debug("Line {}: Skipping empty magic.")
+            continue
+
+        # Extract cell type, if it exists.
+        emit_debug("Line {}: Magic".format(line_num))
         if (not token) or (token[0] != '%'):
             raise NotebookParseError(
                 '''"{}", line {}: Bad first magic cell line: {}'''.format(

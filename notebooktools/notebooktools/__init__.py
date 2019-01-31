@@ -620,9 +620,6 @@ def parse_source_notebook(path,     # type: str
             continue
 
         # Start of a new cell requires additional processing.
-        emit_debug("Line {}: First line of new cell: <{}>".format(
-            line_num, line
-        ))
         saw_new_cell = False
 
         if not m:

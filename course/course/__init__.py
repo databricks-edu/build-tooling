@@ -21,7 +21,7 @@ from textwrap import TextWrapper
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.0.5'
+VERSION = '2.0.6'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -1135,11 +1135,13 @@ def print_tool_versions():
     # type: () -> None
     import gendbc
     import master_parse
+    import notebooktools
 
-    print("course:       {}".format(VERSION))
-    print("bdc:          {}".format(bdc.VERSION))
-    print("gendbc:       {}".format(gendbc.VERSION))
-    print("master_parse: {}".format(master_parse.VERSION))
+    print("course:                  {}".format(VERSION))
+    print("bdc:                     {}".format(bdc.VERSION))
+    print("gendbc:                  {}".format(gendbc.VERSION))
+    print("master_parse:            {}".format(master_parse.VERSION))
+    print("notebooktools (library): {}".format(notebooktools.VERSION))
 
 
 def which(cfg):

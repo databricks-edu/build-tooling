@@ -1,5 +1,10 @@
 # Change log for `course`
 
+Version 2.0.6:
+
+- `course toolversions` now display the version of the `notebooktools`
+  library.
+
 Version 2.0.5:
 
 - `DB_SHARD_HOME` is now required, either in the configuration file or in

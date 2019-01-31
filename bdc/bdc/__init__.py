@@ -35,8 +35,8 @@ from notebooktools import parse_source_notebook, NotebookError
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
-from typing import Sequence
-
+from typing import (Sequence, Mapping, Any, Type, TypeVar, Set, Optional, Dict,
+                    AnyStr, Tuple)
 
 # We're using backports.tempfile, instead of tempfile, so we can use
 # TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
@@ -120,7 +120,7 @@ NOTEBOOK_TYPE = 'notebook_type'
 OUTPUT_DIR = 'output_dir'
 PROFILE_VAR = 'profile'
 
-VALID_PROFILES = {'amazon', 'azure'}
+DEFAULT_PROFILES = {'amazon': 'Amazon', 'azure': 'Azure'}
 PROFILE_ABBREVIATIONS = {'amazon' : 'am', 'azure': 'az'}
 
 POST_MASTER_PARSE_VARIABLES = {
@@ -171,6 +171,7 @@ errors = 0
 # Classes
 # ---------------------------------------------------------------------------
 
+
 class BuildError(Exception):
     pass
 
@@ -191,6 +192,9 @@ class UnknownFieldsError(BuildConfigError):
             )
         )
 
+# See https://github.com/python/typing/issues/58#issuecomment-326240794
+NotebookTypeClass = TypeVar('NotebookTypeClass', bound='NotebookType')
+
 class NotebookType(Enum):
     EXERCISES = 'exercises'
     INSTRUCTOR = 'instructor'
@@ -198,6 +202,7 @@ class NotebookType(Enum):
 
     @classmethod
     def default_mappings(cls):
+        # type: (Type[NotebookTypeClass]) -> Dict[Any, AnyStr]
         return {
             NotebookType.EXERCISES:  'exercises',
             NotebookType.INSTRUCTOR: 'instructor',
@@ -237,9 +242,30 @@ MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
 BundleFile = namedtuple('BundleFileData', ('src', 'dest'))
+Profile = namedtuple('Profile', ('name', 'value'))
+
+
+class Bundle(DefaultStrMixin):
+    def __init__(self, zipfile, files=None):
+        # type: (str, Optional[Sequence[BundleFile]]) -> Bundle
+        """
+        Parsed bundle information.
+
+        :param zipfile:  the zip file for the bundle
+        :param files:    a list of BundleFile objects
+        """
+        self.files = files or []
+        self.zipfile = zipfile
+
 
 class OutputInfo(DefaultStrMixin):
-    def __init__(self, student_dir, student_dbc, instructor_dir, instructor_dbc):
+    def __init__(self,
+                 student_dir,     # type: str
+                 student_dbc,     # type: str
+                 instructor_dir,  # type: str
+                 instructor_dbc   # type: str
+                ):
+        # type: (...) -> OutputInfo
         self.student_dir = student_dir
         self.student_dbc = student_dbc
         self.instructor_dir = instructor_dir
@@ -247,18 +273,30 @@ class OutputInfo(DefaultStrMixin):
 
     @property
     def student_labs_subdir(self):
+        # type: (OutputInfo) -> str
         (base, _) = path.splitext(self.student_dbc)
         return joinpath(self.student_dir, base)
 
     @property
     def instructor_labs_subdir(self):
+        # type: (OutputInfo) -> str
         (base, _) = path.splitext(self.instructor_dbc)
         return joinpath(self.instructor_dir, base)
 
 
 class CourseInfo(DefaultStrMixin):
-    def __init__(self, name, version, class_setup, schedule, instructor_prep,
-                 copyright_year, deprecated, type, title=None):
+    def __init__(self,
+                 name,             # type: str
+                 version,          # type: str
+                 class_setup,      # type: str
+                 schedule,         # type: str
+                 instructor_prep,  # type: str
+                 copyright_year,   # type: str
+                 deprecated,       # type: bool
+                 type,             # type: master_parse.CourseType
+                 title=None        # type: str
+                ):
+        # type: (...) -> CourseInfo
         self.name = name
         self.version = version
         self.class_setup = class_setup
@@ -271,6 +309,7 @@ class CourseInfo(DefaultStrMixin):
 
     @property
     def course_id(self):
+        # type: (CourseInfo) -> AnyStr
         """
         The course ID, which is a combination of the course name and the
         version.
@@ -280,20 +319,13 @@ class CourseInfo(DefaultStrMixin):
         return '{0}-{1}'.format(self.name, self.version)
 
 
-class Bundle(DefaultStrMixin):
-    def __init__(self, zipfile, files=None):
-        """
-        Parsed bundle information.
-
-        :param zipfile:  the zip file for the bundle
-        :param files:    a list of BundleFile objects
-        """
-        self.files = files or []
-        self.zipfile = zipfile
-
-
 class NotebookDefaults(DefaultStrMixin):
-    def __init__(self, dest=None, master=None, variables=None):
+    def __init__(self,
+                 dest=None,      # type: str
+                 master=None,    # type: MasterParseInfo
+                 variables=None  # type: Mapping[AnyStr, AnyStr]
+                ):
+        # type: (...) -> NotebookDefaults
         """
         Create a new NotebookDefaults object.
 
@@ -305,6 +337,8 @@ class NotebookDefaults(DefaultStrMixin):
         self.master = master or {}
         self.variables = variables or {}
 
+# See https://github.com/python/typing/issues/58#issuecomment-326240794
+MasterParseInfoClass = TypeVar('MasterParseInfoClass', bound='MasterParseInfo')
 
 class MasterParseInfo(DefaultStrMixin):
     """
@@ -340,21 +374,23 @@ class MasterParseInfo(DefaultStrMixin):
     }
 
     def __init__(self,
-                 enabled=False,
-                 python=True,
-                 scala=True,
-                 r=False,
-                 sql=False,
-                 answers=True,
-                 exercises=True,
-                 instructor=True,
-                 heading=NotebookHeading(path=None, enabled=True),
-                 footer=NotebookFooter(path=None, enabled=True),
-                 encoding_in='UTF-8',
-                 encoding_out='UTF-8',
-                 target_profile=master_parse.TargetProfile.NONE,
-                 enable_templates=False,
-                 debug=False):
+                 enabled=False,             # type: bool
+                 python=True,               # type: bool
+                 scala=True,                # type: bool
+                 r=False,                   # type: bool
+                 sql=False,                 # type: bool
+                 answers=True,              # type: bool
+                 exercises=True,            # type: bool
+                 instructor=True,           # type: bool
+                 heading=None,              # type: NotebookHeading
+                 footer=None,               # type: NotebookFooter
+                 encoding_in='UTF-8',       # type: AnyStr
+                 encoding_out='UTF-8',      # type: AnyStr
+                 target_profile=None,       # type: master_parse.TargetProfile
+                 enable_templates=False,    # type: AnyStr
+                 debug=False                # type: bool
+                ):
+        # type: (...) -> MasterParseInfo
         """
         Create a new parsed master parse data object
 
@@ -376,6 +412,12 @@ class MasterParseInfo(DefaultStrMixin):
         :param debug:            enable/disable debug messages for the master
                                  parse phase
         """
+        if heading is None:
+            heading = NotebookHeading(path=None, enabled=True)
+        if footer is None:
+            footer = NotebookFooter(path=None, enabled=True)
+        if target_profile is None:
+            target_profile = master_parse.TargetProfile.NONE
         self.enabled          = enabled
         self.python           = python
         self.scala            = scala
@@ -393,6 +435,7 @@ class MasterParseInfo(DefaultStrMixin):
         self.debug            = debug
 
     def lang_is_enabled(self, lang):
+        # type: (MasterParseInfo, AnyStr) -> bool
         """
         Determine if a specific language is enabled.
 
@@ -403,6 +446,7 @@ class MasterParseInfo(DefaultStrMixin):
         return self.__getattribute__(lang)
 
     def enabled_langs(self):
+        # type: (MasterParseInfo) -> Sequence[AnyStr]
         """
         Return a list of the enabled languages. e.g., ['scala', 'python']
 
@@ -411,6 +455,7 @@ class MasterParseInfo(DefaultStrMixin):
         return [i for i in self.LANGUAGES if self.__getattribute__(i)]
 
     def update_from_dict(self, d):
+        # type: (MasterParseInfo, Mapping[AnyStr, Any]) -> None
         """
         Update the fields in this master parse record from a dictionary.
         The dictionary should represent a master parse dictionary (e.g., as
@@ -437,7 +482,10 @@ class MasterParseInfo(DefaultStrMixin):
                     self.__setattr__(k, d[k])
 
     @classmethod
-    def extra_keys(cls, d):
+    def extra_keys(cls,  # type: Type[MasterParseInfoClass]
+                   d     # type: Mapping[AnyStr, Any]
+                  ):
+        # type: (...) -> Optional[Set[AnyStr]]
         """
         Check a dictionary of master parse value for extra (unknown) keys.
 
@@ -456,7 +504,10 @@ class MasterParseInfo(DefaultStrMixin):
         return extra
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls, # type: Type[MasterParseInfoClass]
+                  d    # type: Mapping[AnyStr, Any]
+                 ):
+        # type: (...) -> MasterParseInfo
         """
         Create a MasterParseData object from a dictionary of values.
 
@@ -484,6 +535,7 @@ class MasterParseInfo(DefaultStrMixin):
         )
 
     def to_dict(self):
+        # type: (MasterParseInfo) -> Mapping[AnyStr, Any]
         """
         Convert this object into a dictionary.
 
@@ -494,20 +546,26 @@ class MasterParseInfo(DefaultStrMixin):
         return res
 
     @classmethod
-    def _parse_footer(cls, footer_data):
+    def _parse_footer(cls,        # type: Type[MasterParseInfoClass]
+                      footer_data # type: Mapping[AnyStr, AnyStr]
+                     ):
+        # type: (...) -> NotebookFooter
         if footer_data:
-            heading = NotebookFooter(
+            footer = NotebookFooter(
                 path=footer_data.get('path', DEFAULT_NOTEBOOK_FOOTER.path),
                 enabled=bool_field(footer_data, 'enabled',
                                    DEFAULT_NOTEBOOK_FOOTER.enabled)
             )
         else:
-            heading = NotebookHeading(path=None, enabled=True)
+            footer = NotebookFooter(path=None, enabled=True)
 
-        return heading
+        return footer
 
     @classmethod
-    def _parse_heading(cls, heading_data):
+    def _parse_heading(cls,          # type: Type[MasterParseInfoClass]
+                       heading_data  # type: Mapping[AnyStr, Any]
+                      ):
+        # type: (...) -> NotebookHeading
         if heading_data:
             heading = NotebookHeading(
                 path=heading_data.get('path', DEFAULT_NOTEBOOK_HEADING.path),
@@ -524,13 +582,14 @@ class NotebookData(object, DefaultStrMixin):
     """
     Parsed notebook data.
     """
-    def __init__(self,
-                 src,
-                 dest,
-                 upload_download=True,
-                 master=None,
-                 variables=None,
-                 only_in_profile=None):
+    def __init__(self,                  # type: NotebookData
+                 src,                   # type: AnyStr
+                 dest,                  # type: AnyStr
+                 upload_download=True,  # type: bool
+                 master=None,           # type: Optional[MasterParseInfo]
+                 variables=None,        # type: Optional[Mapping[AnyStr, AnyStr]]
+                 only_in_profile=None   # type: Optional[AnyStr]
+                ):
         """
         Captures parsed notebook data.
 
@@ -555,6 +614,7 @@ class NotebookData(object, DefaultStrMixin):
         self.only_in_profile = only_in_profile
 
     def master_enabled(self):
+        # type: (NotebookData) -> bool
         """
         Determine whether master notebook processing is enabled for this
         notebook.
@@ -564,6 +624,7 @@ class NotebookData(object, DefaultStrMixin):
         return self.master.enabled
 
     def total_master_langs(self):
+        # type: (NotebookData) -> int
         """
         Get the number of output languages produced by the master parser
         for this notebook.
@@ -574,6 +635,7 @@ class NotebookData(object, DefaultStrMixin):
         return len(self.master.enabled_langs()) if self.master.enabled else 0
 
     def master_multiple_langs(self):
+        # type: (NotebookData) -> bool
         """
         Determine whether the master parser is parsing to multiple languages
         or not.
@@ -589,23 +651,23 @@ class BuildData(object, DefaultStrMixin):
     """
     Parsed build data.
     """
-    def __init__(self,
-                 build_file_path,
-                 top_dbc_folder_name,
-                 source_base,
-                 output_info,
-                 course_info,
-                 notebooks,
-                 slides,
-                 datasets,
-                 misc_files,
-                 keep_lab_dirs,
-                 markdown_cfg,
-                 notebook_type_map,
-                 use_profiles=False,
-                 course_type=None,
-                 variables=None,
-                 bundle_info=None):
+    def __init__(self,                 # type: BuildData
+                 build_file_path,      # type: AnyStr
+                 top_dbc_folder_name,  # type: AnyStr
+                 source_base,          # type: AnyStr
+                 output_info,          # type: OutputInfo
+                 course_info,          # type: CourseInfo
+                 notebooks,            # type: Sequence[NotebookData]
+                 slides,               # type: Sequence[SlideData]
+                 datasets,             # type: Sequence[DatasetData]
+                 misc_files,           # type: Sequence[MiscFileData]
+                 keep_lab_dirs,        # type: bool
+                 markdown_cfg,         # type: MarkdownInfo
+                 notebook_type_map,    # type: Mapping[NotebookType, AnyStr]
+                 profiles=None,        # type: Optional[Sequence[Profile]]
+                 variables=None,       # type: Optional[Mapping[AnyStr, AnyStr]]
+                 bundle_info=None      # type: Optional[Bundle]
+                ):
         """
         Create a new BuildData object.
 
@@ -623,7 +685,7 @@ class BuildData(object, DefaultStrMixin):
         :param markdown_cfg:          parsed MarkdownInfo object
         :param notebook_type_map:     a dict mapping notebook types to strings.
                                       Keys are from the NotebookType enum.
-        :param use_profiles:          whether to use Azure/Amazon build profiles
+        :param profiles:              set of profiles, if any
         :param variables:             a map of user-defined variables
         :param bundle_info            Bundle data, if any
         """
@@ -636,6 +698,7 @@ class BuildData(object, DefaultStrMixin):
         self.output_info = output_info
         self.slides = slides
         self.datasets = datasets
+        self.profiles = set() if profiles is None else profiles
 
         if markdown_cfg.html_stylesheet:
             if path.isabs(markdown_cfg.html_stylesheet):
@@ -653,8 +716,6 @@ class BuildData(object, DefaultStrMixin):
         self.keep_lab_dirs = keep_lab_dirs
         self.notebook_type_map = notebook_type_map
         self.variables = variables or {}
-        self.use_profiles = use_profiles
-        self.course_type = course_type
         self.bundle_info = bundle_info
 
         if top_dbc_folder_name is None:
@@ -673,11 +734,18 @@ class BuildData(object, DefaultStrMixin):
         )
 
     @property
+    def course_type(self):
+        # type: (BuildData) -> master_parse.CourseType
+        return self.course_info.type
+
+    @property
     def name(self):
+        # type: (BuildData) -> AnyStr
         return self.course_info.name
 
     @property
     def course_id(self):
+        # type: (BuildData) -> AnyStr
         """
         The course ID, which is a combination of the course name and the
         version.
@@ -715,6 +783,7 @@ MASTER_PARSE_DEFAULTS = {
 # ---------------------------------------------------------------------------
 
 def error(msg):
+    # type: (AnyStr) -> None
     global errors
     errors += 1
     if msg:
@@ -722,6 +791,7 @@ def error(msg):
 
 
 def die(msg, show_usage=False):
+    # type: (AnyStr, bool) -> None
     """
     Emit a message to standard error, optionally write the usage, and exit.
     """
@@ -733,7 +803,7 @@ def die(msg, show_usage=False):
 
 
 def load_build_yaml(yaml_file):
-    # type: (str) -> BuildData
+    # type: (AnyStr) -> BuildData
     """
     Load the YAML configuration file that defines the build for a particular
     class. Returns a BuildData object. Throws BuildConfigError on error.
@@ -904,7 +974,12 @@ def load_build_yaml(yaml_file):
 
         return res
 
-    def parse_notebook(obj, notebook_defaults, extra_vars, build_yaml_dir):
+    def parse_notebook(obj,               # type: Mapping[AnyStr, Any],
+                       notebook_defaults, # type: NotebookDefaults
+                       extra_vars,        # type: Mapping[AnyStr, AnyStr],
+                       profiles,          # type: Optional[Set[Profile]]
+                       build_yaml_dir     # type: AnyStr
+                      ):
         bad_dest = re.compile('^\.\./*|^\./*')
         src = required(obj, 'src', 'notebooks section')
         section = 'Notebook "{0}"'.format(src)
@@ -964,13 +1039,22 @@ def load_build_yaml(yaml_file):
                 )
 
         prof = obj.get('only_in_profile')
-        if prof and (prof not in VALID_PROFILES):
-            raise BuildConfigError(
-                ('Notebook "{0}": Bad value of "{1}" for only_in_profile. ' +
-                 'Must be one of: {2}').format(
-                    src, prof, ', '.join(VALID_PROFILES)
+        if prof:
+            if not profiles:
+                raise BuildConfigError(
+                    ('Notebook "{0}": Bad value of "{1}" for only_in_profile. ' +
+                     'No profiles are defined in the build.').format(
+                        src, prof
+                    )
                 )
-            )
+            profile_names = [p.name for p in profiles]
+            if prof not in profile_names:
+                raise BuildConfigError(
+                    ('Notebook "{0}": Bad value of "{1}" for only_in_profile. ' +
+                     'Must be one of: {2}').format(
+                        src, prof, ', '.join(profile_names)
+                    )
+                )
 
         if prof and (not master.enabled):
             raise BuildConfigError(
@@ -1002,7 +1086,12 @@ def load_build_yaml(yaml_file):
                                       extra_vars=extra_vars)
             )
 
-    def parse_bundle(obj, output_info, course_info, extra_vars):
+    def parse_bundle(obj,         # Mapping[AnyStr, Any]
+                     output_info, # OutputInfo
+                     course_info, # CourseInfo
+                     extra_vars   # Mapping[AnyStr, AnyStr]
+                    ):
+        # type: (...) -> Optional[Bundle]
         if not obj:
             return None
 
@@ -1046,7 +1135,10 @@ def load_build_yaml(yaml_file):
 
         return Bundle(zipfile=zipfile, files=file_list)
 
-    def parse_misc_file(obj, extra_vars):
+    def parse_misc_file(obj,       # type: Mapping[AnyStr, Any]
+                        extra_vars # type: Mapping[AnyStr, AnyStr]
+                       ):
+        # type: (...) -> Optional[MiscFileData]
         src = required(obj, 'src', 'misc_files')
         dest = required(obj, 'dest', 'misc_files')
 
@@ -1114,7 +1206,11 @@ def load_build_yaml(yaml_file):
             return mf
 
 
-    def parse_dataset(obj, extra_vars, build_yaml_dir):
+    def parse_dataset(obj,           # Mapping[AnyStr, Any]
+                      extra_vars,    # Mapping[AnyStr, AnyStr]
+                      build_yaml_dir # AnyStr
+                     ):
+        # type: (...) -> Optional[DatasetData]
         src = required(obj, 'src', 'notebooks')
         dest = required(obj, 'dest', 'notebooks')
         if bool_field(obj, 'skip'):
@@ -1150,7 +1246,11 @@ def load_build_yaml(yaml_file):
                 readme=readme
             )
 
-    def parse_file_section(section, parse, *args):
+    def parse_file_section(section,  # Mapping[AnyStr, Any]
+                           parse,    # Callable([Any], Any]
+                           *args     # Any
+                          ):
+        # type: (...) -> Tuple
         # Use the supplied parse function to parse each element in the
         # supplied section, filtering out None results from the function.
         # Convert the entire result to a tuple.
@@ -1159,6 +1259,7 @@ def load_build_yaml(yaml_file):
         )
 
     def parse_markdown(obj):
+        # type: (Mapping[AnyStr, Any]) -> MarkdownInfo
         if obj:
             stylesheet = obj.get('html_stylesheet')
         else:
@@ -1166,6 +1267,7 @@ def load_build_yaml(yaml_file):
         return MarkdownInfo(html_stylesheet=stylesheet)
 
     def parse_notebook_types(contents):
+        # type: (Mapping[AnyStr, Any]) -> Dict[Any, AnyStr]
         res = NotebookType.default_mappings()
         names_to_keys = dict([(t.value, t) for t in NotebookType])
 
@@ -1185,6 +1287,7 @@ def load_build_yaml(yaml_file):
         return res
 
     def parse_min_version(key, value):
+        # type: (AnyStr, AnyStr) -> AnyStr
         res = contents.get(key)
         if res is not None:
             if isinstance(res, float):
@@ -1205,6 +1308,7 @@ def load_build_yaml(yaml_file):
         return res
 
     def parse_course_type(data, section):
+        # type: (Mapping[AnyStr, Any], AnyStr) -> master_parse.CourseType
         course_type = data.get('type')
         if not course_type:
             raise BuildConfigError(
@@ -1224,6 +1328,7 @@ def load_build_yaml(yaml_file):
         )
 
     def parse_course_info(course_info_cfg, section_name):
+        # type: (Mapping[AnyStr, Any], str) -> CourseInfo
         ilt_only = {
             'class_setup':     None,
             'schedule':        None,
@@ -1263,6 +1368,7 @@ def load_build_yaml(yaml_file):
         )
 
     def parse_output_info(contents):
+        # type: (Mapping[AnyStr, Any]) -> OutputInfo
         student_dir = contents.get('student_dir', DEFAULT_STUDENT_FILES_SUBDIR)
         instructor_dir = contents.get('instructor_dir',
                                       DEFAULT_INSTRUCTOR_FILES_SUBDIR)
@@ -1292,6 +1398,48 @@ def load_build_yaml(yaml_file):
                           instructor_dbc=instructor_dbc)
 
 
+    def parse_profiles(contents):
+        # type: (Mapping[AnyStr, Any]) -> Set[Profile]
+        profiles = contents.get('profiles')
+        use_profiles = bool_field(contents, 'use_profiles', False)
+        if profiles and use_profiles:
+            raise BuildConfigError(
+                'You cannot specify both "use_profiles" and "profiles".'
+            )
+        if profiles:
+            res = set()
+            for thing in profiles:
+                if isinstance(thing, dict):
+                    if len(thing.keys()) != 1:
+                        raise BuildConfigError(
+                           'Malformed profile: {}'.format(thing)
+                        )
+                    n = thing.keys()[0]
+                    v = thing[n]
+                    if not isinstance(v, basestring):
+                        raise BuildConfigError(
+                            ('The value of profile "{}" ("{}") is not ' +
+                             'a string.').format(
+                                n, v
+                            )
+                        )
+                    res.add(Profile(name=n, value=v))
+                    continue
+
+                if isinstance(thing, basestring):
+                    res.add(Profile(name=thing, value=thing))
+                    continue
+
+                raise BuildConfigError(
+                    ('Profile "{}" is neither a simple string nor a ' +
+                     '"name: value"').format(thing)
+                )
+        else:
+            res = set(Profile(name='amazon', value='Amazon'),
+                      Profile(name='azure', value='azure'))
+
+        return res
+
     # Main function logic
 
     verbose("Loading {0}...".format(yaml_file))
@@ -1310,7 +1458,7 @@ def load_build_yaml(yaml_file):
                 '.'.join(map(str, bdc_min_version)), VERSION
             )
         )
-
+    profiles = parse_profiles(contents)
     variables = contents.get('variables', {})
     notebooks_cfg = required(contents, 'notebooks', 'build')
     slides_cfg = contents.get('slides', [])
@@ -1323,7 +1471,6 @@ def load_build_yaml(yaml_file):
     build_yaml_full = path.abspath(yaml_file)
     build_yaml_dir = path.dirname(build_yaml_full)
     src_base = path.abspath(joinpath(build_yaml_dir, src_base))
-    use_profiles = bool_field(contents, 'use_profiles')
 
     notebook_defaults = parse_notebook_defaults(contents, 'notebook_defaults',
                                                 build_yaml_dir)
@@ -1348,15 +1495,15 @@ def load_build_yaml(yaml_file):
     if notebooks_cfg:
         notebooks = parse_file_section(notebooks_cfg, parse_notebook,
                                        notebook_defaults, variables,
-                                       build_yaml_dir)
+                                       profiles, build_yaml_dir)
 
-        # If there are any profiles in the notebooks, and use_profiles is off,
-        # abort.
-        profiles = {n.only_in_profile for n in notebooks if n.only_in_profile}
-        if (not use_profiles) and (len(profiles) > 0):
+        # If there are any profiles in the notebooks, but no profiles in the
+        # build, abort.
+        nb_profiles = {n.only_in_profile for n in notebooks if n.only_in_profile}
+        if (len(profiles) == 0) and (len(nb_profiles) > 0):
             raise BuildConfigError(
                 'At least one notebook has "only_in_profile" set, but the ' +
-                'build does not specify "use_profiles: true".'
+                'build does not specify any profiles.'
             )
 
     else:
@@ -1399,7 +1546,7 @@ def load_build_yaml(yaml_file):
         markdown_cfg=parse_markdown(contents.get('markdown')),
         notebook_type_map=parse_notebook_types(contents),
         variables=variables,
-        use_profiles=use_profiles,
+        profiles=profiles,
         bundle_info=bundle_info
     )
 
@@ -1420,7 +1567,7 @@ def expand_template(src_template_file, build, tempdir, profile):
     if build.variables:
         variables['variables'] = build.variables
 
-    for p in VALID_PROFILES:
+    for p in build.profiles:
         if profile == p:
             variables[p] = p.capitalize()
         else:
@@ -2033,13 +2180,14 @@ def build_course(build, dest_dir, overwrite):
 
         rm_rf(dest_dir)
 
-    if not build.use_profiles:
+    if not build.profiles:
         do_build(build, dest_dir, profile=None)
     else:
-        for profile in VALID_PROFILES:
+        for profile in build.profiles:
+            n = profile.name
             info('')
-            info("Building profile {}".format(profile))
-            do_build(build, dest_dir, profile)
+            info("Building profile {}".format(n))
+            do_build(build, dest_dir, n)
 
     if errors > 0:
         raise BuildError("{0} error(s).".format(errors))

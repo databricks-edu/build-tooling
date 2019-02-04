@@ -242,7 +242,7 @@ MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
 NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
 NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
 BundleFile = namedtuple('BundleFileData', ('src', 'dest'))
-Profile = namedtuple('Profile', ('name', 'value'))
+Profile = master_parse.Profile
 
 
 class Bundle(DefaultStrMixin):
@@ -1406,6 +1406,7 @@ def load_build_yaml(yaml_file):
             raise BuildConfigError(
                 'You cannot specify both "use_profiles" and "profiles".'
             )
+
         if profiles:
             res = set()
             for thing in profiles:
@@ -1435,6 +1436,7 @@ def load_build_yaml(yaml_file):
                      '"name: value"').format(thing)
                 )
         else:
+            warning('"use_profiles" is deprecated. Please set explicit profiles.')
             res = set(Profile(name='amazon', value='Amazon'),
                       Profile(name='azure', value='azure'))
 

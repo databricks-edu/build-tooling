@@ -262,6 +262,8 @@ This work is licensed under a
 # Classes
 # -----------------------------------------------------------------------------
 
+Profile = namedtuple('Profile', ('name', 'value'))
+
 class Params(object):
     '''
     Parsed command-line parameters or manually constructed parameters,

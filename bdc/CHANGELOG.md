@@ -1,22 +1,23 @@
 # Change Log for BDC
 
+### Version 1.28.0
+
+- A file in the `misc_files` section can now be marked with `only_in_profile`.
+
 ### Version 1.27.0
 
 - `bdc` now ignores notebooks that are empty files or contain no cells,
   spitting out a warning.
-
-### Version 1.26.1
-
-- Now uses `namedtuple._replace` to copy a `namedtuple` while replacing one
-  value, instead of custom code.
-
-### Version 1.27.0
-
 - `gendbc` is now written in Python. Changed `bdc` to call it as a Python
   function, instead of invoking the JVM to run the old command line Scala
   version.
 - Refactored `bdc` so that its functionality is available as a library, as
   well as from the command line.
+
+### Version 1.26.1
+
+- Now uses `namedtuple._replace` to copy a `namedtuple` while replacing one
+  value, instead of custom code.
 
 ### Version 1.26.0
 

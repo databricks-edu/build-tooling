@@ -53,7 +53,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.27.0"
+VERSION = "1.28.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -235,7 +235,7 @@ class NotebookType(Enum):
 
 
 MiscFileData = namedtuple('MiscFileData', ('src', 'dest', 'is_template',
-                                           'dest_is_dir'))
+                                           'dest_is_dir', 'only_in_profile'))
 SlideData = namedtuple('SlideData', ('src', 'dest'))
 DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
 MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
@@ -1152,7 +1152,8 @@ def load_build_yaml(yaml_file):
                 src=src,
                 dest=dest,
                 dest_is_dir=obj.get('dest_is_dir', None),
-                is_template=obj.get('template', False)
+                is_template=obj.get('template', False),
+                only_in_profile=obj.get('only_in_profile', None)
             )
             # Sanity checks: A Markdown file can be translated to Markdown,
             # PDF or HTML. An HTML file can be translated to HTML or PDF.
@@ -2020,6 +2021,9 @@ def copy_misc_files(build, dest_root, profile):
     """
     if build.misc_files:
         for f in build.misc_files:
+            if f.only_in_profile and (f.only_in_profile != profile):
+                continue
+
             s = joinpath(build.course_directory, f.src)
 
             dest = f.dest
@@ -2654,6 +2658,12 @@ def validate_build(build):
         src_path = rel_to_build(misc.src)
         if not path.exists(src_path):
             complain('misc_file "{}" does not exist.'.format(src_path))
+            errors += 1
+        if misc.only_in_profile and (not build.use_profiles):
+            complain(
+                ('misc file "{}" specifies only_in_profile, but profiles ' +
+                 'are not enabled.').format(src_path)
+            )
             errors += 1
 
     if build.slides:

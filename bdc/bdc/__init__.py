@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+from __future__ import (absolute_import, division, print_function)
 
 from builtins import (bytes, dict, int, list, object, range, str, ascii,
                       chr, hex, input, next, oct, open, pow, round, super,
@@ -53,7 +52,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.28.0"
+VERSION = "1.29.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -173,6 +172,12 @@ errors = 0
 
 class BuildError(Exception):
     pass
+
+
+class DatabricksCliError(Exception):
+    def __init__(self, code, message=None):
+        super(Exception, self).__init__(message)
+        self.code = code
 
 
 class UploadDownloadError(Exception):
@@ -1827,29 +1832,8 @@ def make_dbc(build, labs_dir, dbc_path):
                flatten=False,
                verbose=verbosity_is_enabled(),
                debug=False)
-    #except Exception as e:
-    #    raise e #BuildError("Failed to create DBC: {}".format(e.message))
     finally:
         pass
-
-    # wd = path.dirname(labs_dir)
-    # with working_directory(wd):
-    #     simple_labs_dir = path.basename(labs_dir)
-    #     if verbosity_is_enabled():
-    #         cmd = "{0} {1} {2} {3} {4} {5}".format(
-    #             gendbc, "-v", "-f", build.top_dbc_folder_name, simple_labs_dir,
-    #             dbc_path
-    #         )
-    #     else:
-    #         cmd = "{0} {1} {2} {3} {4}".format(
-    #             gendbc, "-f", build.top_dbc_folder_name, simple_labs_dir,
-    #             dbc_path
-    #         )
-    #
-    #     verbose("\nIn {0}:\n{1}\n".format(wd, cmd))
-    #     rc = os.system(cmd)
-    #     if rc != 0:
-    #         raise BuildError("Failed to create DBC: " + cmd)
 
 
 def copy_slides(build, dest_root):
@@ -2052,6 +2036,33 @@ def build_course(build, dest_dir, overwrite):
         build.course_info.name, build.course_info.version, dest_dir
     ))
 
+def _configure_databricks(db_profile):
+    from databricks_cli.configure import provider
+
+    config = provider.get_config_for_profile(db_profile)
+    # If the profile doesn't exist, environment variables can be used.
+    if not config.host:
+        config.host = os.environ.get('DATABRICKS_HOST')
+    if not config.token:
+        config.token = os.environ.get('DATABRICKS_TOKEN')
+    if not config.password:
+        config.password = os.environ.get('DATABRICKS_PASSWORD')
+    if not config.username:
+        config.username = os.environ.get('DATABRICKS_USERNAME')
+
+    if not config.host:
+        raise BuildError('No host for databricks_cli profile "{}"'.format(
+            db_profile
+        ))
+
+    if config.token is None:
+        if (config.username is None) or (config.password is None):
+            raise BuildError(
+                ('databricks_cli profile "{}" has no API token AND no ' +
+                 'username and password').format(db_profile)
+            )
+
+    return config
 
 def dbw(subcommand, args, capture_stdout=True, db_profile=None):
     """
@@ -2064,73 +2075,71 @@ def dbw(subcommand, args, capture_stdout=True, db_profile=None):
     :param db_profile:     The --profile argument for the "databricks" command,
                            if any; None otherwise.
 
-    :return: A tuple of (returncode, parsed_json) on error,
-             or (returncode, stdout) on success. If capture_stdout is False,
-             then a successful result will return an empty string for stdout.
+    :return: the string containing standard output, if capture_stdout is True.
+             None otherwise.
+    :raises DatabricksCliError: if the command fails. If possible, the code
+            field will be set
     """
-    dbw = find_in_path('databricks')
+    from databricks_cli.cli import cli
+    from StringIO import StringIO
+
+    if db_profile is None:
+        db_profile = 'DEFAULT'
+
+    config = _configure_databricks(db_profile)
+    kwargs = {
+        'standalone_mode': False,
+        'prog_name': 'databricks',
+    }
+    args = ('--profile', db_profile, 'workspace', subcommand) + tuple(args)
+
+    verbose('+ databricks {0}'.format(' '.join(args)))
+
+    output = None
+    saved_stdout = None
     try:
-        full_args = [dbw, 'workspace', subcommand] + args
-        if db_profile:
-            full_args.append('--profile')
-            full_args.append(db_profile)
+        import unicodedata
+        output = StringIO()
+        saved_stdout = sys.stdout
+        sys.stdout = output
+        cli(args, **kwargs)
+        return output.getvalue() if capture_stdout else None
+    except:
+        stdout = output.getvalue()
+        json_string = re.sub(r'^Error:\s+', '', stdout)
+        default_msg = "Unknown error from databricks_cli"
+        try:
+            d = json.loads(json_string)
+            code = d.get("error_code")
+            msg = d.get("message", default_msg)
+        except:
+            code = None
+            msg = stdout
+        raise DatabricksCliError(code=code, message=msg)
 
-        verbose('+ {0}'.format(' '.join(full_args)))
-        stdout_loc = subprocess.PIPE if capture_stdout else None
-        p = subprocess.Popen(full_args,
-                             stdout=stdout_loc, stderr=subprocess.STDOUT)
-        if capture_stdout:
-            stdout, stderr = p.communicate()
-            stdout = stdout.decode('UTF-8')
-        else:
-            stdout = ''
-            p.wait()
-
-        if p.returncode is 0:
-            return (p.returncode, stdout)
-        elif stdout.startswith('Error: {'):
-            j = json.loads(stdout.replace('Error: {', '{'))
-            j['message'] = j.get('message', '').replace(r'\n', '\n')
-            return (p.returncode, j)
-        else:
-            return (p.returncode, {'error_code': 'UNKNOWN', 'message': stdout})
-
-    except OSError as e:
-        return (1, {'error_code': 'OS_ERROR', 'message': e.message})
+    finally:
+        sys.stdout = saved_stdout
 
 
 def ensure_shard_path_exists(shard_path, db_profile):
-    rc, res = dbw('ls', [shard_path], db_profile=db_profile)
-    if rc == 0 and res.startswith(u'Usage:'):
-        die('(BUG) Error in "databricks" command:\n{0}'.format(res))
-    elif rc == 0:
-        # Path exists.
-        pass
-    else:
-        message = res.get('message', '?')
-        if res.get('error_code', '?') == 'RESOURCE_DOES_NOT_EXIST':
-            # All good
-            die('Shard path "{0}" does not exist.'.format(message))
+    try:
+        dbw('ls', [shard_path], db_profile=db_profile)
+    except DatabricksCliError as e:
+        if e.code == 'RESOURCE_DOES_NOT_EXIST':
+            die('Shard path "{0}" does not exist.'.format(shard_path))
         else:
-            # Some other error
-            die('Unexpected error with "databricks": {0}'.format(message))
+            die('Unexpected error with "databricks": {0}'.format(e.message))
 
 
 def ensure_shard_path_does_not_exist(shard_path, db_profile):
-    rc, res = dbw('ls', [shard_path], db_profile=db_profile)
-    if rc == 0 and res.startswith('Usage:'):
-        die('(BUG) Error in "databricks" command:\n{0}'.format(res))
-    elif rc == 0:
-        # Path exists.
+    try:
+        dbw('ls', [shard_path], db_profile=db_profile)
         die('Shard path "{0}" already exists.'.format(shard_path))
-    else:
-        message = res.get('message', '?')
-        if res.get('error_code', '?') == 'RESOURCE_DOES_NOT_EXIST':
-            # All good
+    except DatabricksCliError as e:
+        if e.code == 'RESOURCE_DOES_NOT_EXIST':
             pass
         else:
-            # Some other error
-            die('Unexpected error with "databricks": {0}'.format(message))
+            die('Unexpected error with "databricks": {0}'.format(e.message))
 
 
 def expand_shard_path(shard_path):
@@ -2295,16 +2304,16 @@ def upload_notebooks(build, shard_path, db_profile):
 
             with working_directory(tempdir):
                 info("Uploading notebooks to {0}".format(shard_path))
-                rc, res = dbw('import_dir', ['.', shard_path],
-                              capture_stdout=False, db_profile=db_profile)
-                if rc != 0:
-                    raise UploadDownloadError(
-                        "Upload failed: {0}".format(res.get('message', '?'))
-                    )
-                else:
+                try:
+                    dbw('import_dir', ['.', shard_path],
+                        capture_stdout=False, db_profile=db_profile)
                     info("Uploaded {0} notebooks to {1}.".format(
                         len(notebooks), shard_path
                     ))
+                except DatabricksCliError as e:
+                    raise UploadDownloadError(
+                        'Upload failed: {}'.format(e.message)
+                    )
 
     try:
         do_upload(notebooks)
@@ -2342,10 +2351,11 @@ def download_notebooks(build, shard_path, db_profile):
         with TemporaryDirectory() as tempdir:
             info("Downloading notebooks to temporary directory")
             with working_directory(tempdir):
-                rc, res = dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
-                if rc != 0:
+                try:
+                    dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
+                except DatabricksCliError as e:
                     raise UploadDownloadError(
-                        "Download failed: {0}".format(res.get('message', '?'))
+                        "Download failed: {}".format(e.message)
                     )
 
                 for local, remotes in notebooks.items():

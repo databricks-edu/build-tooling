@@ -17,7 +17,7 @@ import os
 import sys
 from contextlib import contextmanager
 
-VERSION = '1.11.0'
+VERSION = '1.12.0'
 
 @contextmanager
 def chdir(dir):
@@ -46,7 +46,7 @@ if (len(sys.argv) > 1 and
     print('Installing/upgrading databricks-cli')
     cmd('pip install --upgrade databricks-cli')
 
-    for d in ('notebooktools', 'master_parse', 'bdc', 'gendbc', 'course'):
+    for d in ('db_edu_util', 'master_parse', 'bdc', 'gendbc', 'course'):
         print('Installing {0}...'.format(d))
         with chdir(os.path.join(top_dir, d)):
             cmd('python setup.py install')

@@ -30,7 +30,7 @@ setup(
     description='Master parse tool',
     install_requires=[
         'enum34 >= 1.1.6',
-        'pystache >= 0.5.4',
+        'pystache == 0.5.4',
     ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

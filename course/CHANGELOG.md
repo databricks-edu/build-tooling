@@ -1,5 +1,12 @@
 # Change log for `course`
 
+Version 2.0.7:
+
+- Changed to work with new `db_edu_util` library, which contains 
+  `notebooktools` and other goodies.
+- Now runs the `databricks_cli` commands via a function call, rather than
+  a shell command.
+
 Version 2.0.6:
 
 - `course toolversions` now display the version of the `notebooktools`

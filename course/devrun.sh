@@ -7,4 +7,4 @@
 here=`pwd`
 up=`(cd ..; pwd)`
 
-PYTHONPATH=.:$up/notebooktools:$up/master_parse:$up/gendbc:$up/bdc python course/__init__.py "$@"
+PYTHONPATH=.:$up/db_edu_util:$up/master_parse:$up/gendbc:$up/bdc python course/__init__.py "$@"

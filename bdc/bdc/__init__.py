@@ -2,7 +2,7 @@
 
 from __future__ import (absolute_import, division, print_function)
 
-from builtins import (bytes, dict, int, list, object, range, str, ascii,
+from builtins import (bytes, dict, int, list, object, range, str,
                       chr, hex, input, next, oct, open, pow, round, super,
                       filter, map, zip)
 
@@ -10,7 +10,6 @@ from future import standard_library
 standard_library.install_aliases()
 
 import sys
-
 if sys.version_info[0] != 2:
     print("bdc only works on Python 2. You're using Python {0}.".format(
         '.'.join([str(i) for i in sys.version_info[0:3]])
@@ -30,7 +29,9 @@ from ConfigParser import SafeConfigParser, NoOptionError
 from enum import Enum
 import master_parse
 from gendbc import gendbc
-from notebooktools import parse_source_notebook, NotebookError
+from db_edu_util.notebooktools import parse_source_notebook, NotebookError
+from db_edu_util import db_cli
+from db_edu_util.db_cli import DatabricksCliError
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
@@ -172,12 +173,6 @@ errors = 0
 
 class BuildError(Exception):
     pass
-
-
-class DatabricksCliError(Exception):
-    def __init__(self, code, message=None):
-        super(Exception, self).__init__(message)
-        self.code = code
 
 
 class UploadDownloadError(Exception):
@@ -2036,33 +2031,6 @@ def build_course(build, dest_dir, overwrite):
         build.course_info.name, build.course_info.version, dest_dir
     ))
 
-def _configure_databricks(db_profile):
-    from databricks_cli.configure import provider
-
-    config = provider.get_config_for_profile(db_profile)
-    # If the profile doesn't exist, environment variables can be used.
-    if not config.host:
-        config.host = os.environ.get('DATABRICKS_HOST')
-    if not config.token:
-        config.token = os.environ.get('DATABRICKS_TOKEN')
-    if not config.password:
-        config.password = os.environ.get('DATABRICKS_PASSWORD')
-    if not config.username:
-        config.username = os.environ.get('DATABRICKS_USERNAME')
-
-    if not config.host:
-        raise BuildError('No host for databricks_cli profile "{}"'.format(
-            db_profile
-        ))
-
-    if config.token is None:
-        if (config.username is None) or (config.password is None):
-            raise BuildError(
-                ('databricks_cli profile "{}" has no API token AND no ' +
-                 'username and password').format(db_profile)
-            )
-
-    return config
 
 def dbw(subcommand, args, capture_stdout=True, db_profile=None):
     """
@@ -2080,45 +2048,10 @@ def dbw(subcommand, args, capture_stdout=True, db_profile=None):
     :raises DatabricksCliError: if the command fails. If possible, the code
             field will be set
     """
-    from databricks_cli.cli import cli
-    from StringIO import StringIO
-
-    if db_profile is None:
-        db_profile = 'DEFAULT'
-
-    config = _configure_databricks(db_profile)
-    kwargs = {
-        'standalone_mode': False,
-        'prog_name': 'databricks',
-    }
-    args = ('--profile', db_profile, 'workspace', subcommand) + tuple(args)
-
-    verbose('+ databricks {0}'.format(' '.join(args)))
-
-    output = None
-    saved_stdout = None
-    try:
-        import unicodedata
-        output = StringIO()
-        saved_stdout = sys.stdout
-        sys.stdout = output
-        cli(args, **kwargs)
-        return output.getvalue() if capture_stdout else None
-    except:
-        stdout = output.getvalue()
-        json_string = re.sub(r'^Error:\s+', '', stdout)
-        default_msg = "Unknown error from databricks_cli"
-        try:
-            d = json.loads(json_string)
-            code = d.get("error_code")
-            msg = d.get("message", default_msg)
-        except:
-            code = None
-            msg = stdout
-        raise DatabricksCliError(code=code, message=msg)
-
-    finally:
-        sys.stdout = saved_stdout
+    args = ('workspace', subcommand) + tuple(args)
+    return db_cli.databricks(args, capture_stdout=capture_stdout,
+                             db_profile=db_profile,
+                             verbose=verbosity_is_enabled())
 
 
 def ensure_shard_path_exists(shard_path, db_profile):

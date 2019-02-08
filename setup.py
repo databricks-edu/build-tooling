@@ -39,6 +39,20 @@ class CustomInstallCommand(install):
         install.run(self)
 
 
+setup(
+    name='db-build-tooling',
+    packages=[],
+    install_requires=[
+        'cairocffi==0.9.0',
+    ],
+    version=VERSION,
+    description='Wrapper package for Databricks Training build tools',
+    author='Databricks Education Team',
+    author_email='training-logins@databricks.com',
+    license="Creative Commons Attribution-NonCommercial 4.0 International",
+)
+
+
 top_dir = os.path.dirname(os.path.abspath(__file__))
 
 if (len(sys.argv) > 1 and
@@ -50,16 +64,3 @@ if (len(sys.argv) > 1 and
         print('Installing {0}...'.format(d))
         with chdir(os.path.join(top_dir, d)):
             cmd('python setup.py install')
-
-setup(
-    name='db-build-tooling',
-    packages=[],
-    install_requires=[
-        'databricks-cli==0.8.0',
-    ],
-    version=VERSION,
-    description='Wrapper package for Databricks Training build tools',
-    author='Databricks Education Team',
-    author_email='training-logins@databricks.com',
-    license="Creative Commons Attribution-NonCommercial 4.0 International",
-)

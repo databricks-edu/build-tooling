@@ -9,19 +9,21 @@ import sys
 import bdc
 import re
 from contextlib import contextmanager
-from typing import Generator, Sequence, Pattern
+from typing import Generator, Sequence, Pattern, Mapping
 from tempfile import NamedTemporaryFile
 from termcolor import colored
 from string import Template as StringTemplate
 import functools
 from subprocess import Popen
 from textwrap import TextWrapper
+from db_edu_util import db_cli
+from db_edu_util.db_cli import DatabricksCliError
 
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.0.6'
+VERSION = '2.0.7'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -380,6 +382,20 @@ def cmd(shell_command, quiet=False, dryrun=False):
             raise CourseError('Command exited with {}'.format(rc))
 
 
+def databricks(args, db_profile=None):
+    # type: (Sequence[str], Optional[str]) -> None
+    """
+    Runs the specified "databricks" command, trapping any errors and
+    aborting.
+
+    :param args:       the arguments (e.g., ('workspace', 'ls', ...))
+    :param db_profile: the Databricks profile to use, or None for the default
+    """
+    try:
+        db_cli.databricks(args, db_profile=db_profile, verbose=True)
+    except DatabricksCliError as e:
+        die("*** Command failed: {}".format(e.message))
+
 def quote_shell_arg(arg):
     # type: (str) -> str
     """
@@ -653,7 +669,7 @@ def configure(cfg, config_path, key, value):
 
 
 def work_on(cfg, course_name, config_path):
-    # type: (dict, str, str) -> dict
+    # type: (Mapping[str,str], str, str) -> Mapping[str,str]
     """
     Change the course name in the configuration. Implicitly updates the
     in-memory configuration by calling update_config().
@@ -685,12 +701,9 @@ def clean(cfg):
     # it's easier (and costs no more time, really) than to issue a REST call
     # to check whether it exists in the first place. And "rm" will die if
     # called on a nonexistent remote path.
-    cmd('databricks --profile "{}" workspace mkdirs "{}"'.format(
-        db_profile, remote_target
-    ))
-    cmd('databricks --profile "{}" workspace rm --recursive "{}"'.format(
-        db_profile, remote_target
-    ))
+    databricks(('workspace', 'mkdirs', remote_target), db_profile=db_profile)
+    databricks(('workspace', 'rm', '--recursive', remote_target),
+               db_profile=db_profile)
 
 
 def clean_source(cfg):
@@ -708,12 +721,9 @@ def clean_source(cfg):
     db_profile = cfg['DB_PROFILE']
     remote_source = cfg['COURSE_REMOTE_SOURCE']
 
-    cmd('databricks --profile "{}" workspace mkdirs "{}"'.format(
-        db_profile, remote_source
-    ))
-    cmd('databricks --profile "{}" workspace rm --recursive "{}"'.format(
-        db_profile, remote_source
-    ))
+    databricks(('workspace', 'mkdirs', remote_source), db_profile=db_profile)
+    databricks(('workspace', 'rm', '--recursive', remote_source),
+               db_profile=db_profile)
 
 
 def download(cfg):
@@ -783,16 +793,17 @@ def import_dbcs(cfg, build_dir):
         :return:
         '''
         parent_subpath = os.path.dirname(dbc)
-        cmd('databricks --profile {} workspace mkdirs "{}/{}"'.format(
-            db_profile, remote_target, os.path.dirname(parent_subpath)
-        ))
-        # Language is ignored by databricks, but it's a required option. <sigh>
-        cmd(('databricks --profile {} workspace import --format DBC ' +
-             '--language Python "{}" "{}/{}"').format(
-                db_profile, dbc, remote_target, parent_subpath
-
-            )
+        dir_to_make = '{}/{}'.format(
+            remote_target, os.path.dirname(parent_subpath)
         )
+        databricks(('workspace', 'mkdirs', dir_to_make), db_profile=db_profile)
+
+        # Language is ignored by databricks, but it's a required option. <sigh>
+        databricks(('workspace', 'import', '--format', 'DBC',
+                    '--language', 'Python', dbc,
+                    '{}/{}'.format(remote_target, parent_subpath)),
+                    db_profile=db_profile)
+
 
     print('Importing all DBCs under "{}"'.format(build_dir))
     dbcs = []
@@ -808,9 +819,8 @@ def import_dbcs(cfg, build_dir):
             warn('No DBCs found.')
         else:
             clean(cfg)
-            cmd('databricks --profile {} workspace mkdirs {}'.format(
-                db_profile, remote_target
-            ))
+            databricks(('workspace', 'mkdirs', remote_target),
+                       db_profile=db_profile)
             for dbc in dbcs:
                 print('\nImporting {}\n'.format(os.path.join(build_dir, dbc)))
                 import_dbc(dbc)
@@ -1135,13 +1145,18 @@ def print_tool_versions():
     # type: () -> None
     import gendbc
     import master_parse
-    import notebooktools
+    import db_edu_util
+    from db_edu_util import db_cli
 
-    print("course:                  {}".format(VERSION))
-    print("bdc:                     {}".format(bdc.VERSION))
-    print("gendbc:                  {}".format(gendbc.VERSION))
-    print("master_parse:            {}".format(master_parse.VERSION))
-    print("notebooktools (library): {}".format(notebooktools.VERSION))
+    s = db_cli.databricks(['--version'], capture_stdout=True).strip()
+    db_version = re.sub(r'^.*(\d+\.\d+\.\d+).*$', r'\1', s)
+
+    print("course:                {}".format(VERSION))
+    print("bdc:                   {}".format(bdc.VERSION))
+    print("gendbc:                {}".format(gendbc.VERSION))
+    print("master_parse:          {}".format(master_parse.VERSION))
+    print("db_edu_util (library): {}".format(db_edu_util.VERSION))
+    print("databricks_cli:        {}".format(db_version))
 
 
 def which(cfg):

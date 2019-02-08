@@ -1,5 +1,9 @@
 # Change Log for gendbc
 
+**Version 2.0.3**
+
+- Updated for addition of new `db_edu_util` library.
+
 **Version 2.0.1**
 
 - Fixed a bug: The generated DBC JSON for Python notebooks caused Databricks

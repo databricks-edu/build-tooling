@@ -14,8 +14,6 @@ from typing import Callable, Sequence, Pattern, Generator
 import json
 from abc import abstractmethod
 
-VERSION = '1.0.0'
-
 __all__ = ('NotebookError', 'NotebookParseError', 'NotebookLanguage',
            'CellType', 'NotebookCell', 'Notebook', 'parse_source_notebook')
 

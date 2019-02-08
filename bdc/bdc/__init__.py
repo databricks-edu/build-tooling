@@ -1,9 +1,8 @@
 #!/usr/bin/env python
 
-from __future__ import (absolute_import, division, print_function,
-                        unicode_literals)
+from __future__ import (absolute_import, division, print_function)
 
-from builtins import (bytes, dict, int, list, object, range, str, ascii,
+from builtins import (bytes, dict, int, list, object, range, str,
                       chr, hex, input, next, oct, open, pow, round, super,
                       filter, map, zip)
 
@@ -11,7 +10,6 @@ from future import standard_library
 standard_library.install_aliases()
 
 import sys
-
 if sys.version_info[0] != 2:
     print("bdc only works on Python 2. You're using Python {0}.".format(
         '.'.join([str(i) for i in sys.version_info[0:3]])
@@ -31,7 +29,9 @@ from ConfigParser import SafeConfigParser, NoOptionError
 from enum import Enum
 import master_parse
 from gendbc import gendbc
-from notebooktools import parse_source_notebook, NotebookError
+from db_edu_util.notebooktools import parse_source_notebook, NotebookError
+from db_edu_util import db_cli
+from db_edu_util.db_cli import DatabricksCliError
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
@@ -53,7 +53,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.28.0"
+VERSION = "1.29.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1976,29 +1976,8 @@ def make_dbc(build, labs_dir, dbc_path):
                flatten=False,
                verbose=verbosity_is_enabled(),
                debug=False)
-    #except Exception as e:
-    #    raise e #BuildError("Failed to create DBC: {}".format(e.message))
     finally:
         pass
-
-    # wd = path.dirname(labs_dir)
-    # with working_directory(wd):
-    #     simple_labs_dir = path.basename(labs_dir)
-    #     if verbosity_is_enabled():
-    #         cmd = "{0} {1} {2} {3} {4} {5}".format(
-    #             gendbc, "-v", "-f", build.top_dbc_folder_name, simple_labs_dir,
-    #             dbc_path
-    #         )
-    #     else:
-    #         cmd = "{0} {1} {2} {3} {4}".format(
-    #             gendbc, "-f", build.top_dbc_folder_name, simple_labs_dir,
-    #             dbc_path
-    #         )
-    #
-    #     verbose("\nIn {0}:\n{1}\n".format(wd, cmd))
-    #     rc = os.system(cmd)
-    #     if rc != 0:
-    #         raise BuildError("Failed to create DBC: " + cmd)
 
 
 def copy_slides(build, dest_root):
@@ -2214,73 +2193,36 @@ def dbw(subcommand, args, capture_stdout=True, db_profile=None):
     :param db_profile:     The --profile argument for the "databricks" command,
                            if any; None otherwise.
 
-    :return: A tuple of (returncode, parsed_json) on error,
-             or (returncode, stdout) on success. If capture_stdout is False,
-             then a successful result will return an empty string for stdout.
+    :return: the string containing standard output, if capture_stdout is True.
+             None otherwise.
+    :raises DatabricksCliError: if the command fails. If possible, the code
+            field will be set
     """
-    dbw = find_in_path('databricks')
-    try:
-        full_args = [dbw, 'workspace', subcommand] + args
-        if db_profile:
-            full_args.append('--profile')
-            full_args.append(db_profile)
-
-        verbose('+ {0}'.format(' '.join(full_args)))
-        stdout_loc = subprocess.PIPE if capture_stdout else None
-        p = subprocess.Popen(full_args,
-                             stdout=stdout_loc, stderr=subprocess.STDOUT)
-        if capture_stdout:
-            stdout, stderr = p.communicate()
-            stdout = stdout.decode('UTF-8')
-        else:
-            stdout = ''
-            p.wait()
-
-        if p.returncode is 0:
-            return (p.returncode, stdout)
-        elif stdout.startswith('Error: {'):
-            j = json.loads(stdout.replace('Error: {', '{'))
-            j['message'] = j.get('message', '').replace(r'\n', '\n')
-            return (p.returncode, j)
-        else:
-            return (p.returncode, {'error_code': 'UNKNOWN', 'message': stdout})
-
-    except OSError as e:
-        return (1, {'error_code': 'OS_ERROR', 'message': e.message})
+    args = ('workspace', subcommand) + tuple(args)
+    return db_cli.databricks(args, capture_stdout=capture_stdout,
+                             db_profile=db_profile,
+                             verbose=verbosity_is_enabled())
 
 
 def ensure_shard_path_exists(shard_path, db_profile):
-    rc, res = dbw('ls', [shard_path], db_profile=db_profile)
-    if rc == 0 and res.startswith(u'Usage:'):
-        die('(BUG) Error in "databricks" command:\n{0}'.format(res))
-    elif rc == 0:
-        # Path exists.
-        pass
-    else:
-        message = res.get('message', '?')
-        if res.get('error_code', '?') == 'RESOURCE_DOES_NOT_EXIST':
-            # All good
-            die('Shard path "{0}" does not exist.'.format(message))
+    try:
+        dbw('ls', [shard_path], db_profile=db_profile)
+    except DatabricksCliError as e:
+        if e.code == 'RESOURCE_DOES_NOT_EXIST':
+            die('Shard path "{0}" does not exist.'.format(shard_path))
         else:
-            # Some other error
-            die('Unexpected error with "databricks": {0}'.format(message))
+            die('Unexpected error with "databricks": {0}'.format(e.message))
 
 
 def ensure_shard_path_does_not_exist(shard_path, db_profile):
-    rc, res = dbw('ls', [shard_path], db_profile=db_profile)
-    if rc == 0 and res.startswith('Usage:'):
-        die('(BUG) Error in "databricks" command:\n{0}'.format(res))
-    elif rc == 0:
-        # Path exists.
+    try:
+        dbw('ls', [shard_path], db_profile=db_profile)
         die('Shard path "{0}" already exists.'.format(shard_path))
-    else:
-        message = res.get('message', '?')
-        if res.get('error_code', '?') == 'RESOURCE_DOES_NOT_EXIST':
-            # All good
+    except DatabricksCliError as e:
+        if e.code == 'RESOURCE_DOES_NOT_EXIST':
             pass
         else:
-            # Some other error
-            die('Unexpected error with "databricks": {0}'.format(message))
+            die('Unexpected error with "databricks": {0}'.format(e.message))
 
 
 def expand_shard_path(shard_path):
@@ -2445,16 +2387,16 @@ def upload_notebooks(build, shard_path, db_profile):
 
             with working_directory(tempdir):
                 info("Uploading notebooks to {0}".format(shard_path))
-                rc, res = dbw('import_dir', ['.', shard_path],
-                              capture_stdout=False, db_profile=db_profile)
-                if rc != 0:
-                    raise UploadDownloadError(
-                        "Upload failed: {0}".format(res.get('message', '?'))
-                    )
-                else:
+                try:
+                    dbw('import_dir', ['.', shard_path],
+                        capture_stdout=False, db_profile=db_profile)
                     info("Uploaded {0} notebooks to {1}.".format(
                         len(notebooks), shard_path
                     ))
+                except DatabricksCliError as e:
+                    raise UploadDownloadError(
+                        'Upload failed: {}'.format(e.message)
+                    )
 
     try:
         do_upload(notebooks)
@@ -2492,10 +2434,11 @@ def download_notebooks(build, shard_path, db_profile):
         with TemporaryDirectory() as tempdir:
             info("Downloading notebooks to temporary directory")
             with working_directory(tempdir):
-                rc, res = dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
-                if rc != 0:
+                try:
+                    dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
+                except DatabricksCliError as e:
                     raise UploadDownloadError(
-                        "Download failed: {0}".format(res.get('message', '?'))
+                        "Download failed: {}".format(e.message)
                     )
 
                 for local, remotes in notebooks.items():

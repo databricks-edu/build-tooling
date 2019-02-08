@@ -8,7 +8,7 @@ import sys
 # Can't just import notebooktools, because dependencies have to be satisfied
 # first. So, we'll "grep" for the VERSION.
 
-source = "notebooktools/__init__.py"
+source = "db_edu_util/__init__.py"
 
 version = None
 version_re = re.compile(r'''^\s*VERSION\s*=\s*['"]?([\d.]+)["']?.*$''')
@@ -24,10 +24,10 @@ if not version:
     sys.exit(1)
 
 setup(
-    name='notebooktools',
-    packages=['notebooktools'],
+    name='db_edu_util',
+    packages=['db_edu_util'],
     version=version,
-    description='Generate a Databricks DBC from source notebooks',
+    description='Library of stuff used by the build tools',
     install_requires=[
         'docopt >= 0.6.2',
         'future >= 0.16.0',

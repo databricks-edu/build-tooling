@@ -6,3 +6,5 @@
 /dist
 /build
 .DS_Store
+/venv
+.envrc

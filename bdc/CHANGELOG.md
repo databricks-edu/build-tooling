@@ -1,5 +1,9 @@
 # Change Log for BDC
 
+### Version 1.29.0
+
+- `bdc` now invokes `databricks` via its API, rather than by shelling out.
+
 ### Version 1.28.0
 
 - A file in the `misc_files` section can now be marked with `only_in_profile`.

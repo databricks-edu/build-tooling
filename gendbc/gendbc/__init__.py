@@ -22,7 +22,7 @@ from zipfile import ZipFile
 from future import standard_library
 standard_library.install_aliases()
 
-from notebooktools import *
+from db_edu_util.notebooktools import *
 
 __all__ = ['Config', 'GendbcError', 'gendbc']
 
@@ -30,7 +30,7 @@ __all__ = ['Config', 'GendbcError', 'gendbc']
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = "2.0.2"
+VERSION = "2.0.3"
 
 PROG = os.path.basename(sys.argv[0])
 

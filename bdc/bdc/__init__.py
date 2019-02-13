@@ -14,7 +14,7 @@ from enum import Enum
 import master_parse
 from gendbc import gendbc
 from db_edu_util.notebooktools import parse_source_notebook, NotebookError
-from db_edu_util import db_cli
+from db_edu_util import db_cli, EnhancedTextWrapper
 from db_edu_util.db_cli import DatabricksCliError
 from grizzled.file import eglob
 from bdc.bdcutil import *
@@ -2589,7 +2589,7 @@ def validate_build(build: BuildData) -> BuildData:
     # TODO: Path joins here duplicate logic elsewhere. Consolidate.
     errors = 0
     error_prefix = "ERROR: "
-    wrapper = BDCTextWrapper(subsequent_indent=' ' * len(error_prefix))
+    wrapper = EnhancedTextWrapper(subsequent_indent=' ' * len(error_prefix))
     build_file_dir = path.dirname(path.abspath(build.build_file_path))
 
     def complain(msg):

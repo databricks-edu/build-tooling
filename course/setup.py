@@ -29,9 +29,7 @@ setup(
     version=version,
     description='Workflow management tool for Databricks curriculum development',
     install_requires=[
-        'future >= 0.16.0',
         'markdown2 >= 2.3.5',
-        'backports.tempfile >= 1.0',
         'termcolor >= 1.1.0',
     ],
     author='Databricks Education Team',

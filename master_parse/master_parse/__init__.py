@@ -14,21 +14,21 @@ line arguments, run with no arguments. If used as a library, the main
 entry point is process_notebooks().
 """
 
-
-
 import glob
 import os
 import os.path
 import re
 import codecs
 from enum import Enum
-from collections import namedtuple
 from string import Template as StringTemplate
-from .InlineToken import InlineToken, expand_inline_tokens
+from master_parse.InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
 from random import SystemRandom
+from db_edu_util import all_pred
 from dataclasses import dataclass
+from typing import (Sequence, Optional, Dict, Set, NoReturn, Pattern, Match,
+                    Tuple, List, TextIO, Any)
 
 VERSION = "1.20.0"
 
@@ -37,31 +37,12 @@ VERSION = "1.20.0"
 # API, for ease of modification.)
 # -----------------------------------------------------------------------------
 
-class TargetProfile(Enum):
-    '''
-    The target output profile, currently either AZURE or AMAZON.
-    '''
-    AZURE = 'azure'
-    AMAZON = 'amazon'
-    NONE = 'none'
 
 class CourseType(Enum):
     '''Type of course (ILT or self-paced)'''
     SELF_PACED = 'self-paced'
     ILT = 'ilt'
     NONE = 'none'
-
-# Strictly speaking, this is not an enum, but it's here for convenience.
-# It maps target profile values to their in-cell keywords.
-
-LABEL_TO_TARGET_PROFILE = {
-    '{}_ONLY'.format(t.value.upper()): t for t in TargetProfile
-    if t is not TargetProfile.NONE
-}
-
-TARGET_PROFILE_TO_LABEL = {
-    v: k for k, v in list(LABEL_TO_TARGET_PROFILE.items())
-}
 
 # NOTE: If you add a new label, be sure to look at:
 #
@@ -77,8 +58,8 @@ class CommandLabel(Enum):
     SQL_ONLY          = 'SQL_ONLY'
     ANSWER            = 'ANSWER'
     TODO              = 'TODO'
-    AZURE_ONLY        = TARGET_PROFILE_TO_LABEL[TargetProfile.AZURE]
-    AMAZON_ONLY       = TARGET_PROFILE_TO_LABEL[TargetProfile.AMAZON]
+    AZURE_ONLY        = 'AZURE_ONLY'
+    AMAZON_ONLY       = 'AMAZON_ONLY'
     TEST              = 'TEST'
     PRIVATE_TEST      = 'PRIVATE_TEST'
     DATABRICKS_ONLY   = 'DATABRICKS_ONLY'
@@ -89,6 +70,7 @@ class CommandLabel(Enum):
     SOURCE_ONLY       = 'SOURCE_ONLY'
     ILT_ONLY          = 'ILT_ONLY'
     SELF_PACED_ONLY   = 'SELF_PACED_ONLY'
+    PROFILES          = 'PROFILES'
 
 class CommandCode(Enum):
     SCALA             = 'scala'
@@ -135,7 +117,7 @@ def _icon_image_url(image):
         image
     )
 
-def _label_for_course_type(course_type):
+def _label_for_course_type(course_type: CourseType) -> CommandLabel:
     if course_type == CourseType.SELF_PACED:
         return CommandLabel.SELF_PACED_ONLY
     if course_type == CourseType.ILT:
@@ -203,6 +185,7 @@ VALID_CELL_TYPES_FOR_LABELS = {
     CommandLabel.ALL_NOTEBOOKS:   ALL_CELL_TYPES,
     CommandLabel.VIDEO:           { CommandCode.MARKDOWN,
                                     CommandCode.MARKDOWN_SANDBOX },
+    CommandLabel.PROFILES:        ALL_CELL_TYPES,
 }
 
 # Ensure that all labels are captured in VALID_CELL_TYPES_FOR_LABELS
@@ -283,31 +266,31 @@ class Params(object):
     passed to process_notebooks().
     '''
     def __init__(self,
-                 path=None,
-                 output_dir=DEFAULT_OUTPUT_DIR,
-                 databricks=True,
-                 ipython=False,
-                 scala=False,
-                 python=False,
-                 r=False,
-                 sql=False,
-                 instructor=False,
-                 answers=False,
-                 exercises=False,
-                 creative_commons=False,
-                 add_footer=False,
-                 notebook_footer_path=None,
-                 add_heading=False,
-                 target_profile=TargetProfile.NONE,
-                 course_type=CourseType.NONE,
-                 notebook_heading_path=None,
-                 encoding_in=DEFAULT_ENCODING_IN,
-                 encoding_out=DEFAULT_ENCODING_OUT,
-                 enable_verbosity=False,
-                 enable_debug=False,
-                 copyright_year=None,
-                 enable_templates=False,
-                 extra_template_vars=None):
+                 path: Optional[str] = None,
+                 output_dir: str = DEFAULT_OUTPUT_DIR,
+                 databricks: bool = True,
+                 ipython: bool = False,
+                 scala: bool = False,
+                 python: bool = False,
+                 r: bool = False,
+                 sql: bool = False,
+                 instructor: bool = False,
+                 answers: bool = False,
+                 exercises: bool = False,
+                 creative_commons: bool = False,
+                 add_footer: bool = False,
+                 notebook_footer_path: Optional[str] = None,
+                 add_heading: bool = False,
+                 profile: Optional[Profile] = None,
+                 course_type: CourseType = CourseType.NONE,
+                 notebook_heading_path: Optional[str] = None,
+                 encoding_in: str = DEFAULT_ENCODING_IN,
+                 encoding_out: str = DEFAULT_ENCODING_OUT,
+                 enable_verbosity: bool = False,
+                 enable_debug: bool = False,
+                 copyright_year: Optional[str] = None,
+                 enable_templates: bool = False,
+                 extra_template_vars: Optional[Dict[str, str]] = None):
         self.path = path
         self.output_dir = output_dir or DEFAULT_OUTPUT_DIR
         self.databricks = databricks
@@ -333,8 +316,7 @@ class Params(object):
         self.copyright_year = copyright_year or datetime.now().year
         assert(course_type in set(CourseType))
         self.course_type = course_type
-        assert(target_profile in set(TargetProfile))
-        self.target_profile = target_profile
+        self.profile = profile
         self.enable_templates = enable_templates
         self.extra_template_vars = extra_template_vars or {}
 
@@ -344,7 +326,7 @@ class Params(object):
                 self._check_path(file, purpose)
 
     @property
-    def notebook_footer(self):
+    def notebook_footer(self) -> str:
         if self._notebook_footer is None:
             if self.notebook_footer_path is None:
                 self._notebook_footer = DEFAULT_NOTEBOOK_FOOTER.format(
@@ -357,7 +339,7 @@ class Params(object):
         return self._notebook_footer
 
     @property
-    def notebook_heading(self):
+    def notebook_heading(self) -> str:
         if self._notebook_heading is None:
             if self.notebook_heading_path is None:
                 self._notebook_heading = DEFAULT_NOTEBOOK_HEADING
@@ -368,25 +350,27 @@ class Params(object):
         return self._notebook_heading
 
     @classmethod
-    def _check_path(cls, file, purpose):
+    def _check_path(cls, file: str, purpose: str):
         if not os.path.exists(file):
-            raise IOError('{0} "{1}" does not exist.'.format(purpose, file))
+            raise IOError(f'{purpose} "{file}" does not exist.')
         if not os.path.isfile(file):
-            raise IOError('{0} "{1}" is not a file.'.format(purpose, file))
+            raise IOError(f'{purpose} "{file}" is not a file.')
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'Params({0})'.format(
-            ','.join([
-                '{0}={1}'.format(f, self.__getattribute__(f))
-                for f in self.__dict__
-            ])
+            ','.join([f'{f}={self.__getattribute__(f)}' for f in self.__dict__])
         )
 
 
-Command = namedtuple('Command', ['part', 'code', 'labels', 'content'])
+@dataclass(frozen=True)
+class Command:
+    part: int
+    code: CommandCode
+    labels: Sequence[CommandLabel]
+    content: List[str]
 
 
 class NotebookGenerator(object):
@@ -418,7 +402,11 @@ class NotebookGenerator(object):
         NotebookUser.ANSWERS: '_answers'
     }
 
-    def __init__(self, notebook_kind, notebook_user, notebook_code, params):
+    def __init__(self,
+                 notebook_kind: NotebookKind,
+                 notebook_user: NotebookUser,
+                 notebook_code: CommandCode,
+                 params: Params):
         '''
 
         :param notebook_kind:  the NotebookKind
@@ -450,7 +438,7 @@ class NotebookGenerator(object):
         self.params = params
         self.cell_template_processor = CellTemplateProcessor()
 
-    def _get_keep_labels(self, params, *args):
+    def _get_keep_labels(self, params: Params, *args: Any) -> Set[CommandLabel]:
         labels = {
             CommandLabel.TEST,
             CommandLabel.INLINE,
@@ -475,23 +463,30 @@ class NotebookGenerator(object):
 
         return labels
 
-    def _get_extension(self):
+    def _get_extension(self) -> str:
         return (NotebookGenerator.user_to_extension[self.notebook_user] +
                 Parser.code_to_extension[self.notebook_code])
 
-    def _check_cell_type(self, command_code, labels, cell_num):
+    def _check_cell_type(self,
+                         command_code: CommandCode,
+                         labels: Set[CommandLabel],
+                         cell_num: int) -> NoReturn:
         for label in labels:
             valid_codes_for_label = VALID_CELL_TYPES_FOR_LABELS[label]
             if command_code not in valid_codes_for_label:
-                magics = ['%{0}'.format(c.value) for c in valid_codes_for_label]
+                magics = [f'%{c.value}' for c in valid_codes_for_label]
                 raise Exception(
-                    ("Cell #{0}: Found {1} in a {2} cell, but it's only valid " +
-                     "in {3} cells.").format(
-                        cell_num, label.value, command_code, ', '.join(magics)
-                    )
+                    f"Cell #{cell_num}: Found {label.value} in a " +
+                    f"{command_code} cell, but it's only valid in " +
+                    f"{', '.join(magics)} cells."
                 )
 
-    def generate(self, header, commands, input_name, params, parts=True):
+    def generate(self,
+                 header: str,
+                 commands: Sequence[Command],
+                 input_name: str,
+                 params: Params,
+                 parts: bool = True) -> NoReturn:
         '''
         Generate output notebook.
 
@@ -502,9 +497,9 @@ class NotebookGenerator(object):
         :param parts:       whether to honor parts or not
         '''
 
-        _verbose('Generating {0} notebook(s) for "{1}"'.format(
-            str(self.notebook_user), input_name
-        ))
+        _verbose(
+            f'Generating {self.notebook_user} notebook(s) for "{input_name}"'
+        )
 
         if params.enable_templates:
             # Process the cell as a template.
@@ -560,7 +555,7 @@ class NotebookGenerator(object):
             if is_IPython:
                 file_out = file_out.replace('.py', '.ipynb')
 
-            magic_prefix = '{0} MAGIC'.format(self.base_comment)
+            magic_prefix = f'{self.base_comment} MAGIC'
             with codecs.open(file_out, 'w', _file_encoding_out,
                              errors=_file_encoding_errors) as output:
 
@@ -573,21 +568,22 @@ class NotebookGenerator(object):
                     # use proper comment char
                     header_adj = re.sub(_comment, self.base_comment, header)
                     sep = ""
+                    sandbox = CommandCode.MARKDOWN_SANDBOX.value
 
                     # Optional heading.
                     if params.add_heading:
-                        header_adj += '\n{0} %{1}\n{0} {2}'.format(
-                            magic_prefix, CommandCode.MARKDOWN_SANDBOX.value,
-                            params.notebook_heading
+                        header_adj += (
+                            f'\n{magic_prefix} %{sandbox}\n' +
+                            f'\n{magic_prefix} {params.notebook_heading}'
                         )
                         sep = '\n' + _command_cell.format(self.base_comment)
                         is_first = False
 
                     if params.creative_commons:
                         header_adj += sep
-                        header_adj += '\n{0} %{1}\n{0} {2}'.format(
-                            magic_prefix, CommandCode.MARKDOWN_SANDBOX.value,
-                            CC_LICENSE
+                        header_adj += (
+                                f'\n{magic_prefix} %{sandbox}\n' +
+                                f'\n{magic_prefix} {CC_LICENSE}'
                         )
                         is_first = False
 
@@ -623,9 +619,8 @@ class NotebookGenerator(object):
 
                             # Databricks now supports relative %run paths.
 
-                            runCommand = '{0} MAGIC %run {1}'.format(
-                                self.base_comment, os.path.basename(answers_file)
-                            )
+                            base_answers = os.path.basename(answers_file)
+                            runCommand = f'{self.base_comment} MAGIC %run {base_answers}'
                             is_first = self._write_command(
                                 output, command_cell, [runCommand, ''], is_first
                             )
@@ -636,9 +631,9 @@ class NotebookGenerator(object):
 
                     if CommandLabel.SOURCE_ONLY in labels:
                         # Suppress this one. It's a source-only cell.
-                        _debug("Cell #{} is source-only. Suppressing it.".format(
-                            cell_num
-                        ))
+                        _debug(
+                            f"Cell #{cell_num} is source-only. Suppressing it."
+                        )
                         continue
 
                     if CommandLabel.INSTRUCTOR_NOTE in labels:
@@ -705,10 +700,10 @@ class NotebookGenerator(object):
                             remove_profile_cell = True
 
                     if len(cell_profile_labels) > 1:
+                        tag_str = ', '.join(cell_profile_labels)
                         raise Exception(
-                            'Cell {} in {} has multiple profile tags: {}'.format(
-                                cell_num, input_name, ', '.join(cell_profile_labels)
-                            )
+                            f'Cell {cell_num} in {input_name} has multiple ' +
+                            f'profile tags: {tag_str}'
                         )
                     if remove_profile_cell:
                         continue
@@ -720,7 +715,7 @@ class NotebookGenerator(object):
                         # the updated cell normally.
                         content = self._handle_video_cell(cell_num, content)
                         code = VIDEO_CELL_CODE
-                        _debug('Preprocessing video cell {}'.format(cell_num))
+                        _debug(f'Preprocessing video cell {cell_num}')
 
                     # This thing just gets uglier and uglier.
                     if ( (not (discard_labels & labels)) and
@@ -751,18 +746,19 @@ class NotebookGenerator(object):
                 # Optionally add the footer.
                 if params.add_footer:
                     footer = params.notebook_footer.replace(
-                        '\n', '\n{0} '.format(magic_prefix)
+                        '\n', f'\n{magic_prefix} '
                     )
-                    template = '\n{0} %md-sandbox\n{0} {1}'.format(
-                        magic_prefix, footer
-                    )
+                    template = (f'\n{magic_prefix} %md-sandbox' +
+                                f'\n{magic_prefix} {footer}')
                     output.write(command_cell)
                     output.write(template)
 
             if is_IPython:
                 self.generate_ipynb(file_out)
 
-    def _handle_todo_cell(self, cell_num, content):
+    def _handle_todo_cell(self,
+                          cell_num: int,
+                          content: List[str]) -> List[str]:
         # Special case processing for runnable To-Do cells: If
         # every line in the cell starts with a comment character,
         # remove the leading comment characters.
@@ -782,7 +778,7 @@ class NotebookGenerator(object):
             return False
 
         if all_pred(starts_with_comment, content):
-            _debug("Cell #{} is a runnable TODO cell.".format(cell_num))
+            _debug(f"Cell #{cell_num} is a runnable TODO cell.")
             new_content = []
             for s in content:
                 if matches_label(s):
@@ -799,7 +795,9 @@ class NotebookGenerator(object):
 
         return content
 
-    def _handle_test_cell(self, cell_num, content):
+    def _handle_test_cell(self,
+                          cell_num: int,
+                          content: List[str]) -> List[str]:
         new_content = []
         for line in content:
             m = _test.match(line)
@@ -817,7 +815,9 @@ class NotebookGenerator(object):
 
         return new_content
 
-    def _handle_video_cell(self, cell_num, content):
+    def _handle_video_cell(self,
+                           cell_num: int,
+                           content: List[str]) -> List[str]:
         new_content = []
         for line in content:
             m = _video.match(line)
@@ -831,9 +831,8 @@ class NotebookGenerator(object):
             arg_string = line[m.end():]
             if len(arg_string.strip()) == 0:
                 raise Exception(
-                    'Cell {0}: "{1}" is not of form: VIDEO <id> [<title>]'.format(
-                    cell_num, line
-                    )
+                    f'Cell {cell_num}: "{line}" is not of form: ' +
+                    'VIDEO <id> [<title>]'
                 )
 
             args = arg_string.split(None, 1)
@@ -846,13 +845,17 @@ class NotebookGenerator(object):
 
         return new_content
 
-    def _write_command(self, output, cell_split, content, is_first):
+    def _write_command(self,
+                       output: TextIO,
+                       cell_split: str,
+                       content: List[str],
+                       is_first: bool) -> bool:
         if not is_first:
             output.write(cell_split)
         output.write('\n'.join(content))
         return False
 
-    def trim_content(self, content):
+    def trim_content(self, content: List[str]) -> List[str]:
         trim_top_lines = 0
         for line in content:
             if _command.match(line) or line.strip() == '':
@@ -863,7 +866,7 @@ class NotebookGenerator(object):
         content[:trim_top_lines] = []
         return content
 
-    def generate_ipynb(self, file_out):
+    def generate_ipynb(self, file_out: TextIO) -> NoReturn:
         """Generate an ipynb file based on a py IPython Notebook format.
 
         Note:
@@ -887,9 +890,14 @@ class NotebookGenerator(object):
                          errors=_file_encoding_errors) as output:
             nbformat.write(nbformat.convert(nb, 4.0), output)
 
-    def remove_and_replace(self, content, code, inline, all_notebooks, isFirst):
+    def remove_and_replace(self,
+                           content: List[str],
+                           code: CommandCode,
+                           inline: bool,
+                           all_notebooks: bool,
+                           isFirst: bool) -> List[str]:
         # Make a copy of content as we iterate over it multiple times
-        modified_content = content[:]
+        modified_content = content[:] # type: List[str]
 
         modified_content = _transform_match(modified_content, self.remove)
         modified_content = _replace_text(modified_content, self.replace)
@@ -912,12 +920,12 @@ class NotebookGenerator(object):
                     # here.
                     content = modified_content[skip_one]
                     del modified_content[skip_one]
-                    modified_content.insert(skip_one, "{0} {1}".format(s, content))
+                    modified_content.insert(skip_one, f"{s} {content}")
                 else:
                     modified_content.insert(skip_one, s)
 
             modified_content = [
-                '{0} {1}{2}'.format(self.base_comment, line_start, line)
+                f"{self.base_comment} {line_start}{line}"
                 for line in modified_content[skip_one:-1]
             ]
 
@@ -1060,9 +1068,14 @@ class CellTemplateProcessor(object):
         # errors.
         self._renderer = pystache.Renderer(missing_tags='strict')
 
-    def process(self, contents, cell_code, cell_num, notebook_name,
-                language, params):
-        '''
+    def process(self,
+                contents: List[str],
+                cell_code: CommandCode,
+                cell_num: int,
+                notebook_name: str,
+                language: CommandCode,
+                params: Params):
+        """
         Runs a cell's content through the template processor.
 
         :param contents:      the contents, a list of lines with no trailing
@@ -1078,21 +1091,12 @@ class CellTemplateProcessor(object):
         :return: a tuple with two elements: the possibly-changed command code
                  (because certain expansions only work in %md-sandbox) and the new
                  content as a list of lines with no trailing newline
-        '''
+        """
         self._found_hints = False
         self._in_hints_block = False
         self._total_hints = 0
 
         s = '\n'.join(contents)
-        if params.target_profile == TargetProfile.NONE:
-            amazon = ''
-            azure = ''
-        elif params.target_profile == TargetProfile.AMAZON:
-            amazon = 'Amazon'
-            azure = ''
-        else:
-            amazon = ''
-            azure = 'Azure'
 
         scala = False
         python = False
@@ -1113,7 +1117,7 @@ class CellTemplateProcessor(object):
         else:
             lang_string = ""
 
-        def check_for_bad_tags(s):
+        def check_for_bad_tags(s: str) -> bool:
             bad = False
             lines = s.split('\n')
             for i, line in enumerate(lines):
@@ -1121,14 +1125,15 @@ class CellTemplateProcessor(object):
                 for r in self.BAD_MUSTACHE_REGEXPS:
                     m = r.search(line)
                     if m:
-                        _warning(('"{}", cell #{}, line {}: Possibly bad ' +
-                                  'Mustache tag "{}".').format(
-                            notebook_name, cell_num, line_num, m.group(1)
-                        ))
+                        _warning(
+                            f'"{notebook_name}", cell #{cell_num}, ' +
+                            f'line {line_num}: Possibly bad Mustache tag ' +
+                            f'"{m.group(1)}"'
+                        )
                         bad = True
             return bad
 
-        def strip_leading_and_trailing_blank_lines(text):
+        def strip_leading_and_trailing_blank_lines(text: str) -> str:
             import itertools
 
             def drop_leading(lines):
@@ -1141,7 +1146,7 @@ class CellTemplateProcessor(object):
             return '\n'.join(lines)
 
 
-        def handle_hints(text):
+        def handle_hints(text: str) -> str:
             # Emit the prelude, which contains the JavaScript and the button.
             # Then, pass the text along, for further expansion.
             self._id_prefix = str(_rng.randint(0, 10000))
@@ -1155,7 +1160,7 @@ class CellTemplateProcessor(object):
             )
             return prelude + strip_leading_and_trailing_blank_lines(text)
 
-        def handle_hint(text):
+        def handle_hint(text: str) -> str:
             # The text is the body of the hint. Expand the hints template.
             if not self._in_hints_block:
                 raise Exception('Found {{#HINT}} outside required {{#HINTS}} block.')
@@ -1167,7 +1172,7 @@ class CellTemplateProcessor(object):
             }
             return self._renderer.render(self.HINT_TEMPLATE, hint_vars)
 
-        def handle_answer(text):
+        def handle_answer(text: str) -> str:
             # The text is the body of the answer.
 
             vars = {
@@ -1189,8 +1194,6 @@ class CellTemplateProcessor(object):
             ilt = False
 
         vars = {
-            'amazon':            amazon,
-            'azure':             azure,
             'copyright_year':    params.copyright_year,
             'notebook_language': lang_string,
             'HINT':              handle_hint,
@@ -1203,6 +1206,9 @@ class CellTemplateProcessor(object):
             'ilt':               ilt,
             'self_paced':        self_paced,
         }
+
+        if params.profile:
+            vars[params.profile.name] = params.profile.value
 
         vars.update(params.extra_template_vars)
         check_for_bad_tags(s)
@@ -1244,17 +1250,18 @@ _verbose_wrapper = TextWrapper(width=COLUMNS,
 _debug_wrapper = TextWrapper(width=COLUMNS,
                              subsequent_indent=' ' * len(DEBUG_PREFIX))
 
-def _warning(msg):
-    print(_warning_wrapper.fill("{0}{1}".format(WARNING_PREFIX, msg)))
+def _warning(msg: str) -> NoReturn:
+    print(_warning_wrapper.fill(f'{WARNING_PREFIX}{msg}'))
 
-def _debug(msg):
+
+def _debug(msg: str) -> NoReturn:
     if _show_debug:
-        print(_debug_wrapper.fill("{0}{1}".format(DEBUG_PREFIX, msg)))
+        print(_debug_wrapper.fill(f"{DEBUG_PREFIX}{msg}"))
 
 
-def _verbose(msg):
+def _verbose(msg: str) -> NoReturn:
     if _be_verbose:
-        print(_verbose_wrapper.fill("{0}{1}".format(VERBOSE_PREFIX, msg)))
+        print(_verbose_wrapper.fill(f"{VERBOSE_PREFIX}{msg}"))
 
 
 # Regular Expressions
@@ -1263,26 +1270,7 @@ _comment_with_optional_blank = r'^\s*(#|//|--)\s?(.*)$'
 _line_start = r'\s*{0}+\s*'.format(_comment)  # flexible format
 _line_start_restricted = r'\s*{0}\s*'.format(_comment)  # only 1 comment allowed
 
-# COPIED FROM bdc CODE. Should be shared, but there's no simple way to do that
-# right now.
-def all_pred(func, iterable):
-    """
-    Similar to the built-in `all()` function, this function ensures that
-    `func()` returns `True` for every element of the supplied iterable.
-    It short-circuits on the first failure.
-
-    :param func:     function or lambda to call with each element
-    :param iterable: the iterable
-
-    :return: `True` if all elements pass, `False` otherwise
-    """
-    for i in iterable:
-        if not func(i):
-            return False
-
-    return True
-
-def or_magic(re_text):
+def or_magic(re_text: str) -> Pattern:
     """Create a regular expression for matching MAGIC (%cells) and code cells.
 
     Args:
@@ -1290,31 +1278,31 @@ def or_magic(re_text):
                           content we are looking to match.
 
     Returns:
-        str: A string that can be used with re that matches either lines that
-             start with DBC's markdown or code cell formats.
+        A compiled regex that matches either lines that start with DBC's
+        markdown or code cell formats.
     """
     # require a comment char before these entries
     re_text = make_re_text(re_text)
     return re.compile(r'({0}|{1})'.format(make_magic_text(re_text), re_text))
 
 
-def make_re_text(regexText):
+def make_re_text(regex_text: str) -> str:
     """
     Create regular expression text that matches a comment and the
     expression w/ spaces.
     """
-    return r'{0}{1}'.format(_line_start_restricted, regexText)
+    return f'{_line_start_restricted}{regex_text}'
 
 
-def make_re(regexText):
-    return re.compile(make_re_text(regexText))
+def make_re(regex_text: str) -> Pattern:
+    return re.compile(make_re_text(regex_text))
 
 
-def make_magic_text(regexText):
-    return r'{0}MAGIC{1}'.format(_line_start_restricted, regexText)
+def make_magic_text(regex_text):
+    return f'{_line_start_restricted}MAGIC{regex_text}'
 
 
-def make_magic(regex_token, must_be_word=False):
+def make_magic(regex_token: str, must_be_word: bool = False) -> Pattern:
     '''
     Maps a "magic" regex into one that matches properly and preserves what
     follows the token.
@@ -1424,27 +1412,29 @@ _code_cell = '\n# <codecell>\n'
 _command_cell = '\n{0} COMMAND ----------\n'  # Replace {0} with comment prefix
 
 
-def _regex_list_match(line, regexList):
+def _regex_list_match(line: str,
+                      regex_list: Sequence[Pattern]) -> Optional[Match]:
     """
     Whether or not the line is matched by one or more regular expressions in
     the list.
 
     Args:
         line (str): The line to check for matches.
-        regexList (list[_sre_SRE_Pattern]): A list of compiled regular
+        regex_list (list[_sre_SRE_Pattern]): A list of compiled regular
             expressions to match against.
 
     Returns:
         the match, or None
     """
-    for regex in regexList:
+    for regex in regex_list:
         m = regex.match(line)
         if m:
             return m
     return None
 
 
-def _transform_match(lines, regexList):
+def _transform_match(lines: List[str],
+                     regex_list: Sequence[Pattern]) -> List[str]:
     """
     Transform or remove any line in lines that matches one of the regular
     expressions in the list.
@@ -1452,7 +1442,7 @@ def _transform_match(lines, regexList):
     Args:
         lines (list[str]): A list of strings to check against the
             regular expression list.
-        regexList (list[_sre_SRE_Pattern]): A list of compiled regular
+        regex_list (list[_sre_SRE_Pattern]): A list of compiled regular
             expressions to match against.
 
     Returns:
@@ -1461,7 +1451,7 @@ def _transform_match(lines, regexList):
     """
     res = []
     for line in lines:
-        m = _regex_list_match(line, regexList)
+        m = _regex_list_match(line, regex_list)
         if m:
             remainder = m.group(2)
             if remainder:
@@ -1473,7 +1463,8 @@ def _transform_match(lines, regexList):
     return res
 
 
-def _replace_line(line, regex_replace_list):
+def _replace_line(line: str,
+                  regex_replace_list: Sequence[Tuple[Pattern, str]]) -> str:
     """Replace any regular expression search matches with the provided string.
 
     Args:
@@ -1491,7 +1482,9 @@ def _replace_line(line, regex_replace_list):
     return line
 
 
-def _replace_text(lines, regex_replace_list):
+def _replace_text(
+        lines: List[str],
+        regex_replace_list: Sequence[Tuple[Pattern, str]]) -> List[str]:
     """
     Replace regular expression search matches with the provided string for
     all lines.
@@ -1530,13 +1523,10 @@ class ParseState(object):
     def __str__(self):
         return (
             "ParseState" +
-            "<command_content={0}, " +
-            "command_code={1}, " +
-            "command_labels={2},"
-            "starting_line_number={3}>"
-        ).format(
-            self.command_content, self.command_code, self.command_labels,
-            self.starting_line_number
+            f"<command_content={self.command_content}, " +
+            f"command_code={self.command_code}, " +
+            f"command_labels={self.command_labels},"
+            f"starting_line_number={self.starting_line_number}>"
         )
 
     def __repr__(self):
@@ -1611,7 +1601,9 @@ class Parser:
         self.part = 0
         self.header = None
 
-    def generate_commands(self, file_name, params):
+    def generate_commands(self,
+                          file_name: str,
+                          params: Params) -> Tuple[str, Sequence[Command]]:
         """Generates file content for DBC and ipynb use.
 
         Note:
@@ -1626,17 +1618,12 @@ class Parser:
             tuple[str, list[Command]]: A tuple containing the header and a list
             of commands.
         """
-
         current = ParseState()
 
         def extend_content(cell_state):
-            _debug('Notebook "{0}": Cell at line {1} matches labels {2}'.
-                format(
-                    file_name,
-                    cell_state.starting_line_number,
-                    [l.value for l in cell_state.command_labels]
-                )
-            )
+            _debug(f'Notebook "{file_name}": Cell at line ' +
+                   f'{cell_state.starting_line_number} matches ' +
+                   f'labels {[l.value for l in cell_state.command_labels]}.')
             if cell_state.command_code is None:
                 cell_state.command_code = self.base_notebook_code
             else:  # Remove %sql, %fs, etc and MAGIC
@@ -1663,7 +1650,7 @@ class Parser:
         file_extension = file_extension.lower()
 
         assert file_extension in Parser.extension_to_code, \
-            'Bad file extension for {0}'.format(file_name)
+            f'Bad file extension for {file_name}'
         self.base_notebook_code = Parser.extension_to_code[file_extension]
         base_comment = _code_to_comment[self.base_notebook_code]
 
@@ -1705,8 +1692,8 @@ class Parser:
                 if pat.match(line):
                     if label in DEPRECATED_LABELS:
                         print(
-                            '*** "{0}", line {1}: WARNING: "{2}" is deprecated.'
-                                .format(file_name, line_number, label.value)
+                            f'*** "{file_name}", line {line_number}: ' +
+                            f'WARNING: "{label.value}" is deprecated.'
                         )
                     current.command_labels.add(label)
 
@@ -1716,9 +1703,8 @@ class Parser:
                 m = pat.match(line2)
                 if m:
                     if current.command_code is not None:
-                        msg = '"{0}", line {1}: multiple magic strings.'.format(
-                            file_name, line_number
-                        )
+                        msg = (f'"{file_name}", line {line_number}: ' +
+                               'multiple magic strings')
                         raise Exception(msg)
                     current.command_code = code
 
@@ -1739,11 +1725,12 @@ class Parser:
 
 
 class UsageError(Exception):
-    def __init__(self, message):
+    def __init__(self, message: str):
         Exception.__init__(self, message)
+        self.message = message
 
 
-def process_notebooks(params):
+def process_notebooks(params: Params) -> NoReturn:
     """
     Main entry point for notebook processing. This function can be used to
     process notebook from within another Python program.
@@ -1779,7 +1766,7 @@ def process_notebooks(params):
         files = [params.path]
 
     if not files:
-        raise UsageError("No acceptable files found for {0}".format(params.path))
+        raise UsageError(f"No acceptable files found for {params.path}")
 
     notebook_kinds = []
     if params.databricks:
@@ -1807,9 +1794,12 @@ def process_notebooks(params):
 
     if params.ipython and CommandCode.PYTHON not in notebook_languages:
         langs = []
-        for x in notebook_languages: langs.append(Parser.code_to_extension[x])
-        raise UsageError('IPython target can only be used when generating' + \
-                         'Python. Languages found: ' + ", ".join(langs))
+        for x in notebook_languages:
+            langs.append(Parser.code_to_extension[x])
+        lang_str = ', '.join(langs)
+        raise UsageError(
+            'IPython target can only be used when generating Python. ' +
+            f'Languages found: {lang_str}')
 
     notebooks = []
     for kind in notebook_kinds:
@@ -1888,8 +1878,8 @@ def main():
                             choices=('ilt', 'self-paced'),
                             default='self-paced')
     arg_parser.add_argument('-d', '--dir',
-                            help="Base output directory. Default: {0}".format(
-                                DEFAULT_OUTPUT_DIR),
+                            help=("Base output directory. Default: " +
+                                  f"{DEFAULT_OUTPUT_DIR}"),
                             action='store',
                             dest='output_dir',
                             metavar="OUTPUT_DIR")
@@ -1940,11 +1930,10 @@ def main():
                                  'parser, and internal variables (plus ' +
                                  'passed via --variables) are available).',
                             action='store_true')
-    arg_parser.add_argument('-tp', '--target-profile',
-                            help="Target output profile, if any. Valid " +
+    arg_parser.add_argument('--profile',
+                            help="Build profile, if any. Valid " +
                                  "values: amazon, azure",
-                            metavar="<profile>",
-                            choices=('amazon', 'azure'),
+                            metavar="NAME[=VALUE]",
                             default=None)
     arg_parser.add_argument('-v', '--verbose',
                             help="Enable verbose messages.",
@@ -1963,7 +1952,7 @@ def main():
                             default=None)
 
 
-    args = arg_parser.parse_args()
+    args: argparse.Namespace = arg_parser.parse_args()
 
     if args.version:
         print(VERSION)
@@ -1986,16 +1975,16 @@ def main():
                 elif (length == 1):
                     k = kv[0].strip()
                     if len(k) == 0:
-                        arg_parser.error('Badly formatted variable: "{}"'.format(kv))
+                        arg_parser.error(f'Badly formatted variable: "{kv}"')
                     elif k[0] == '!':
                         key, value = k[1:], False
                     else:
                         key, value = k, True
                 else:
-                    arg_parser.error('Badly formatted variable: "{}"'.format(kv))
+                    arg_parser.error(f'Badly formatted variable: "{kv}"')
 
                 if not valid_key.search(key):
-                    arg_parser.error('Invalid variable key: {}'.format(key))
+                    arg_parser.error(f'Invalid variable key: {key}')
 
                 extra_template_vars[key] = value
 
@@ -2011,11 +2000,18 @@ def main():
     if not args.filename:
         arg_parser.error('Missing notebook path.')
 
-    if args.target_profile:
-        target_profiles = { t.value : t for t in TargetProfile if t != TargetProfile.NONE }
-        args.target_profile = target_profiles[args.target_profile]
-    else:
-        args.target_profile = TargetProfile.NONE
+    profile = None
+    if args.profile:
+        # The cast gets past type inference problems. args.profile should
+        # be a string, but some type checkers get confused.
+        prof_str = str(args.profile)
+        pieces = prof_str.split('=')
+        if len(pieces) == 1:
+            profile = Profile(name=prof_str, value=prof_str)
+        elif len(pieces) == 2:
+            profile = Profile(name=pieces[0], value=pieces[1])
+        else:
+            arg_parser.error(f'Bad value "{prof_str}" for --profile')
 
     course_types = { c.value : c for c in CourseType if c != CourseType.NONE }
     course_type = course_types[args.course_type]
@@ -2042,7 +2038,7 @@ def main():
         enable_verbosity=args.verbose,
         enable_debug=args.debug,
         copyright_year=args.copyright,
-        target_profile=args.target_profile,
+        profile=profile,
         course_type=course_type,
         enable_templates=args.templates,
         extra_template_vars=extra_template_vars

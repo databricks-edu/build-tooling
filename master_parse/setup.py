@@ -30,6 +30,7 @@ setup(
     description='Master parse tool',
     install_requires=[
         'pystache == 0.5.4',
+        'nbformat==4.4.0',
     ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

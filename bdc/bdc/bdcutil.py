@@ -21,6 +21,7 @@ from textwrap import TextWrapper
 import mimetypes
 from string import Template
 from tempfile import TemporaryDirectory
+from db_edu_util import all_pred
 
 from typing import (Sequence, Any, Set, Optional, Dict, Tuple,
                     Tuple, NoReturn, Generator, Union, Pattern, Iterable,
@@ -261,24 +262,6 @@ def parse_version_string(version: str) -> Tuple[int, int]:
         return tuple([int(i) for i in nums])[0:2]
     except ValueError as e:
         raise ValueError(f'"{version}" is a malformed version string: {e}')
-
-
-def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
-    """
-    Similar to the built-in `all()` function, this function ensures that
-    `func()` returns `True` for every element of the supplied iterable.
-    It short-circuits on the first failure.
-
-    :param func:     function or lambda to call with each element
-    :param iterable: the iterable
-
-    :return: `True` if all elements pass, `False` otherwise
-    """
-    for i in iterable:
-        if not func(i):
-            return False
-
-    return True
 
 
 def flatten(it: Iterable[Any]) -> Generator[Any, Any, None]:

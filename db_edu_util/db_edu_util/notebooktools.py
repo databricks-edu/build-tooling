@@ -13,6 +13,7 @@ from enum import Enum
 from typing import Callable, Sequence, Pattern, Generator
 import json
 from abc import abstractmethod
+from typing import Optional
 
 __all__ = ('NotebookError', 'NotebookParseError', 'NotebookLanguage',
            'CellType', 'NotebookCell', 'Notebook', 'parse_source_notebook')
@@ -283,7 +284,7 @@ class Copyable(object):
         return self.__class__(**args)
 
     def _public_fields(self):
-        return {f for f in self.__dict__.keys() if f[0] != '_'} | self._props()
+        return {f for f in list(self.__dict__.keys()) if f[0] != '_'} | self._props()
 
     def _props(self):
         cls = self.__class__
@@ -523,10 +524,9 @@ def _notebook_header_re(comment_string):
 # Public Functions
 # -----------------------------------------------------------------------------
 
-def parse_source_notebook(path,     # type: str
-                          encoding, # type: str
-                          debug     # type: Callable
-                         ):
+def parse_source_notebook(path: str,
+                          encoding: str,
+                          debug: Optional[Callable] = None):
     # type: (...) -> Notebook
     """
     Parse a Databricks source notebook into a Notebook object.
@@ -608,7 +608,7 @@ def parse_source_notebook(path,     # type: str
         # the leading MAGIC indicator.
         m = magic.search(line)
         if m:
-            line = u'{}{}'.format(m.group(1), m.group(2))
+            line = '{}{}'.format(m.group(1), m.group(2))
 
         # If we didn't see the new cell marker, then keep accumulating the
         # current cell and move on to the next line.

@@ -19,8 +19,7 @@ from backports.tempfile import TemporaryDirectory
 import shutil
 from zipfile import ZipFile
 
-from future import standard_library
-standard_library.install_aliases()
+from typing import Union, Sequence, Optional, NoReturn
 
 from db_edu_util.notebooktools import *
 
@@ -30,7 +29,7 @@ __all__ = ['Config', 'GendbcError', 'gendbc']
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = "2.0.3"
+VERSION = "2.1.0"
 
 PROG = os.path.basename(sys.argv[0])
 
@@ -340,15 +339,13 @@ def _write_dbc(notebooks, # type: Sequence[Notebook]
 # Public Functions
 # -----------------------------------------------------------------------------
 
-def gendbc(source_dir,  # type: str
-           encoding,    # type: str
-           dbc_path,    # type: str
-           dbc_folder,  # type: str
-           flatten,     # type: bool
-           verbose,     # type: bool
-           debug=False  # type: bool
-          ):
-    # type: (...) -> None
+def gendbc(source_dir: str,
+           encoding: str,
+           dbc_path: str,
+           dbc_folder: str,
+           flatten: bool,
+           verbose: bool,
+           debug: bool = False) -> NoReturn:
     """
     Generate a DBC from all the notebooks under a specific source directory.
 

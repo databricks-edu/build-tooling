@@ -14,7 +14,7 @@ line arguments, run with no arguments. If used as a library, the main
 entry point is process_notebooks().
 """
 
-from __future__ import print_function
+
 
 import glob
 import os
@@ -24,12 +24,13 @@ import codecs
 from enum import Enum
 from collections import namedtuple
 from string import Template as StringTemplate
-from InlineToken import InlineToken, expand_inline_tokens
+from .InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
 from random import SystemRandom
+from dataclasses import dataclass
 
-VERSION = "1.19.0"
+VERSION = "1.20.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -59,7 +60,7 @@ LABEL_TO_TARGET_PROFILE = {
 }
 
 TARGET_PROFILE_TO_LABEL = {
-    v: k for k, v in LABEL_TO_TARGET_PROFILE.items()
+    v: k for k, v in list(LABEL_TO_TARGET_PROFILE.items())
 }
 
 # NOTE: If you add a new label, be sure to look at:
@@ -262,7 +263,19 @@ This work is licensed under a
 # Classes
 # -----------------------------------------------------------------------------
 
-Profile = namedtuple('Profile', ('name', 'value'))
+@dataclass(frozen=True)
+class Profile:
+    """
+    Information about a build profile.
+
+    Fields:
+
+    name:  the name of the build profile
+    value: the string value to substitute if the profile is used as a template
+           variable
+    """
+    name: str
+    value: str
 
 class Params(object):
     '''
@@ -904,7 +917,7 @@ class NotebookGenerator(object):
                     modified_content.insert(skip_one, s)
 
             modified_content = [
-                u'{0} {1}{2}'.format(self.base_comment, line_start, line)
+                '{0} {1}{2}'.format(self.base_comment, line_start, line)
                 for line in modified_content[skip_one:-1]
             ]
 
@@ -1571,7 +1584,7 @@ class Parser:
                          '.scala': CommandCode.SCALA,
                          '.py': CommandCode.PYTHON}
 
-    code_to_extension = {v: k for k, v in extension_to_code.items()}
+    code_to_extension = {v: k for k, v in list(extension_to_code.items())}
 
     master_code = {CommandCode.SQL,
                    CommandCode.R,

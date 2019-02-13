@@ -269,7 +269,7 @@ def warn(msg):
     :param msg: the message
     :return: Nothing
     """
-    print(warning_wrapper.fill(WARNING_PREFIX + msg))
+    print((warning_wrapper.fill(WARNING_PREFIX + msg)))
 
 
 def debug(msg):
@@ -281,7 +281,7 @@ def debug(msg):
     :return: Nothing
     """
     if debugging:
-        print(debug_wrapper.fill(DEBUG_PREFIX + msg))
+        print((debug_wrapper.fill(DEBUG_PREFIX + msg)))
 
 
 @contextmanager
@@ -374,7 +374,7 @@ def cmd(shell_command, quiet=False, dryrun=False):
     :raises CourseError: If the command exits with a non-zero status
     """
     if dryrun or (not quiet):
-        print("+ {}".format(shell_command))
+        print(("+ {}".format(shell_command)))
 
     if not dryrun:
         rc = os.system(shell_command)
@@ -805,7 +805,7 @@ def import_dbcs(cfg, build_dir):
                     db_profile=db_profile)
 
 
-    print('Importing all DBCs under "{}"'.format(build_dir))
+    print(('Importing all DBCs under "{}"'.format(build_dir)))
     dbcs = []
     with working_directory(build_dir):
         for dirpath, _, filenames in os.walk('.'):
@@ -822,7 +822,7 @@ def import_dbcs(cfg, build_dir):
             databricks(('workspace', 'mkdirs', remote_target),
                        db_profile=db_profile)
             for dbc in dbcs:
-                print('\nImporting {}\n'.format(os.path.join(build_dir, dbc)))
+                print(('\nImporting {}\n'.format(os.path.join(build_dir, dbc))))
                 import_dbc(dbc)
 
 
@@ -841,7 +841,7 @@ def build_local(cfg):
     if not os.path.exists(build_file):
         die('Build file "{}" does not exist.'.format(build_file))
 
-    print("\nBuilding {}".format(course_name))
+    print(("\nBuilding {}".format(course_name)))
     bdc.bdc_build_course(build_file,
                          dest_dir='',
                          overwrite=True,
@@ -953,7 +953,7 @@ def git_status(cfg):
     :return: Nothing
     """
     course_repo = cfg['COURSE_REPO']
-    print('+ cd {}'.format(course_repo))
+    print(('+ cd {}'.format(course_repo)))
     with working_directory(course_repo):
         cmd("git status")
 
@@ -1151,19 +1151,19 @@ def print_tool_versions():
     s = db_cli.databricks(['--version'], capture_stdout=True).strip()
     db_version = re.sub(r'^.*(\d+\.\d+\.\d+).*$', r'\1', s)
 
-    print("course:                {}".format(VERSION))
-    print("bdc:                   {}".format(bdc.VERSION))
-    print("gendbc:                {}".format(gendbc.VERSION))
-    print("master_parse:          {}".format(master_parse.VERSION))
-    print("db_edu_util (library): {}".format(db_edu_util.VERSION))
-    print("databricks_cli:        {}".format(db_version))
+    print(("course:                {}".format(VERSION)))
+    print(("bdc:                   {}".format(bdc.VERSION)))
+    print(("gendbc:                {}".format(gendbc.VERSION)))
+    print(("master_parse:          {}".format(master_parse.VERSION)))
+    print(("db_edu_util (library): {}".format(db_edu_util.VERSION)))
+    print(("databricks_cli:        {}".format(db_version)))
 
 
 def which(cfg):
     # type: (dict) -> None
     course_name = cfg.get('COURSE_NAME')
     if course_name:
-        print(cfg['COURSE_NAME'])
+        print((cfg['COURSE_NAME']))
     else:
         print('No course has been set.')
 
@@ -1344,11 +1344,11 @@ def main():
 
             elif cmd == "showconfig":
                 hdr = "Current configuration"
-                print('-' * len(hdr))
+                print(('-' * len(hdr)))
                 print(hdr)
-                print('-' * len(hdr))
+                print(('-' * len(hdr)))
                 for key in sorted(cfg.keys()):
-                    print('{}="{}"'.format(key, cfg[key]))
+                    print(('{}="{}"'.format(key, cfg[key])))
 
             else:
                 die('"{}" is not a valid "course" subcommand.'.format(cmd))

@@ -5,7 +5,7 @@ Run this module as a main program, or run it through `python -m doctest`,
 to exercise embedded tests.
 """
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 import re
 import os
 from os import path
@@ -19,16 +19,12 @@ from parsimonious import grammar, expressions
 from parsimonious.exceptions import ParseError, VisitationError
 from textwrap import TextWrapper
 import mimetypes
-
-from future import standard_library
-standard_library.install_aliases()
-
 from string import Template
+from tempfile import TemporaryDirectory
 
-# We're using backports.tempfile, instead of tempfile, so we can use
-# TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
-# was added in Python 3.2.
-from backports.tempfile import TemporaryDirectory
+from typing import (Sequence, Any, Set, Optional, Dict, Tuple,
+                    Tuple, NoReturn, Generator, Union, Pattern, Iterable,
+                    Callable)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -95,13 +91,14 @@ DEBUG_PREFIX = "(DEBUG) "
 # Custom TextWrapper class
 # ---------------------------------------------------------------------------
 
+
 class BDCTextWrapper(TextWrapper):
-    def __init__(self, width=COLUMNS, subsequent_indent=''):
+    def __init__(self, width: int = COLUMNS, subsequent_indent: str = ''):
         TextWrapper.__init__(self,
                              width=width,
                              subsequent_indent=subsequent_indent)
 
-    def fill(self, msg):
+    def fill(self, msg: str) -> str:
         wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
         return '\n'.join(wrapped)
 
@@ -122,7 +119,7 @@ _error_wrapper = BDCTextWrapper()
 
 _info_wrapper = BDCTextWrapper(subsequent_indent=' ' * 4)
 
-_debug_wrapper = BDCTextWrapper(subsequent_indent = ' ' * len(DEBUG_PREFIX))
+_debug_wrapper = BDCTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
 
 _generic_wrapper = BDCTextWrapper()
 
@@ -130,7 +127,8 @@ _generic_wrapper = BDCTextWrapper()
 # Public functions
 # ---------------------------------------------------------------------------
 
-def set_verbosity(verbose, verbose_prefix):
+
+def set_verbosity(verbose: bool, verbose_prefix: str) -> NoReturn:
     """
     Set or clear verbose messages.
 
@@ -150,7 +148,7 @@ def set_verbosity(verbose, verbose_prefix):
         )
 
 
-def verbosity_is_enabled():
+def verbosity_is_enabled() -> bool:
     """
     Determine whether verbosity is on or off.
 
@@ -159,73 +157,72 @@ def verbosity_is_enabled():
     return _verbose
 
 
-def _do_fill(msg, wrapper):
-    s = ''
+def _do_fill(msg: str, wrapper: BDCTextWrapper) -> str:
     wrapped = [wrapper.fill(line) for line in msg.split('\n')]
     return '\n'.join(wrapped)
 
 
-def verbose(msg):
+def verbose(msg: str) -> NoReturn:
     """
     Conditionally emit a verbose message. See also set_verbosity().
 
     :param msg: the message
     """
     if _verbose:
-        print(_do_fill("{0}{1}".format(_verbose_prefix, msg), _verbose_wrapper))
+        print((_do_fill(f"{_verbose_prefix}{msg}", _verbose_wrapper)))
 
 
-def debug(msg, debug_enabled=True):
-    '''
+def debug(msg: str, debug_enabled: bool = True) -> NoReturn:
+    """
     Conditionally emit a debug message.
 
     :param msg:            the message
     :param debug_enabled:  whether debug messages are enabled or not
-    '''
+    """
     if debug_enabled:
-        print(_do_fill("{0}{1}".format(DEBUG_PREFIX, msg), _debug_wrapper))
+        print((_do_fill(f"{DEBUG_PREFIX}{msg}", _debug_wrapper)))
 
 
-def warning(msg):
+def warning(msg: str) -> NoReturn:
     """
     Emit a warning message.
 
     :param msg: The message
     """
-    print(_do_fill("{0}{1}".format(WARNING_PREFIX, msg), _warning_wrapper))
+    print((_do_fill(f"{WARNING_PREFIX}{msg}", _warning_wrapper)))
 
 
-def info(msg):
+def info(msg: str) -> NoReturn:
     """
     Emit an informational message.
 
     :param msg: The message
     """
-    print(_do_fill(msg, _info_wrapper))
+    print((_do_fill(msg, _info_wrapper)))
 
 
-def emit_error(msg):
+def emit_error(msg: str) -> NoReturn:
     """
     Emit an error message.
 
     :param msg: The message
     """
     print('***')
-    print(_do_fill(msg, _error_wrapper))
+    print((_do_fill(msg, _error_wrapper)))
     print('***')
 
 
-def wrap2stdout(msg):
+def wrap2stdout(msg: str) -> NoReturn:
     """
     Emit a message to standard output, wrapped at screen boundaries (as
     determined by the COLUMNS environment variable), without any prefix.
 
     :param msg: The message
     """
-    print(_do_fill(msg, _generic_wrapper))
+    print((_do_fill(msg, _generic_wrapper)))
 
 
-def parse_version_string(version):
+def parse_version_string(version: str) -> Tuple[int, int]:
     """
     Parse a semantic version string (e.g., 1.10.30) or a partial
     <major>.<minor> semver string (e.g., 1.10) into a tuple of
@@ -259,16 +256,14 @@ def parse_version_string(version):
     """
     nums = version.split('.')
     if len(nums) not in (2, 3):
-        raise ValueError('"{0}" is a malformed version string'.format(version))
+        raise ValueError(f'"{version}" is a malformed version string')
     try:
         return tuple([int(i) for i in nums])[0:2]
     except ValueError as e:
-        raise ValueError('"{0}" is a malformed version string: {1}'.format(
-            version, e.message
-        ))
+        raise ValueError(f'"{version}" is a malformed version string: {e}')
 
 
-def all_pred(func, iterable):
+def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
     """
     Similar to the built-in `all()` function, this function ensures that
     `func()` returns `True` for every element of the supplied iterable.
@@ -286,14 +281,14 @@ def all_pred(func, iterable):
     return True
 
 
-def flatten(it):
+def flatten(it: Iterable[Any]) -> Generator[Any, Any, None]:
     """
     Recursively flatten an iterable. Yields a generator for a new iterable.
 
     NOTE: This function explicitly does NOT treat strings as iterables, even
     though they are.
 
-    :param the iterable to flatten
+    :param it: the iterable to flatten
 
     :return: a generator for the recursively flattened result
 
@@ -327,7 +322,9 @@ def flatten(it):
                 yield i
 
 
-def merge_dicts(dict1, dict2, *dicts):
+def merge_dicts(dict1:  Dict[str, Any],
+                dict2:  Dict[str, Any],
+                *dicts: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge multiple dictionaries, producing a merged result without modifying
     the arguments.
@@ -360,45 +357,9 @@ def merge_dicts(dict1, dict2, *dicts):
     return res
 
 
-def bool_field(d, key, default=False):
+def bool_value(s: Union[str, int]) -> bool:
     """
-    Get a boolean value from a dictionary, parsing it if it's a string.
-
-    :param d:       the dictionary
-    :param key:     the key
-    :param default: the default, if not found
-
-    :return: the value
-
-    :raise ValueError on error
-
-    >>> d = {'a': 0, 'b': 10, 'c': 'false', 'd': 'TRUE', 'e': 'No',\
-             'f': 'yeS', 'g': True, 'h': 'hello'}
-    >>> bool_field(d, 'a')
-    False
-    >>> bool_field(d, 'b')
-    True
-    >>> bool_field(d, 'c')
-    False
-    >>> bool_field(d, 'd')
-    True
-    >>> bool_field(d, 'e')
-    False
-    >>> bool_field(d, 'f')
-    True
-    >>> bool_field(d, 'g')
-    True
-    >>> bool_field(d, 'h')
-    Traceback (most recent call last):
-    ...
-    ValueError: Bad boolean value: "hello"
-    """
-    return bool_value(d.get(key, default))
-
-
-def bool_value(s):
-    """
-    Convert a string to a boolean value. Raises ValueError if the string
+    Convert a string or int to a boolean value. Raises ValueError if the string
     isn't boolean.
 
     :param s: the string
@@ -441,21 +402,60 @@ def bool_value(s):
         raise ValueError('Bad boolean value: "{0}"'.format(s))
 
 
+def bool_field(d: Dict[str, Any],
+               key: str,
+               default: bool = False) -> bool:
+    """
+    Get a boolean value from a dictionary, parsing it if it's a string.
+
+    :param d:       the dictionary
+    :param key:     the key
+    :param default: the default, if not found
+
+    :return: the value
+
+    :raise ValueError on error
+
+    >>> d = {'a': 0, 'b': 10, 'c': 'false', 'd': 'TRUE', 'e': 'No',\
+             'f': 'yeS', 'g': True, 'h': 'hello'}
+    >>> bool_field(d, 'a')
+    False
+    >>> bool_field(d, 'b')
+    True
+    >>> bool_field(d, 'c')
+    False
+    >>> bool_field(d, 'd')
+    True
+    >>> bool_field(d, 'e')
+    False
+    >>> bool_field(d, 'f')
+    True
+    >>> bool_field(d, 'g')
+    True
+    >>> bool_field(d, 'h')
+    Traceback (most recent call last):
+    ...
+    ValueError: Bad boolean value: "hello"
+    """
+    return bool_value(d.get(key, default))
+
+
+# Regarding the typing: See https://stackoverflow.com/a/49736916/53495
 @contextlib.contextmanager
-def working_directory(path):
+def working_directory(dirpath: str) -> Generator[None, None, None]:
     """
     Simple context manager that runs the code under "with" in a specified
     directory, returning to the original directory when the "with" exits.
     """
     prev = os.getcwd()
     try:
-        os.chdir(path)
+        os.chdir(dirpath)
         yield
     finally:
         os.chdir(prev)
 
 
-def find_in_path(command):
+def find_in_path(command: str) -> str:
     """
     Find a command in the path, or bail.
 
@@ -475,10 +475,10 @@ def find_in_path(command):
         if os.path.isfile(p) and os.access(p, os.X_OK):
             return p
     else:
-        raise Exception("""Can't find "{0}" in PATH.""".format(command))
+        raise Exception(f"""Can't find "{command}" in PATH.""")
 
 
-def ensure_parent_dir_exists(path):
+def ensure_parent_dir_exists(path: str) -> NoReturn:
     """
     Ensures that the parent directory of a path exists.
 
@@ -487,7 +487,10 @@ def ensure_parent_dir_exists(path):
     mkdirp(os.path.dirname(path))
 
 
-def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+def move(src: str,
+         dest: str,
+         ensure_final_newline: bool = False,
+         encoding: str = 'UTF-8') -> NoReturn:
     """
     Copy a source file to a destination file, honoring the --verbose
     command line option and creating any intermediate destination
@@ -508,7 +511,7 @@ def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     os.unlink(src)
 
 
-def joinpath(*pieces):
+def joinpath(*pieces: str) -> str:
     """
     Similar to os.path.join(), this function joins the path components, but
     also normalizes the path.
@@ -523,7 +526,7 @@ def joinpath(*pieces):
     return os.path.normpath(os.path.join(*pieces))
 
 
-def rm_rf(path):
+def rm_rf(path: str) -> NoReturn:
     """
     Equivalent of "rm -rf dir", this function is similar to
     shutil.rmtree(dir), except that it doesn't abort if the directory does
@@ -544,9 +547,10 @@ def rm_rf(path):
             )
 
 
-def mkdirp(dir):
+def mkdirp(dir: str) -> NoReturn:
     """
-    Equivalent of "mkdir -p".
+    Equivalent of "mkdir -p". This function is just a front-end to
+    `os.makedirs()`, but it doesn't abort if the directory already exists.
 
     :param dir: The directory to be created, along with any intervening
                 parent directories that don't exist.
@@ -555,7 +559,10 @@ def mkdirp(dir):
         os.makedirs(dir)
 
 
-def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+def copy(src: str,
+         dest: str,
+         ensure_final_newline: bool = False,
+         encoding: str = 'UTF-8') -> NoReturn:
     """
     Copy a source file to a destination file, honoring the --verbose
     command line option and creating any intermediate destination
@@ -575,7 +582,7 @@ def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     )
 
 
-def has_extension(path):
+def has_extension(path: str) -> bool:
     '''
     Simple convenience function that uses os.path.splitext() to determine
     whether a file has an extension or not.
@@ -588,7 +595,7 @@ def has_extension(path):
     return (ext is not None) and (len(ext) > 0)
 
 
-def is_text_file(path):
+def is_text_file(path: str) -> bool:
     '''
     Determine whether a file is a text file or not. This determination is
     based solely on its MIME type, which is based off the file extension.
@@ -609,7 +616,7 @@ def is_text_file(path):
     return is_text
 
 
-def is_pdf(path):
+def is_pdf(path: str) -> bool:
     '''
     Determine whether a file is a PDF file or not. This determination is made
     solely on the MIME type, which is based off the file extension.
@@ -622,7 +629,7 @@ def is_pdf(path):
     return mime_type == 'application/pdf'
 
 
-def is_html(path):
+def is_html(path: str) -> bool:
     '''
     Determine whether a file is an HTML file or not.
 
@@ -635,7 +642,7 @@ def is_html(path):
     return mime_type in ('application/xhtml+xml', 'text/html')
 
 
-def is_markdown(path):
+def is_markdown(path: str) -> bool:
     '''
     Determine whether a file is a Markdown file or not.
 
@@ -647,7 +654,10 @@ def is_markdown(path):
     return extension.lower() in ['.md', '.markdown']
 
 
-def markdown_to_html(markdown, html_out, html_template=None, stylesheet=None):
+def markdown_to_html(markdown: str,
+                     html_out: str,
+                     html_template: Optional[str] = None,
+                     stylesheet: Optional[str] = None) -> NoReturn:
     """
     Convert a Markdown file to HTML, writing it to the specified HTML file.
     If the stylesheet is specified, it is inserted.
@@ -682,7 +692,7 @@ def markdown_to_html(markdown, html_out, html_template=None, stylesheet=None):
             )
 
 
-def html_to_pdf(html, pdf_out):
+def html_to_pdf(html: str, pdf_out: str) -> NoReturn:
     '''
     Convert an HTML document to PDF, writing it to the specified PDF file.
 
@@ -694,7 +704,10 @@ def html_to_pdf(html, pdf_out):
     dom.write_pdf(pdf_out)
 
 
-def markdown_to_pdf(markdown, pdf_out, html_template=None, stylesheet=None):
+def markdown_to_pdf(markdown: str,
+                    pdf_out: str,
+                    html_template: Optional[str] = None,
+                    stylesheet: Optional[str] = None) -> NoReturn:
     """
     Convert a Markdown file to PDF, writing it to the specified PDF file.
     If the stylesheet is specified, it is inserted.
@@ -712,7 +725,9 @@ def markdown_to_pdf(markdown, pdf_out, html_template=None, stylesheet=None):
         html_to_pdf(html, pdf_out)
 
 
-def dict_get_and_del(d, key, default=None):
+def dict_get_and_del(d: Dict[str, Any],
+                     key: str,
+                     default: Optional[Any] = None) -> Any:
     """
     Get the value of a key from a dictionary, and remove the key.
 
@@ -740,7 +755,7 @@ def dict_get_and_del(d, key, default=None):
     return default
 
 
-def variable_ref_patterns(variable_name):
+def variable_ref_patterns(variable_name: str) -> Sequence[Pattern]:
     """
     Convert a variable name into a series of regular expressions that will
     match a reference to the variable. (Regular expression alternation syntax
@@ -776,7 +791,8 @@ def variable_ref_patterns(variable_name):
     )
 
 
-def matches_variable_ref(patterns, string):
+def matches_variable_ref(patterns: Sequence[Pattern],
+                         string: str) -> Optional[Tuple[str, str, str]]:
     """
     Matches the string against the patterns, returning a 3-tuple on match and
     None on no match.
@@ -813,13 +829,12 @@ def matches_variable_ref(patterns, string):
 # Classes
 # ---------------------------------------------------------------------------
 
-class DefaultStrMixin(object):
+class DefaultStrMixin(ABC):
     """
     Provides default implementations of __str__() and __repr__(). These
     implementations assume that all arguments passed to the constructor are
     captured in same-named fields in `self`.
     """
-    __metaclass__ = ABCMeta
 
     def __str__(self):
         indent = ' ' * (len(self.__class__.__name__) + 1)
@@ -886,9 +901,9 @@ _VAR_SUBST_EDIT_DELIM1          = '/'
 _VAR_SUBST_EDIT_DELIM2          = '|'
 _VAR_SUBST_EDIT_GROUPREF_PREFIX = '$'
 
-def _replace_tokens(s, tokens):
+def _replace_tokens(s: str, tokens: Dict[str, str]) -> str:
     s2 = s
-    for token, replacement in tokens.items():
+    for token, replacement in list(tokens.items()):
         s2 = s2.replace(token, replacement)
     return s2
 
@@ -1228,7 +1243,7 @@ class VariableSubstituter(object):
     >>> v.substitute({'file': '01-abc', 'bar': 'tuvw', 'baz': '!!'})
     'Xtu-!!.abc'
     """
-    def __init__(self, template):
+    def __init__(self, template: str):
         """
         Create a new variable substituter.
 
@@ -1275,7 +1290,7 @@ class VariableSubstituter(object):
                 )
 
     @property
-    def template(self):
+    def template(self) -> str:
         """
         Get the template.
 
@@ -1283,7 +1298,7 @@ class VariableSubstituter(object):
         """
         return self._template
 
-    def substitute(self, variables):
+    def substitute(self, variables: Dict[str, str]) -> str:
         """
         Substitute all variable references and ternary IFs in the template,
         using the supplied variables. This method will throw an `KeyError` if
@@ -1298,7 +1313,7 @@ class VariableSubstituter(object):
             return str(variables[varname])
         return self._subst(get_var)
 
-    def safe_substitute(self, variables):
+    def safe_substitute(self, variables: Dict[str, str]) -> str:
         """
         Substitute all variable references and ternary IFs in the template,
         using the supplied variables. This method will substitute an empty
@@ -1324,7 +1339,7 @@ class VariableSubstituter(object):
 
         return self._subst(get_var)
 
-    def _subst(self, get_var):
+    def _subst(self, get_var: Callable[[str], str]) -> str:
         """
         Workhorse method for both substitute() and safe_substitute().
 
@@ -1355,10 +1370,9 @@ class _Token(DefaultStrMixin):
     implementations assume that all arguments passed to the constructor are
     captured in same-named fields in `self`.
     """
-    __metaclass__ = ABCMeta
 
     @abstractmethod
-    def evaluate(self, get_var):
+    def evaluate(self, get_var: Callable[[str], str]) -> str:
         """
         Evaluate the token, returning the resulting string.
 
@@ -1368,7 +1382,10 @@ class _Token(DefaultStrMixin):
         """
         pass
 
-    def _expand(self, get_var, tokens, allowed_tokens):
+    def _expand(self,
+                get_var: Callable[[str], str],
+                tokens: Sequence[str],
+                allowed_tokens: Set[str]) -> str:
         """
         Expands a list of tokens, processing each one by calling its
         evaluate() method.
@@ -1389,7 +1406,10 @@ class _Var(_Token):
     """
     Captures a variable name in the modified (i.e., non-Parsimonious) AST.
     """
-    def __init__(self, name, slice_start=None, slice_end=None):
+    def __init__(self,
+                 name: str,
+                 slice_start: Optional[int] = None,
+                 slice_end: Optional[int] = None):
         """
         Create a new variable reference.
 
@@ -1402,7 +1422,7 @@ class _Var(_Token):
         self.slice_start = slice_start
         self.slice_end   = slice_end
 
-    def evaluate(self, get_var):
+    def evaluate(self, get_var: Callable[[str], str]) -> str:
         """
         Evaluate the variable's value, applying any subscripts.
 
@@ -1429,7 +1449,7 @@ class _Text(DefaultStrMixin):
     """
     Captures arbitrary text in the modified (i.e., non-Parsimonious) AST.
     """
-    def __init__(self, text):
+    def __init__(self, text: str):
         """
         Create a new text container.
 
@@ -1438,7 +1458,7 @@ class _Text(DefaultStrMixin):
         super(_Text, self).__init__()
         self.text = text
 
-    def evaluate(self, get_var):
+    def evaluate(self, get_var: Callable[[str], str]) -> str:
         """
         Evaluate the token. In this case, just return the text
 
@@ -1470,7 +1490,7 @@ class _Ternary(_Token):
         self.if_true    = if_true
         self.if_false   = if_false
 
-    def evaluate(self, get_var):
+    def evaluate(self: Callable[[str], str]) -> str:
         """
         Evaluate the ternary expression, returning the resulting string.
 
@@ -1514,7 +1534,7 @@ class _Edit(_Token):
         self.repl = repl
         self.replace_all = replace_all
 
-    def evaluate(self, get_var):
+    def evaluate(self: Callable[[str], str]) -> str:
         """
         Evaluate the edit expression, returning the resulting string.
 
@@ -1590,7 +1610,7 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                 # ${var[:]} is the same as ${var}
                 pass
             elif pat == 'n:':
-                slice_nums = [int(tokens[0]), sys.maxint]
+                slice_nums = [int(tokens[0]), sys.maxsize]
             elif pat == ':n':
                 slice_nums = [0, int(tokens[1])]
             elif pat == 'n':
@@ -1915,7 +1935,10 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 # Module-private functions
 # ---------------------------------------------------------------------------
 
-def _do_copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+def _do_copy(src: str,
+             dest: str,
+             ensure_final_newline: bool = False,
+             encoding: str = 'UTF-8'):
     """
     Workhorse function that actually copies a text file. Used by move() and
     copy(). The source file's mode and other stats are copied, as well as its

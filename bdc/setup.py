@@ -30,15 +30,12 @@ setup(
     description='Build Databricks Course (curriculum build tool)',
     install_requires=[
         'docopt == 0.6.2',
-        'future == 0.16.0',
-        'markdown2 == 2.3.5',
-        'backports.tempfile >= 1.0',
-        'grizzled-python >= 1.1.0',
-        'enum34 >= 1.1.6',
-        'PyYAML == 3.12',
+        'markdown2 == 2.3.7',
+        'grizzled-python == 2.0.0',
+        'PyYAML == 3.13',
         'pystache == 0.5.4',
-        'parsimonious==0.8.0',
-        'WeasyPrint==0.42.3'
+        'parsimonious==0.8.1',
+        'WeasyPrint==44'
     ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

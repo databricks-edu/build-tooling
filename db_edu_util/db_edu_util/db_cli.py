@@ -7,7 +7,7 @@ import os
 import sys
 import re
 import json
-from StringIO import StringIO
+from io import StringIO
 from databricks_cli.configure import provider
 from databricks_cli.cli import cli
 
@@ -85,7 +85,7 @@ def databricks(args, db_profile=None, capture_stdout=False, verbose=False):
     args = ('--profile', db_profile) + tuple(args)
 
     if verbose:
-        print('+ databricks {0}'.format(' '.join(args)))
+        print(('+ databricks {0}'.format(' '.join(args))))
 
     buf = None
     saved_stdout = None

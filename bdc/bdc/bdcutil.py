@@ -1445,15 +1445,23 @@ class _Ternary(_Token):
     """
     Captures the pieces of a ternary IF.
     """
-    def __init__(self, variable, op, to_compare, if_true, if_false):
+    def __init__(self,
+                 variable: str,
+                 op: str,
+                 to_compare: Optional[Sequence[Type[_Token]]],
+                 if_true: Optional[Sequence[Type[_Token]]],
+                 if_false: Optional[Sequence[Type[_Token]]]):
         """
         Create a new _Ternary object.
 
         :param variable:    the variable to substitute and test
         :param op:          the operation (one of OPS)
-        :param to_compare:  the string against which to compare the variable
-        :param if_true:     the string to substitute if the comparison is true
-        :param if_false:    the string to substitute if the comnparison is false
+        :param to_compare:  the string (token) against which to compare the
+                            variable
+        :param if_true:     the string (token) to substitute if the comparison
+                            is true
+        :param if_false:    the string (token) to substitute if the comparison
+                            is false
         """
         super(_Ternary, self).__init__()
         self.variable   = variable
@@ -1491,7 +1499,11 @@ class _Edit(_Token):
     """
     Stores the pieces of an inline variable value edit.
     """
-    def __init__(self, variable, pattern, repl, replace_all=False):
+    def __init__(self,
+                 variable: str,
+                 pattern: Pattern,
+                 repl: str,
+                 replace_all: bool = False):
         """
         Create a new _Edit token.
 

@@ -4,6 +4,7 @@ Utility functions and classes
 Run this module as a main program, or run it through `python -m doctest`,
 to exercise embedded tests.
 """
+from __future__ import annotations # PEP 563 (allows annotation forward refs)
 
 from abc import ABC, abstractmethod
 import re
@@ -21,11 +22,11 @@ from textwrap import TextWrapper
 import mimetypes
 from string import Template
 from tempfile import TemporaryDirectory
-from db_edu_util import all_pred
+from db_edu_util import all_pred, EnhancedTextWrapper
 
 from typing import (Sequence, Any, Set, Optional, Dict, Tuple,
                     Tuple, NoReturn, Generator, Union, Pattern, Iterable,
-                    Callable)
+                    Callable, Type, no_type_check)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -89,22 +90,6 @@ WARNING_PREFIX = "*** WARNING: "
 DEBUG_PREFIX = "(DEBUG) "
 
 # ---------------------------------------------------------------------------
-# Custom TextWrapper class
-# ---------------------------------------------------------------------------
-
-
-class BDCTextWrapper(TextWrapper):
-    def __init__(self, width: int = COLUMNS, subsequent_indent: str = ''):
-        TextWrapper.__init__(self,
-                             width=width,
-                             subsequent_indent=subsequent_indent)
-
-    def fill(self, msg: str) -> str:
-        wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
-        return '\n'.join(wrapped)
-
-
-# ---------------------------------------------------------------------------
 # Module globals
 # ---------------------------------------------------------------------------
 
@@ -112,17 +97,19 @@ _verbose = False
 _verbose_prefix = ''
 
 # Text wrappers
-_warning_wrapper = BDCTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
+_warning_wrapper = EnhancedTextWrapper(
+    subsequent_indent=' ' * len(WARNING_PREFIX)
+)
 
-_verbose_wrapper = BDCTextWrapper()
+_verbose_wrapper = EnhancedTextWrapper()
 
-_error_wrapper = BDCTextWrapper()
+_error_wrapper = EnhancedTextWrapper()
 
-_info_wrapper = BDCTextWrapper(subsequent_indent=' ' * 4)
+_info_wrapper = EnhancedTextWrapper(subsequent_indent=' ' * 4)
 
-_debug_wrapper = BDCTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
+_debug_wrapper = EnhancedTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
 
-_generic_wrapper = BDCTextWrapper()
+_generic_wrapper = EnhancedTextWrapper()
 
 # ---------------------------------------------------------------------------
 # Public functions
@@ -144,7 +131,7 @@ def set_verbosity(verbose: bool, verbose_prefix: str) -> NoReturn:
     _verbose = verbose
     if verbose_prefix:
         _verbose_prefix = verbose_prefix
-        _verbose_wrapper = BDCTextWrapper(
+        _verbose_wrapper = EnhancedTextWrapper(
             subsequent_indent=' ' * len(verbose_prefix)
         )
 
@@ -158,7 +145,7 @@ def verbosity_is_enabled() -> bool:
     return _verbose
 
 
-def _do_fill(msg: str, wrapper: BDCTextWrapper) -> str:
+def _do_fill(msg: str, wrapper: EnhancedTextWrapper) -> str:
     wrapped = [wrapper.fill(line) for line in msg.split('\n')]
     return '\n'.join(wrapped)
 
@@ -775,7 +762,7 @@ def variable_ref_patterns(variable_name: str) -> Sequence[Pattern]:
 
 
 def matches_variable_ref(patterns: Sequence[Pattern],
-                         string: str) -> Optional[Tuple[str, str, str]]:
+                         string: str) -> Optional[Sequence[str]]:
     """
     Matches the string against the patterns, returning a 3-tuple on match and
     None on no match.
@@ -1260,8 +1247,10 @@ class VariableSubstituter(object):
             #
             # Since we can't actually test the nested exception, we have to
             # check the text of the message.
-            pat = re.compile(r'^.*VariableSubstituterParseError: (.*)\s*Parse tree:')
-            msg = e.message.replace('\n', ' ')
+            pat = re.compile(
+                r'^.*VariableSubstituterParseError: (.*)\s*Parse tree:'
+            )
+            msg = str(e).replace('\n', ' ')
             m = pat.search(msg)
             if m:
                 raise VariableSubstituterParseError(
@@ -1281,7 +1270,7 @@ class VariableSubstituter(object):
         """
         return self._template
 
-    def substitute(self, variables: Dict[str, str]) -> str:
+    def substitute(self, variables: Dict[str, Any]) -> str:
         """
         Substitute all variable references and ternary IFs in the template,
         using the supplied variables. This method will throw an `KeyError` if
@@ -1296,7 +1285,7 @@ class VariableSubstituter(object):
             return str(variables[varname])
         return self._subst(get_var)
 
-    def safe_substitute(self, variables: Dict[str, str]) -> str:
+    def safe_substitute(self, variables: Dict[str, Any]) -> str:
         """
         Substitute all variable references and ternary IFs in the template,
         using the supplied variables. This method will substitute an empty
@@ -1322,7 +1311,7 @@ class VariableSubstituter(object):
 
         return self._subst(get_var)
 
-    def _subst(self, get_var: Callable[[str], str]) -> str:
+    def _subst(self, get_var: Callable[[str], Any]) -> str:
         """
         Workhorse method for both substitute() and safe_substitute().
 
@@ -1355,7 +1344,7 @@ class _Token(DefaultStrMixin):
     """
 
     @abstractmethod
-    def evaluate(self, get_var: Callable[[str], str]) -> str:
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the token, returning the resulting string.
 
@@ -1366,9 +1355,9 @@ class _Token(DefaultStrMixin):
         pass
 
     def _expand(self,
-                get_var: Callable[[str], str],
-                tokens: Sequence[str],
-                allowed_tokens: Set[str]) -> str:
+                get_var: Callable[[str], Any],
+                tokens: Sequence[Type[_Token]],
+                allowed_tokens: Set[Type[_Token]]) -> str:
         """
         Expands a list of tokens, processing each one by calling its
         evaluate() method.
@@ -1405,7 +1394,7 @@ class _Var(_Token):
         self.slice_start = slice_start
         self.slice_end   = slice_end
 
-    def evaluate(self, get_var: Callable[[str], str]) -> str:
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the variable's value, applying any subscripts.
 
@@ -1428,7 +1417,7 @@ class _Var(_Token):
         return v[self.slice_start:end]
 
 
-class _Text(DefaultStrMixin):
+class _Text(_Token):
     """
     Captures arbitrary text in the modified (i.e., non-Parsimonious) AST.
     """
@@ -1441,7 +1430,7 @@ class _Text(DefaultStrMixin):
         super(_Text, self).__init__()
         self.text = text
 
-    def evaluate(self, get_var: Callable[[str], str]) -> str:
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the token. In this case, just return the text
 
@@ -1473,7 +1462,7 @@ class _Ternary(_Token):
         self.if_true    = if_true
         self.if_false   = if_false
 
-    def evaluate(self: Callable[[str], str]) -> str:
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the ternary expression, returning the resulting string.
 
@@ -1497,6 +1486,7 @@ class _Ternary(_Token):
         else:
             return self._expand(get_var, self.if_false, {_Var, _Text})
 
+
 class _Edit(_Token):
     """
     Stores the pieces of an inline variable value edit.
@@ -1511,13 +1501,13 @@ class _Edit(_Token):
                             objects)
         :param replace_all: whether to not to do a global replacement
         """
-        super(_Token, self).__init__()
+        super(_Edit, self).__init__()
         self.variable = variable
         self.pattern = pattern
         self.repl = repl
         self.replace_all = replace_all
 
-    def evaluate(self: Callable[[str], str]) -> str:
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the edit expression, returning the resulting string.
 
@@ -1532,6 +1522,8 @@ class _Edit(_Token):
         count = 0 if self.replace_all else 1
         return self.pattern.sub(repl, value, count=count)
 
+
+@no_type_check
 class _VarSubstASTVisitor(grammar.NodeVisitor):
     """
     Node visitor, which translates the Parsimonious AST to a list of tokens.

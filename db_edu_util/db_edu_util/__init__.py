@@ -64,6 +64,20 @@ def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
     :param iterable: the iterable
 
     :return: `True` if all elements pass, `False` otherwise
+
+    >>> all_pred(lambda x: x > 0, [10, 20, 30, 40])
+    True
+    >>> all_pred(lambda x: x > 0, [0, 20, 30, 40])
+    False
+    >>> all_pred(lambda x: x > 0, [20, 30, 0, 40])
+    False
+    >>> import string
+    >>> all_pred(lambda c: c in string.ascii_uppercase, string.ascii_uppercase)
+    True
+    >>> all_pred(lambda c: c in string.ascii_uppercase, string.ascii_lowercase)
+    False
+    >>> all_pred(lambda c: c in string.ascii_uppercase, 'SADLFKJaLKJSDF')
+    False
     """
     for i in iterable:
         if not func(i):
@@ -71,3 +85,11 @@ def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
 
     return True
 
+
+# ---------------------------------------------------------------------------
+# Fire up doctest if main()
+# ---------------------------------------------------------------------------
+
+if __name__ == '__main__':
+    from doctest import testmod, ELLIPSIS
+    testmod(optionflags=ELLIPSIS)

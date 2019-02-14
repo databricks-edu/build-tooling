@@ -131,11 +131,13 @@ def set_verbosity(verbose: bool,
     global _verbose_wrapper
 
     _verbose = verbose
-    if verbose_prefix:
-        _verbose_prefix = verbose_prefix
-        _verbose_wrapper = EnhancedTextWrapper(
-            subsequent_indent=' ' * len(verbose_prefix)
-        )
+    if _verbose:
+        indent = ''
+        if verbose_prefix:
+            _verbose_prefix = verbose_prefix
+            indent = ' ' * len(verbose_prefix)
+
+        _verbose_wrapper = EnhancedTextWrapper(subsequent_indent=indent)
 
 
 def verbosity_is_enabled() -> bool:

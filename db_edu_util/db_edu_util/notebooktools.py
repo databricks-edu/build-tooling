@@ -4,16 +4,19 @@ notebooks. Currently, this library is only used by gendbc. If we convert other
 tools to use it, this module can be moved into its own separately installable
 package.
 """
+from __future__ import annotations # PEP 563 (allows annotation forward refs)
+
 from collections import namedtuple
 import codecs
 import re
 import os
 import uuid
 from enum import Enum
-from typing import Callable, Sequence, Pattern, Generator
 import json
-from abc import abstractmethod
-from typing import Optional
+from db_edu_util import debug, debug_is_enabled, set_debug
+import dataclasses
+from dataclasses import dataclass
+from typing import Callable, Sequence, Pattern, Generator, Optional, Any, Dict
 
 __all__ = ('NotebookError', 'NotebookParseError', 'NotebookLanguage',
            'CellType', 'NotebookCell', 'Notebook', 'parse_source_notebook')
@@ -53,8 +56,7 @@ class NotebookLanguage(Enum):
     PYTHON     = 'py'
     SQL        = 'sql'
 
-    def for_json(self):
-        # type: () -> str
+    def for_json(self) -> str:
         '''
         Get the notebook language as it should be rendered in JSON.
 
@@ -65,8 +67,7 @@ class NotebookLanguage(Enum):
         return self.value
 
     @classmethod
-    def from_path(cls, path):
-        # type: (str) -> NotebookLanguage
+    def from_path(cls, path: str) -> NotebookLanguage:
         """
         Return the appropriate language for a file, based on the extension.
 
@@ -78,10 +79,7 @@ class NotebookLanguage(Enum):
         return cls.from_extension(ext)
 
     @classmethod
-    def from_extension(cls,
-                       ext # type: str
-                       ):
-        # type: (str) -> NotebookLanguage
+    def from_extension(cls, ext: str) -> NotebookLanguage:
         """
         Return the appropriate language for a file extension.
 
@@ -115,8 +113,7 @@ class CellType(Enum):
     UNKNOWN    = '?'
 
     @classmethod
-    def from_language(cls, language):
-        # type: (NotebookLanguage) -> CellType
+    def from_language(cls, language: NotebookLanguage) -> CellType:
         """
         Return the appropriate cell type for a code cell of a given language.
 
@@ -132,13 +129,10 @@ class CellType(Enum):
             return CellType.R
         if language == NotebookLanguage.SQL:
             return CellType.SQL
-        raise NotebookError('(BUG): {} passed to CellType.from_language'.format(
-            language
-        ))
+        raise NotebookError('(BUG): Unknown {language}')
 
     @classmethod
-    def from_string(cls, s):
-        # type: (str) -> CellType
+    def from_string(cls, s: str) -> CellType:
         """
         Return the appropriate cell type for a string.
 
@@ -152,15 +146,10 @@ class CellType(Enum):
         try:
             return values[s]
         except KeyError:
-            raise NotebookError('Unknown cell type: "{}"'.format(s))
+            raise NotebookError(f'Unknown cell type: "{s}"')
 
-_NotebookCell = namedtuple('NotebookCell', ('command', 'guid', 'position',
-                                            'cell_type', 'marked_magic'))
-# Create a wrapper class around _NotebookCell, so we can docstring it.
-# In Python 2 (unlike Python 3), you can't write to __doc__. This solution
-# just wraps the namedtuple in a thin shell. Use of __slots__ means we retain
-# the lightweight nature. See https://stackoverflow.com/a/1606478/53495
-class NotebookCell(_NotebookCell):
+@dataclass(frozen=True)
+class NotebookCell:
     """
     Represents a parsed notebook cell. This class is just a thin wrapper around
     a namedtuple. It contains the following fields:
@@ -173,11 +162,13 @@ class NotebookCell(_NotebookCell):
                           string. False means it's implicitly a code cell of
                           the base notebook language.
     """
+    command: str
+    guid: Optional[uuid.UUID]
+    position: int
+    cell_type: CellType
+    marked_magic: bool
 
-    __slots__ = ()
-
-    def to_json_dict(self):
-        # type: () -> dict
+    def to_json_dict(self) -> Dict[str, Any]:
         """
         Convert the parsed notebook cell into a dict containing all the fields
         necessary to represent the cell in a Databricks JSON-formatted
@@ -231,142 +222,34 @@ class NotebookCell(_NotebookCell):
             'yColumns':                     None,
         }
 
-    def __repr__(self):
-        return _NotebookCell.__repr__(self).replace(
-            '_NotebookCell', 'NotebookCell'
-        )
-
-    def __str__(self):
-        return _NotebookCell.__str__(self).replace(
-            '_NotebookCell', 'NotebookCell'
-        )
 
 # An empty cell, used as a sentinel marker.
 EmptyCell = NotebookCell(command='', guid=None, position=0,
                          cell_type=CellType.UNKNOWN, marked_magic=True)
 
-class Copyable(object):
-    '''
-    Mixin for a class, providing a _replace() method that is consistent with
-    the _replace() method you automatically get with a namedtuple. Because of
-    the way this class instantiates the subclass, Copyable cannot use a
-    metaclass of ABCMeta. Pretend this class is abstract.
-    '''
-
-    @abstractmethod
-    def __init__(self):
-        pass
-
-    def _replace(self, **kw):
-        '''
-        Create a new instance of the object on which _replace() is called,
-        replacing only those fields specified as keyword parameters and copying
-        the rest. The original object is unmodified.
-
-        :param kw: the key=value parameters for the fields to replace.
-        :return: a copy of this object, with the specified fields replaced
-        :raises KeyError: if a nonexistent field is specified
-        '''
-        fields = self._public_fields()
-        arg_keys = set(kw.keys())
-        unknown = arg_keys - fields
-        if unknown:
-            raise KeyError('Unknown fields passed to copy(): {}'.format(
-                ', '.join(unknown)
-            ))
-
-        args = kw
-        for field in fields:
-            if field in args:
-                continue
-            args[field] = eval('self.{}'.format(field))
-
-        return self.__class__(**args)
-
-    def _public_fields(self):
-        return {f for f in list(self.__dict__.keys()) if f[0] != '_'} | self._props()
-
-    def _props(self):
-        cls = self.__class__
-        return set([p for p in dir(cls) if isinstance(getattr(cls, p),property)])
-
-
-class Notebook(Copyable):
+@dataclass(frozen=True)
+class Notebook:
     """
     Parsed representation of a Databricks source notebook. Does not contain
     fields that appear in JSON notebooks but not source notebooks.
     """
-
-    def __init__(self,
-                 cells,    # type: Sequence[NotebookCell]
-                 path      # type: str
-                 ):
-        """
-        :param cells: the parsed notebook cells
-        :param path:  the path to the source notebook that was parsed
-        """
-
-        name, _ = os.path.splitext(os.path.basename(path))
-
-        self._name     = name
-        self._guid     = uuid.uuid4()
-        self._cells    = cells
-        self._language = NotebookLanguage.from_path(path)
-        self._path     = path
+    cells: Sequence[NotebookCell]
+    path: str
+    guid: uuid.UUID = uuid.uuid4()
 
     @property
-    def name(self):
-        # type: () -> str
-        """
-        :return: the name of the notebook (derived from the path)
-        """
-        return self._name
+    def name(self) -> str:
+        """The name of the notebook (derived from the path)."""
+        name, _ = os.path.splitext(os.path.basename(self.path))
+        return name
 
     @property
-    def path(self):
-        # type: () -> str
-        """
-        :return: the path to the source notebook that was parsed
-        """
-        return self._path
-
-    @property
-    def guid(self):
-        # type: () -> UUID
-        """
-        :return: a unique identifier for the notebook
-        """
-        return self._guid
-
-    @property
-    def cells(self):
-        # type: () -> Sequence[NotebookCell]
-        """
-        :return: the parsed notebook cells
-        """
-        return self._cells
-
-    @property
-    def language(self):
-        # type: () -> NotebookLanguage
-        """
-        :return: the base programming language of the notebook, as derived
-                 from the extension
-        """
-        return self._language
-
-    def __str__(self):
-        return ('Notebook(name="{}", guid="{}", path="{}", language={}, ' +
-                'len(cells)={})').format(
-            self.name, self.guid, self.path, self.language, len(self.cells)
-        )
-
-    def __repr__(self):
-        return self.__str__()
+    def language(self) -> NotebookLanguage:
+        """The notebook language, derived from the path."""
+        return NotebookLanguage.from_path(self.path)
 
     @classmethod
-    def is_source_notebook(cls, path, encoding):
-        # type: (str, str) -> bool
+    def is_source_notebook(cls, path: str, encoding: str) -> bool:
         """
         Determine whether a file is a source notebook. This function first
         checks the file extension. If the extension is one of the valid source
@@ -398,8 +281,7 @@ class Notebook(Copyable):
         return True
 
 
-    def to_source(self):
-        # type: () -> Generator[str]
+    def to_source(self) -> Generator[None, str, None]:
         """
         Converts the parsed notebook to a source notebook.
 
@@ -407,11 +289,11 @@ class Notebook(Copyable):
                  source notebook
         """
         comment_string = COMMENT_STRINGS[self.language]
-        yield '{} Databricks notebook source'.format(comment_string)
+        yield f'{comment_string} Databricks notebook source'
         for i, cell in enumerate(self.cells):
             if i > 0:
                 yield ''
-                yield '{} COMMAND ----------'.format(comment_string)
+                yield f'{comment_string} COMMAND ----------'
                 yield ''
 
             lines = cell.command.split('\n')
@@ -421,13 +303,12 @@ class Notebook(Copyable):
             magic = (len(lines[0]) > 0) and (lines[0][0] == '%')
             for line in lines:
                 if magic:
-                    yield '{} MAGIC {}'.format(comment_string, line)
+                    yield f'{comment_string} MAGIC {line}'
                 else:
                     yield line
 
 
-    def to_json(self):
-        # type: () -> str
+    def to_json(self) -> str:
         """
         Converts the parsed notebook to JSON, suitable for stuffing into a DBC.
 
@@ -439,7 +320,7 @@ class Notebook(Copyable):
                 'commands':        cell_hashes,
                 'dashboards':      [],
                 'globalVars':      {},
-                'guid':            str(self._guid),
+                'guid':            str(self.guid),
                 'iPythonMetadata': None,
                 'inputWidgets':    {},
                 'language':        self.language.for_json(),
@@ -464,8 +345,7 @@ COMMENT_STRINGS = {
 # Internal Functions
 # -----------------------------------------------------------------------------
 
-def _read_notebook(path, encoding):
-    # type: (str, str) -> Sequence[str]
+def _read_notebook(path: str, encoding: str) -> Sequence[str]:
     """
     Read a source notebook into a list of lines, removing trailing newlines.
 
@@ -489,8 +369,7 @@ def _read_notebook(path, encoding):
 
     return buf
 
-def _leading_comment_pattern(comment_string):
-    # type: (str) -> str
+def _leading_comment_pattern(comment_string: str) -> str:
     """
     Convert the comment string for a language into a (string) regular expression
     pattern that will match the comment at the beginning of a source notebook
@@ -503,8 +382,7 @@ def _leading_comment_pattern(comment_string):
     return r'^\s*{}'.format(comment_string)
 
 
-def _notebook_header_re(comment_string):
-    # type: (str) -> Pattern
+def _notebook_header_re(comment_string: str) -> Pattern:
     """
     Given a language comment string, return a compiled regular expression that
     will match the Databricks notebook header line.
@@ -520,30 +398,18 @@ def _notebook_header_re(comment_string):
     )
 
 
-# -----------------------------------------------------------------------------
-# Public Functions
-# -----------------------------------------------------------------------------
-
-def parse_source_notebook(path: str,
-                          encoding: str,
-                          debug: Optional[Callable] = None):
-    # type: (...) -> Notebook
+def _parse_source_notebook(path: str, encoding: str) -> Notebook:
     """
     Parse a Databricks source notebook into a Notebook object.
 
     :param path:     the path to the notebook
     :param encoding: the encoding to use when reading the file
-    :param debug:    True to enable debug messages, False otherwise
 
     :returns: a parsed Notebook object
 
     :raises NotebookParseError: if the notebook cannot be parsed
     :raises NotebookError:      other errors (e.g., invalid file type)
     """
-    def emit_debug(msg):
-        if debug:
-            debug(msg)
-
     language = NotebookLanguage.from_path(path)
     comment_string = COMMENT_STRINGS[language]
 
@@ -559,19 +425,16 @@ def parse_source_notebook(path: str,
     def check_for_header(line):
         if not header.search(line):
             raise NotebookParseError(
-                'File "{}" is missing expected Databricks header'.format(
-                    path
-                )
+                f'File "{path}" is missing expected Databricks header'
             )
 
-    c = Copyable()
     cells = []
     cur_cell = EmptyCell
     command_buf = []
 
     lines = _read_notebook(path, encoding)
     if len(lines) == 0:
-        raise NotebookParseError('File "{}" is empty.'.format(path))
+        raise NotebookParseError(f'File "{path}" is empty.')
 
     saw_new_cell = False
     check_for_header(lines[0])
@@ -581,14 +444,14 @@ def parse_source_notebook(path: str,
         line_num = i + 2 # account for skipped header
 
         if skip_next:
-            emit_debug("Line {}: Skipping...".format(line_num))
+            debug(f'"{path}", line {line_num}: Skipping...')
             skip_next = False
             continue
 
         # If this line matches the start of a new cell marker, save the
         # existing cell and reset all the variables.
         if new_cell.search(line):
-            emit_debug("Line {}: New command".format(line_num))
+            debug(f'"{path}", line {line_num}: New command')
             if cur_cell != EmptyCell:
                 # The last line of any cell should be blank and should
                 # be removed, as it is really just a separator before the
@@ -596,7 +459,7 @@ def parse_source_notebook(path: str,
                 if len(command_buf[-1].strip()) == 0:
                     command_buf = command_buf[:-1]
                 cells.append(
-                    cur_cell._replace(command='\n'.join(command_buf))
+                    dataclasses.replace(cur_cell, command='\n'.join(command_buf))
                 )
             cur_cell = EmptyCell
             saw_new_cell = True
@@ -608,12 +471,12 @@ def parse_source_notebook(path: str,
         # the leading MAGIC indicator.
         m = magic.search(line)
         if m:
-            line = '{}{}'.format(m.group(1), m.group(2))
+            line = f'{m.group(1)}{m.group(2)}'
 
         # If we didn't see the new cell marker, then keep accumulating the
         # current cell and move on to the next line.
         if not saw_new_cell:
-            emit_debug("Line {}: Not first line".format(line_num))
+            debug(f'"{path}", line {line_num}: Not first line')
             command_buf.append(line)
             continue
 
@@ -623,9 +486,10 @@ def parse_source_notebook(path: str,
         if not m:
             # Not a magic line. It is, therefore, a code cell of the same
             # type as the base language of the notebook.
-            emit_debug("Line {}: No magic".format(line_num))
+            debug(f'{path}, line {line_num}: No magic')
             command_buf.append(line)
-            cur_cell = cur_cell._replace(
+            cur_cell = dataclasses.replace(
+                cur_cell,
                 cell_type=CellType.from_language(language),
                 marked_magic=False
             )
@@ -634,32 +498,53 @@ def parse_source_notebook(path: str,
         # Magic line as first line in cell. If it's an empty magic line, skip it.
         token = m.group(1).strip()
         if not token:
-            emit_debug("Line {}: Skipping empty magic.")
+            debug(f'"{path}", line {line_num}: Skipping empty magic.')
             continue
 
         # Extract cell type, if it exists.
-        emit_debug("Line {}: Magic".format(line_num))
+        debug(f'"{path}", line {line_num}: Magic')
         if (not token) or (token[0] != '%'):
             raise NotebookParseError(
-                '''"{}", line {}: Bad first magic cell line: {}'''.format(
-                    path, line_num, line
-                )
+                f'"{path}", line {line_num}: Bad first magic cell line: {line}'
             )
 
         command_buf.append(line)
-        cur_cell = cur_cell._replace(
-            cell_type=CellType.from_string(token),
+        cur_cell = dataclasses.replace(
+            cur_cell, cell_type=CellType.from_string(token),
         )
 
     # If there's an unfinished cell left, finish it.
     if cur_cell != EmptyCell:
         cells.append(
-            cur_cell._replace(command='\n'.join(command_buf))
+            dataclasses.replace(cur_cell, command='\n'.join(command_buf))
         )
 
-    cells = [cell._replace(position=i + 1, guid=uuid.uuid4())
+    cells = [dataclasses.replace(cell, position=i + 1, guid=uuid.uuid4())
              for i, cell in enumerate(cells)]
     return Notebook(cells=cells, path=path)
 
+# -----------------------------------------------------------------------------
+# Public Functions
+# -----------------------------------------------------------------------------
 
+def parse_source_notebook(path: str,
+                          encoding: str,
+                          debugging: bool = False) -> Notebook:
+    """
+    Parse a Databricks source notebook into a Notebook object.
 
+    :param path:      the path to the notebook
+    :param encoding:  the encoding to use when reading the file
+    :param debugging: True to enable debug messages, False otherwise
+
+    :returns: a parsed Notebook object
+
+    :raises NotebookParseError: if the notebook cannot be parsed
+    :raises NotebookError:      other errors (e.g., invalid file type)
+    """
+    prev_debug = debug_is_enabled()
+    try:
+        set_debug(debugging)
+        return _parse_source_notebook(path, encoding)
+    finally:
+        set_debug(prev_debug)

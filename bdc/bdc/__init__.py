@@ -14,7 +14,8 @@ from enum import Enum
 import master_parse
 from gendbc import gendbc
 from db_edu_util.notebooktools import parse_source_notebook, NotebookError
-from db_edu_util import db_cli, EnhancedTextWrapper
+from db_edu_util import (db_cli, wrap2stdout, error, verbose, set_verbosity,
+                         warn, verbosity_is_enabled, info, die)
 from db_edu_util.db_cli import DatabricksCliError
 from grizzled.file import eglob
 from bdc.bdcutil import *
@@ -831,24 +832,6 @@ MASTER_PARSE_DEFAULTS = {
 # Functions
 # ---------------------------------------------------------------------------
 
-def error(msg: str) -> NoReturn:
-    global errors
-    errors += 1
-    if msg:
-        emit_error(msg)
-
-
-def die(msg: str, show_usage: bool = False) -> NoReturn:
-    """
-    Emit a message to standard error, optionally write the usage, and exit.
-    """
-    error(msg)
-    if show_usage:
-        sys.stderr.write(USAGE)
-    sys.stderr.write("\n*** ABORTED\n")
-    sys.exit(1)
-
-
 def load_build_yaml(yaml_file: str) -> BuildData:
     """
     Load the YAML configuration file that defines the build for a particular
@@ -1379,7 +1362,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
         if type == master_parse.CourseType.SELF_PACED:
             for k, v in list(ilt_only.items()):
                 if v:
-                    warning(f'course_info.{k} is ignored for self-paced courses')
+                    warn(f'course_info.{k} is ignored for self-paced courses')
 
                 ilt_only[k] = None
 
@@ -1458,7 +1441,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                     '"name: value"'
                 )
         else:
-            warning('"use_profiles" is deprecated. Use explicit profiles.')
+            warn('"use_profiles" is deprecated. Use explicit profiles.')
             res = {master_parse.Profile(name='amazon', value='Amazon'),
                    master_parse.Profile(name='azure', value='azure')}
 
@@ -2416,9 +2399,7 @@ def upload_notebooks(build: BuildData,
             info("Copying notebooks to temporary directory.")
             for nb_full_path, partial_paths in list(notebooks.items()):
                 if not path.exists(nb_full_path):
-                    warning(
-                        f'Skipping nonexistent notebook "{nb_full_path}".'
-                    )
+                    warn(f'Skipping nonexistent notebook "{nb_full_path}".')
                     continue
                 for partial_path in partial_paths:
                     temp_path = joinpath(tempdir, partial_path)
@@ -2482,8 +2463,8 @@ def download_notebooks(build: BuildData,
                     # We only ever download the first one.
                     remote = remotes[0]
                     if not path.exists(remote):
-                        warning('Cannot find downloaded version of course ' +
-                                f'notebook "{local}".')
+                        warn('Cannot find downloaded version of course ' +
+                             f'notebook "{local}".')
                     print(f'"{remote}" -> {local}')
                     # Make sure there's a newline at the end of each file.
                     move(remote, local, ensure_final_newline=True)
@@ -2498,7 +2479,7 @@ def download_notebooks(build: BuildData,
                     for f in files:
                         leftover_files.append(path.relpath(joinpath(root, f)))
                 if len(leftover_files) > 0:
-                    warning(
+                    warn(
                         f"These files from {shard_path} aren't in the build " +
                         "file and were not copied."
                     )

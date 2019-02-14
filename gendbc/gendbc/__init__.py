@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from typing import Union, Sequence, Optional, NoReturn, Dict, Any
 
 from db_edu_util.notebooktools import *
+from db_edu_util import (error, verbose, set_verbosity, warn, set_debug, info,
+                         verbosity_is_enabled, debug, debug_is_enabled)
 
 __all__ = ['Config', 'GendbcError', 'gendbc']
 

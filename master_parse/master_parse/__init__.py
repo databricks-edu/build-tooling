@@ -25,7 +25,9 @@ from master_parse.InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
 from textwrap import TextWrapper
 from random import SystemRandom
-from db_edu_util import all_pred
+from db_edu_util import (all_pred, wrap2stdout, error, verbose, set_verbosity,
+                         warn, verbosity_is_enabled, info, debug, set_debug,
+                         debug_is_enabled)
 from dataclasses import dataclass
 from typing import (Sequence, Optional, Dict, Set, NoReturn, Pattern, Match,
                     Tuple, List, TextIO, Any)
@@ -497,7 +499,7 @@ class NotebookGenerator(object):
         :param parts:       whether to honor parts or not
         '''
 
-        _verbose(
+        verbose(
             f'Generating {self.notebook_user} notebook(s) for "{input_name}"'
         )
 
@@ -631,7 +633,7 @@ class NotebookGenerator(object):
 
                     if CommandLabel.SOURCE_ONLY in labels:
                         # Suppress this one. It's a source-only cell.
-                        _debug(
+                        debug(
                             f"Cell #{cell_num} is source-only. Suppressing it."
                         )
                         continue
@@ -715,7 +717,7 @@ class NotebookGenerator(object):
                         # the updated cell normally.
                         content = self._handle_video_cell(cell_num, content)
                         code = VIDEO_CELL_CODE
-                        _debug(f'Preprocessing video cell {cell_num}')
+                        debug(f'Preprocessing video cell {cell_num}')
 
                     # This thing just gets uglier and uglier.
                     if ( (not (discard_labels & labels)) and
@@ -778,7 +780,7 @@ class NotebookGenerator(object):
             return False
 
         if all_pred(starts_with_comment, content):
-            _debug(f"Cell #{cell_num} is a runnable TODO cell.")
+            debug(f"Cell #{cell_num} is a runnable TODO cell.")
             new_content = []
             for s in content:
                 if matches_label(s):
@@ -866,7 +868,7 @@ class NotebookGenerator(object):
         content[:trim_top_lines] = []
         return content
 
-    def generate_ipynb(self, file_out: TextIO) -> NoReturn:
+    def generate_ipynb(self, file_out: str) -> NoReturn:
         """Generate an ipynb file based on a py IPython Notebook format.
 
         Note:
@@ -1125,7 +1127,7 @@ class CellTemplateProcessor(object):
                 for r in self.BAD_MUSTACHE_REGEXPS:
                     m = r.search(line)
                     if m:
-                        _warning(
+                        warn(
                             f'"{notebook_name}", cell #{cell_num}, ' +
                             f'line {line_num}: Possibly bad Mustache tag ' +
                             f'"{m.group(1)}"'
@@ -1233,36 +1235,6 @@ _output_dir = DEFAULT_OUTPUT_DIR
 _be_verbose = False
 _show_debug = False
 _rng = SystemRandom()
-
-COLUMNS = int(os.getenv('COLUMNS', '80')) - 1
-DEBUG_PREFIX = "master_parse (DEBUG) "
-VERBOSE_PREFIX = "master_parse: "
-WARNING_PREFIX = "master_parse: (WARNING) "
-
-# Text wrappers
-
-_warning_wrapper = TextWrapper(width=COLUMNS,
-                               subsequent_indent=' ' * len(WARNING_PREFIX))
-
-_verbose_wrapper = TextWrapper(width=COLUMNS,
-                               subsequent_indent=' ' * len(VERBOSE_PREFIX))
-
-_debug_wrapper = TextWrapper(width=COLUMNS,
-                             subsequent_indent=' ' * len(DEBUG_PREFIX))
-
-def _warning(msg: str) -> NoReturn:
-    print(_warning_wrapper.fill(f'{WARNING_PREFIX}{msg}'))
-
-
-def _debug(msg: str) -> NoReturn:
-    if _show_debug:
-        print(_debug_wrapper.fill(f"{DEBUG_PREFIX}{msg}"))
-
-
-def _verbose(msg: str) -> NoReturn:
-    if _be_verbose:
-        print(_verbose_wrapper.fill(f"{VERBOSE_PREFIX}{msg}"))
-
 
 # Regular Expressions
 _comment = r'(#|//|--)' # Allow Python, Scala, and SQL style comments
@@ -1621,9 +1593,9 @@ class Parser:
         current = ParseState()
 
         def extend_content(cell_state):
-            _debug(f'Notebook "{file_name}": Cell at line ' +
-                   f'{cell_state.starting_line_number} matches ' +
-                   f'labels {[l.value for l in cell_state.command_labels]}.')
+            debug(f'Notebook "{file_name}": Cell at line ' +
+                  f'{cell_state.starting_line_number} matches ' +
+                  f'labels {[l.value for l in cell_state.command_labels]}.')
             if cell_state.command_code is None:
                 cell_state.command_code = self.base_notebook_code
             else:  # Remove %sql, %fs, etc and MAGIC
@@ -1730,24 +1702,18 @@ class UsageError(Exception):
         self.message = message
 
 
-def process_notebooks(params: Params) -> NoReturn:
+def _do_process_notebooks(params: Params) -> NoReturn:
     """
-    Main entry point for notebook processing. This function can be used to
-    process notebook from within another Python program.
+     Main entry point for notebook processing. This function can be used to
+     process notebook from within another Python program.
 
-    :param params: parameters
-    :return: Nothing.
-    """
+     :param params: parameters
+     :return: Nothing.
+     """
     global _output_dir, _file_encoding_in, _file_encoding_out
     _output_dir = params.output_dir
     _file_encoding_in = params.encoding_in
     _file_encoding_out = params.encoding_out
-
-    global _be_verbose
-    _be_verbose = params.enable_verbosity
-
-    global _show_debug
-    _show_debug = params.enable_debug
 
     if (params.course_type is None) or (params.course_type == CourseType.NONE):
         raise UsageError('course_type must be set.')
@@ -1806,7 +1772,7 @@ def process_notebooks(params: Params) -> NoReturn:
         for user in notebook_users:
             for lang in notebook_languages:
                 if kind != NotebookKind.IPYTHON or \
-                   (kind == NotebookKind.IPYTHON and lang == CommandCode.PYTHON):
+                        (kind == NotebookKind.IPYTHON and lang == CommandCode.PYTHON):
                     notebooks.append(NotebookGenerator(kind, user, lang, params))
 
     parser = Parser()
@@ -1814,6 +1780,17 @@ def process_notebooks(params: Params) -> NoReturn:
         header, commands = parser.generate_commands(db_src, params)
         for notebook in notebooks:
             notebook.generate(header, commands, db_src, params)
+
+def process_notebooks(params: Params) -> NoReturn:
+    prev_verbose = verbosity_is_enabled()
+    prev_debug = debug_is_enabled()
+    try:
+        set_verbosity(params.enable_verbosity)
+        set_debug(params.enable_debug)
+        _do_process_notebooks(params)
+    finally:
+        set_verbosity(prev_verbose)
+        set_debug(prev_debug)
 
 
 def main():

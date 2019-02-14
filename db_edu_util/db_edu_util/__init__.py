@@ -8,9 +8,11 @@ from typing import Callable, Iterable, Any
 from textwrap import TextWrapper
 import os
 import sys
-from typing import Optional
+from typing import Optional, NoReturn
 
-__all__ = ['all_pred', 'notebooktools', 'db_cli', 'EnhancedTextWrapper']
+__all__ = ['all_pred', 'notebooktools', 'db_cli', 'EnhancedTextWrapper', 'die',
+           'set_verbosity', 'verbosity_is_enabled', 'wrap2stdout', 'verbose',
+           'debug', 'error', 'warn', 'info', 'set_debug', 'debug_is_enabled']
 
 # -----------------------------------------------------------------------------
 # Classes
@@ -51,8 +53,156 @@ class EnhancedTextWrapper(TextWrapper):
         return '\n'.join(wrapped)
 
 # -----------------------------------------------------------------------------
-# Functions
+# Internal module globals
 # -----------------------------------------------------------------------------
+
+_verbose = False
+_verbose_wrapper = None
+_verbose_prefix = ''
+_debug = False
+_ERROR_PREFIX = 'ERROR: '
+_WARNING_PREFIX = 'WARNING: '
+_DEBUG_PREFIX = '(DEBUG) '
+try:
+    _COLUMNS = int(os.environ.get('COLUMNS', '80')) - 1
+except:
+    _COLUMNS = 79
+
+_debug_wrapper = EnhancedTextWrapper(
+    width=_COLUMNS, subsequent_indent=' ' * len(_DEBUG_PREFIX)
+)
+_warning_wrapper = EnhancedTextWrapper(
+    width=_COLUMNS, subsequent_indent=' ' * len(_WARNING_PREFIX)
+)
+_error_wrapper = EnhancedTextWrapper(
+    width=_COLUMNS, subsequent_indent=' ' * len(_ERROR_PREFIX)
+)
+_no_prefix_wrapper = EnhancedTextWrapper(width=_COLUMNS)
+
+# -----------------------------------------------------------------------------
+# Private Functions
+# -----------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Public Functions
+# -----------------------------------------------------------------------------
+
+def die(msg: str) -> NoReturn:
+    """
+    Print a message to stderr and abort the program.
+
+    :param msg: the message
+    """
+    print(msg, file=sys.stderr)
+    sys.exit(1)
+
+
+def set_debug(debug: bool) -> NoReturn:
+    """
+    Set or clear debug messages.
+
+    :param debug: True or False to enable or disable debug messages
+    """
+    global _debug
+
+    _debug = debug
+
+
+def debug_is_enabled() -> bool:
+    """
+    Determine whether debug messages are on or off.
+
+    :return:  True or False
+    """
+    return _debug
+
+
+def set_verbosity(verbose: bool,
+                  verbose_prefix: Optional[str] = None) -> NoReturn:
+    """
+    Set or clear verbose messages.
+
+    :param verbose:        True or False to enable or disable verbosity
+    :param verbose_prefix  string to use as a prefix for verbose messages, or
+                           None (or empty string) for no prefix
+    """
+    global _verbose
+    global _verbose_prefix
+    global _verbose_wrapper
+
+    _verbose = verbose
+    if verbose_prefix:
+        _verbose_prefix = verbose_prefix
+        _verbose_wrapper = EnhancedTextWrapper(
+            subsequent_indent=' ' * len(verbose_prefix)
+        )
+
+
+def verbosity_is_enabled() -> bool:
+    """
+    Determine whether verbosity is on or off.
+
+    :return:  True or False
+    """
+    return _verbose
+
+
+def wrap2stdout(msg: str) -> NoReturn:
+    """
+    Emit a message to standard output, wrapped at screen boundaries (as
+    determined by the COLUMNS environment variable), without any prefix.
+
+    :param msg: The message
+    """
+    print(_no_prefix_wrapper.fill(msg))
+
+
+def verbose(msg: str) -> NoReturn:
+    """
+    Conditionally emit a verbose message. See also set_verbosity().
+
+    :param msg: the message
+    """
+    if _verbose:
+        print(_verbose_wrapper.fill(f"{_verbose_prefix}{msg}"))
+
+
+def debug(msg: str) -> NoReturn:
+    """
+    Conditionally emit a debug message.
+
+    :param msg: the message
+    """
+    if _debug:
+        print(_debug_wrapper.fill(f"{_DEBUG_PREFIX}{msg}"))
+
+
+def warn(msg: str) -> NoReturn:
+    """
+    Emit a warning message.
+
+    :param msg: The message
+    """
+    print(_warning_wrapper.fill(f"{_WARNING_PREFIX}{msg}"))
+
+
+def info(msg: str) -> NoReturn:
+    """
+    Emit an informational message.
+
+    :param msg: The message
+    """
+    print(_no_prefix_wrapper.fill(msg))
+
+
+def error(msg: str) -> NoReturn:
+    """
+    Emit an error message.
+
+    :param msg: The message
+    """
+    print(_error_wrapper.fill(f"{_ERROR_PREFIX}{msg}"))
+
 
 def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
     """

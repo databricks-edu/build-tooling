@@ -14,10 +14,10 @@ from termcolor import colored
 from string import Template as StringTemplate
 import functools
 from subprocess import Popen
-from db_edu_util import db_cli, EnhancedTextWrapper
+from db_edu_util import die, error, warn, debug, set_debug, db_cli
 from db_edu_util.db_cli import DatabricksCliError
-from typing import (Generator, Sequence, Pattern, Mapping, NoReturn, Optional,
-                    Any, Dict, TextIO)
+from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
+                    Dict, TextIO)
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -214,61 +214,9 @@ COLUMNS = int(os.environ.get('COLUMNS', '80')) - 1
 class CourseError(Exception):
     pass
 
-
-# -----------------------------------------------------------------------------
-# Globals
-# -----------------------------------------------------------------------------
-
-warning_wrapper = EnhancedTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
-debug_wrapper = EnhancedTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
-error_wrapper = EnhancedTextWrapper(subsequent_indent=' ' * len(ERROR_PREFIX))
-debugging = False
-
 # -----------------------------------------------------------------------------
 # Internal functions
 # -----------------------------------------------------------------------------
-
-def printerr(msg: str) -> NoReturn:
-    """
-    Emit an error message, with wrapping.
-
-    :param msg: the message
-    :return: Nothing
-    """
-    sys.stderr.write(error_wrapper.fill(ERROR_PREFIX + msg) + '\n')
-
-
-def die(msg: str) -> NoReturn:
-    """
-    Emit an error message, with wrapping. Then, abort the program.
-
-    :param msg: the message
-    :return: Nothing
-    """
-    printerr(msg)
-    sys.exit(1)
-
-
-def warn(msg: str) -> NoReturn:
-    """
-    Emit a warning message, with wrapping.
-
-    :param msg: the message
-    :return: Nothing
-    """
-    print(warning_wrapper.fill(WARNING_PREFIX + msg))
-
-
-def debug(msg: str) -> NoReturn:
-    """
-    Emit a debug message, with wrapping.
-
-    :param msg: the message
-    :return: Nothing
-    """
-    if debugging:
-        print(debug_wrapper.fill(DEBUG_PREFIX + msg))
-
 
 @contextmanager
 def working_directory(dir: str) -> Generator[None, None, None]:
@@ -435,7 +383,7 @@ def load_config(config_path: str,
                 fields = line.split('=')
                 if len(fields) != 2:
                     bad = True
-                    printerr(f'"{config_path}", line {lno}: Malformed line')
+                    error(f'"{config_path}", line {lno}: Malformed line')
                     continue
 
                 cfg[fields[0]] = fields[1]
@@ -1129,9 +1077,8 @@ def which(cfg: Dict[str, str]) -> NoReturn:
 # -----------------------------------------------------------------------------
 
 def main():
-    global debugging
     if os.environ.get('COURSE_DEBUG', 'false') == 'true':
-        debugging = True
+        set_debug(True)
 
     try:
         # Load the configuration and then run it through update_config() to
@@ -1312,10 +1259,10 @@ def main():
             i += 1
 
     except CourseError as e:
-        printerr(str(e))
+        error(str(e))
 
     except KeyboardInterrupt:
-        printerr('\n*** Interrupted.')
+        error('\n*** Interrupted.')
 
 if __name__ == '__main__':
     main()

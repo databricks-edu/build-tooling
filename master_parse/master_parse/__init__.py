@@ -6,9 +6,6 @@ Converts notebooks exported in "source" format from Databricks
 into separate notebooks by language and for instructor and student use.
 It can also generate IPython notebooks.
 
-Works with Python 2 and Python 3. When using IPython, IPython version 3 is
-required.
-
 This module can be used as a command or a library. To see the valid command
 line arguments, run with no arguments. If used as a library, the main
 entry point is process_notebooks().
@@ -28,6 +25,7 @@ from random import SystemRandom
 from db_edu_util import (all_pred, wrap2stdout, error, verbose, set_verbosity,
                          warn, verbosity_is_enabled, info, debug, set_debug,
                          debug_is_enabled)
+import dataclasses
 from dataclasses import dataclass
 from typing import (Sequence, Optional, Dict, Set, NoReturn, Pattern, Match,
                     Tuple, List, TextIO, Any)
@@ -369,10 +367,10 @@ class Params(object):
 
 @dataclass(frozen=True)
 class Command:
-    part: int
     code: CommandCode
     labels: Sequence[CommandLabel]
     content: List[str]
+    part: int = 0
 
 
 class NotebookGenerator(object):
@@ -444,7 +442,10 @@ class NotebookGenerator(object):
         labels = {
             CommandLabel.TEST,
             CommandLabel.INLINE,
-            CommandLabel.VIDEO
+            CommandLabel.VIDEO,
+            CommandLabel.PROFILES,
+            CommandLabel.AMAZON_ONLY,
+            CommandLabel.AZURE_ONLY
         }
         for arg in args:
             label = NotebookGenerator.param_to_label[arg]
@@ -455,13 +456,6 @@ class NotebookGenerator(object):
             labels.add(CommandLabel.SELF_PACED_ONLY)
         elif params.course_type == CourseType.ILT:
             labels.add(CommandLabel.ILT_ONLY)
-
-        # Don't discard the profile labels.
-        for c in CommandLabel:
-            tp = LABEL_TO_TARGET_PROFILE.get(c.value)
-            if tp is not None:
-                # This is a target profile label. Mark it as kept.
-                labels.add(c)
 
         return labels
 
@@ -528,7 +522,16 @@ class NotebookGenerator(object):
 
         command_cell = _command_cell.format(self.base_comment)
 
-        max_part = max([part for (part, _, _, _) in commands]) if parts else 0
+        if parts:
+            # "commands" is a list of Command. Command is a dataclass.
+            # Calling asdict() on an instance of a dataclass returns its
+            # fields (and values) as a dictionary. The following gets the
+            # value of each "part" field.
+            max_part = max(
+                [dataclasses.asdict(c)['part'] for c in commands]
+            )
+        else:
+            max_part = 0
 
         # Don't generate parts for IPython notebooks or instructor notebooks.
         if max_part == 0 or is_IPython or is_instructor_nb:
@@ -541,7 +544,7 @@ class NotebookGenerator(object):
         base_file, _ = os.path.splitext(os.path.basename(input_name))
         for i in range(max_part + 1): # parts are zero indexed
 
-            part_base = '_part{0}'
+            part_base = f'_part{i}'
             part_string = part_base.format(i + 1) if parts else ''
 
             out_dir = os.path.join(
@@ -592,10 +595,15 @@ class NotebookGenerator(object):
                 output.write(header_adj + '\n')
 
                 added_run = False
-                for (cell_num, (part, code, labels, content)) in enumerate(commands):
+                for cell_num, cmd in enumerate(commands):
+                    part = cmd.part
+                    code = cmd.code
+                    labels = cmd.labels
+                    content = cmd.content
+
                     cell_num += 1 # 1-based, for error reporting
 
-                    self._check_cell_type(code, labels, cell_num)
+                    self._check_cell_type(code, set(labels), cell_num)
 
                     if parts:
                         if part > i:  # don't show later parts
@@ -687,27 +695,23 @@ class NotebookGenerator(object):
                         labels = labels - {CommandLabel.ALL_NOTEBOOKS}
 
 
-                    # Check for target profile label.
-                    remove_profile_cell = False
-                    cell_profile_labels = []
-                    for label in labels:
-                        lv = label.value
-                        cell_profile = LABEL_TO_TARGET_PROFILE.get(lv)
-                        if cell_profile is None:
-                            continue
-                        cell_profile_labels.append(lv)
-
-                        if ((params.target_profile is not TargetProfile.NONE) and
-                            (cell_profile != params.target_profile)):
-                            remove_profile_cell = True
-
-                    if len(cell_profile_labels) > 1:
-                        tag_str = ', '.join(cell_profile_labels)
-                        raise Exception(
-                            f'Cell {cell_num} in {input_name} has multiple ' +
-                            f'profile tags: {tag_str}'
+                    # Check for profile label.
+                    profiles = []
+                    if ((CommandLabel.PROFILES in labels) or
+                        (CommandLabel.AMAZON_ONLY in labels) or
+                        (CommandLabel.AZURE_ONLY in labels)):
+                        profiles = self._get_profiles(
+                            input_name, cell_num, content
                         )
-                    if remove_profile_cell:
+
+                    if ((params.profile is not None) and
+                        (len(profiles) > 0) and
+                        (params.profile.name not in profiles)):
+                        # This cell is not in the right profile.
+                        debug(f'"{input_name}", cell #{cell_num}: Build ' +
+                              f'profile is "{params.profile.name}", but ' +
+                              f'cell is only valid in {", ".join(profiles)} ' +
+                              f'profile(s). Skipping cell.')
                         continue
 
                     # Process the cell.
@@ -813,9 +817,52 @@ class NotebookGenerator(object):
                 new_content.append(line)
             else:
                 # Add the default annotation.
-                new_content.append(line + " - " + DEFAULT_TEST_CELL_ANNOTATION)
+                new_content.append(f'{line} - {DEFAULT_TEST_CELL_ANNOTATION}')
 
         return new_content
+
+    def _get_profiles(self,
+                      notebook_name: str,
+                      cell_num: int,
+                      content: List[str]) -> Set[str]:
+        result = set()
+        for line in content:
+            if _amazon_only.match(line):
+                result.add('amazon')
+                continue
+
+            if _azure_only.match(line):
+                result.add('azure')
+                continue
+
+            m = _profiles.match(line)
+            if not m:
+                continue
+
+            # The regular expression (used to parse) matches the first part
+            # of the token (e.g., "// PROFILES"). The remainder of the line
+            # is comma-separated list of profiles for which the cell is valid.
+            profiles_str = line[m.end():].strip()
+
+            if len(profiles_str) == 0:
+                warn(f'"{notebook_name}", cell #{cell_num}: ' +
+                     'Found PROFILES tag, with no profiles.')
+                break
+
+            # Allow a ":" (e.g., "-- PROFILES:", as well as "-- PROFILES ")
+            if profiles_str[0] == ':':
+                profiles_str = profiles_str[1:]
+
+            if len(profiles_str) == 0:
+                warn(f'"{notebook_name}", cell #{cell_num}: ' +
+                     'Found PROFILES tag, with no profiles.')
+                break
+
+            profiles = re.split(r'[\s,]+', profiles_str)
+            for i in profiles:
+                result.add(i)
+
+        return result
 
     def _handle_video_cell(self,
                            cell_num: int,
@@ -1331,6 +1378,7 @@ _all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
 _instructor_note = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
 _video = or_magic(CommandLabel.VIDEO.value)
 _test = or_magic(CommandLabel.TEST.value)
+_profiles = or_magic(CommandLabel.PROFILES.value)
 
 _ipython_remove_line = re.compile(
     r'.*{0}\s*REMOVE\s*LINE\s*IPYTHON\s*$'.format(_comment)
@@ -1528,6 +1576,7 @@ class Parser:
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
                         (_video, CommandLabel.VIDEO),
+                        (_profiles, CommandLabel.PROFILES),
                         (_test, CommandLabel.TEST),
                         (_sql_only, CommandLabel.SQL_ONLY)]
 
@@ -1611,10 +1660,10 @@ class Parser:
                 # non base notebook commands are inlined automatically
                 cell_state.command_labels.add(CommandLabel.INLINE)
 
-            cmd = Command(self.part,
-                          cell_state.command_code,
-                          cell_state.command_labels,
-                          cell_state.command_content)
+            cmd = Command(part=self.part,
+                          code=cell_state.command_code,
+                          labels=cell_state.command_labels,
+                          content=cell_state.command_content)
 
             commands.append(cmd)
 
@@ -1642,7 +1691,6 @@ class Parser:
             line_number_inc += 1
 
         for i, line in enumerate(file_contents):
-
             line_number = i + line_number_inc
 
             if current.starting_line_number is None:

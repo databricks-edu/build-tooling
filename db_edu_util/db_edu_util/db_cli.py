@@ -63,7 +63,7 @@ def databricks(args: Sequence[str],
     args = ('--profile', db_profile) + tuple(args)
 
     if verbose:
-        print(('+ databricks {0}'.format(' '.join(args))))
+        print(f"+ databricks {' '.join(args)}")
 
     buf = None
     saved_stdout = None

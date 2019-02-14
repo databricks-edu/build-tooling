@@ -156,7 +156,7 @@ def verbose(msg: str) -> NoReturn:
     :param msg: the message
     """
     if _verbose:
-        print((_do_fill(f"{_verbose_prefix}{msg}", _verbose_wrapper)))
+        print(_do_fill(f"{_verbose_prefix}{msg}", _verbose_wrapper))
 
 
 def debug(msg: str, debug_enabled: bool = True) -> NoReturn:
@@ -167,7 +167,7 @@ def debug(msg: str, debug_enabled: bool = True) -> NoReturn:
     :param debug_enabled:  whether debug messages are enabled or not
     """
     if debug_enabled:
-        print((_do_fill(f"{DEBUG_PREFIX}{msg}", _debug_wrapper)))
+        print(_do_fill(f"{DEBUG_PREFIX}{msg}", _debug_wrapper))
 
 
 def warning(msg: str) -> NoReturn:
@@ -176,7 +176,7 @@ def warning(msg: str) -> NoReturn:
 
     :param msg: The message
     """
-    print((_do_fill(f"{WARNING_PREFIX}{msg}", _warning_wrapper)))
+    print(_do_fill(f"{WARNING_PREFIX}{msg}", _warning_wrapper))
 
 
 def info(msg: str) -> NoReturn:
@@ -185,7 +185,7 @@ def info(msg: str) -> NoReturn:
 
     :param msg: The message
     """
-    print((_do_fill(msg, _info_wrapper)))
+    print(_do_fill(msg, _info_wrapper))
 
 
 def emit_error(msg: str) -> NoReturn:
@@ -195,7 +195,7 @@ def emit_error(msg: str) -> NoReturn:
     :param msg: The message
     """
     print('***')
-    print((_do_fill(msg, _error_wrapper)))
+    print(_do_fill(msg, _error_wrapper))
     print('***')
 
 
@@ -206,7 +206,7 @@ def wrap2stdout(msg: str) -> NoReturn:
 
     :param msg: The message
     """
-    print((_do_fill(msg, _generic_wrapper)))
+    print(_do_fill(msg, _generic_wrapper))
 
 
 def parse_version_string(version: str) -> Tuple[int, int]:

@@ -9,7 +9,6 @@ from __future__ import annotations # PEP 563 (allows annotation forward refs)
 from abc import ABC, abstractmethod
 import re
 import os
-from os import path
 import contextlib
 import markdown2
 import shutil
@@ -317,7 +316,7 @@ def merge_dicts(dict1:  Dict[str, Any],
     >>> sorted(list(y.items())) # should not be modified
     [('b', 'Bee'), ('d', 40), ('x', 'Ecks')]
     >>> z = {'z': 'Frammis', 'c': 'Cee'}
-    >>> sorted(list(merge_dicts(x, y, z)))
+    >>> sorted(list(merge_dicts(x, y, z).items()))
     [('a', 10), ('b', 'Bee'), ('c', 'Cee'), ('d', 40), ('x', 'Ecks'), ('z', 'Frammis')]
     """
     res = dict1.copy()
@@ -369,7 +368,7 @@ def bool_value(s: Union[str, int]) -> bool:
     elif sl in ('f', 'false', '0', 'no'):
         return False
     else:
-        raise ValueError('Bad boolean value: "{0}"'.format(s))
+        raise ValueError(f'Bad boolean value: "{s}"')
 
 
 def bool_field(d: Dict[str, Any],
@@ -512,9 +511,7 @@ def rm_rf(path: str) -> NoReturn:
         elif os.path.isdir(path):
             shutil.rmtree(path)
         else:
-            raise OSError(
-                '"{0}" is neither a file nor a directory'.format(path)
-            )
+            raise OSError(f'"{path}" is neither a file nor a directory')
 
 
 def mkdirp(dir: str) -> NoReturn:
@@ -525,7 +522,7 @@ def mkdirp(dir: str) -> NoReturn:
     :param dir: The directory to be created, along with any intervening
                 parent directories that don't exist.
     """
-    if not path.exists(dir):
+    if not os.path.exists(dir):
         os.makedirs(dir)
 
 
@@ -656,7 +653,7 @@ def markdown_to_html(markdown: str,
             output.write(
                 template.substitute(
                     body=body,
-                    title=path.basename(markdown),
+                    title=os.path.basename(markdown),
                     css=stylesheet
                 )
             )
@@ -811,11 +808,13 @@ class DefaultStrMixin(ABC):
         fields = []
         for key in sorted(self.__dict__.keys()):
             value = self.__dict__[key]
-            v = '"{0}"'.format(value) if isinstance(value, str) else value
-            fields.append('{0}={1}'.format(key, v))
+            v = f'"{value}"' if isinstance(value, str) else value
+            fields.append(f'{key}={v}')
 
-        delim = ',\n{0}'.format(indent)
-        return '{0}({1})'.format(self.__class__.__name__, delim.join(fields))
+        delim = f',\n{indent}'
+        class_name = self.__class__.__name__
+        field_str = delim.join(fields)
+        return f'{class_name}({field_str})'
 
     def __repr__(self):
         return self.__str__()
@@ -879,7 +878,7 @@ def _replace_tokens(s: str, tokens: Dict[str, str]) -> str:
 
 # The grammar itself. Some values are substituted, so they can be shared
 # with the code.
-_VAR_SUBST_OPS_RULE = ' / '.join(['"{}"'.format(op) for op in _VAR_SUBST_OPS])
+_VAR_SUBST_OPS_RULE = ' / '.join([f'"{op}"' for op in _VAR_SUBST_OPS])
 _VAR_SUBST_GRAMMAR = _replace_tokens(r'''
 # A line consists of zero or more terms. 
 line                  = term*
@@ -1227,16 +1226,10 @@ class VariableSubstituter(object):
             self._tokens = list(flatten(visitor.visit(parsimonious_ast)))
 
         except ParseError as e:
-            if e.message:
-                raise VariableSubstituterParseError(
-                    'Failed to parse "{0}: {1}'.format(
-                        self.template, e.message
-                    )
-                )
-            else:
-                raise VariableSubstituterParseError(
-                    'Failed to parse "{0}".'.format(self.template)
+            raise VariableSubstituterParseError(
+                f'Failed to parse "{self.template}": {e}'
             )
+
         except VisitationError as e:
             # This is ugly and would not be necessary if VisitationError
             # contained the original thrown exception. The visitor in this
@@ -1254,11 +1247,11 @@ class VariableSubstituter(object):
             m = pat.search(msg)
             if m:
                 raise VariableSubstituterParseError(
-                   'Failed to parse "{0}: {1}'.format(self.template, m.group(1))
+                    f'Failed to parse "{self.template}: {m.group(1)}'
                 )
             else:
                 raise VariableSubstituterParseError(
-                    'Failed to parse "{0}"'.format(self.template)
+                    f'Failed to parse "{self.template}"'
                 )
 
     @property
@@ -1329,7 +1322,7 @@ class VariableSubstituter(object):
             elif type(token) == _Edit:
                 result = token.evaluate(get_var)
             else:
-                raise KeyError('(BUG) Unknown token: {0}'.format(token))
+                raise KeyError(f'(BUG) Unknown token: {token}')
 
             return result
 
@@ -1605,10 +1598,10 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
             elif pat == 'n:n':
                 slice_nums = [int(tokens[0]), int(tokens[2])]
             else:
+                token_str = ''.join(tokens)
                 raise VariableSubstituterParseError(
-                    '(BUG) Unrecognized slice pattern "{0}" in "{1}".'.format(
-                        ''.join(tokens), node.text
-                    )
+                    f'(BUG) Unrecognized slice pattern "{token_str}" in ' +
+                    f'"{node.text}".'
                 )
 
         var_name = self._find_recursively(node, self.IDENT_RE)
@@ -1714,11 +1707,10 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         if not all_pred(lambda i: i is not None,
                         [var, op, to_compare, if_true, if_false]):
             raise VariableSubstituterParseError(
-                ('(BUG) Unable to find all expected pieces of parsed ternary ' +
-                 'expression: "{}". var={}, op={}, to_compare={}, if_true={} ' +
-                 'if_false={}').format(
-                    node.text, var, op, to_compare, if_true, if_false
-                )
+                '(BUG) Unable to find all expected pieces of parsed ternary ' +
+                f'expression: "{node.text}". var={var}, op={op}, ' +
+                f'to_compare={to_compare}, if_true={if_true}, ' +
+                f'if_false={if_false}'
             )
         return _Ternary(variable=var, op=op, to_compare=to_compare,
                        if_true=if_true, if_false=if_false)
@@ -1812,9 +1804,8 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                     re.compile(pattern)
                 except:
                     raise VariableSubstituterParseError(
-                        ('Bad regular expression "{0}" in "{1}".'.format(
-                            child.text, node.text
-                        ))
+                        f'Bad regular expression "{child.text}" in ' +
+                        f'"{node.text}".'
                     )
 
             elif expr.name.startswith('replacement'):
@@ -1829,20 +1820,18 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
                 leftover = flag_set - {'i', 'g'}
                 if len(leftover) > 0:
+                    flag_str = ', '.join(["'" + c + "'" for c in leftover])
                     raise VariableSubstituterParseError(
-                        'Unknown flag(s) {0} in "{1}"'.format(
-                            ', '.join(["'" + c + "'" for c in leftover]),
-                            node.text
-                        )
+                        f'Unknown flag(s) {flag_str} in "{node.text}"'
                     )
 
         # Make sure we have all the pieces. Note that "repl" is allowed to
         # be empty.
         if not all_pred(lambda i: i is not None, [var, pattern, repl]):
             raise VariableSubstituterParseError(
-                ('(BUG) Unable to find all expected pieces of parsed ' +
-                 'substitution expression: "{}". variable={}, pattern={}, ' +
-                 'repl={}').format(node.text, var, pattern, repl)
+                '(BUG) Unable to find all expected pieces of parsed ' +
+                f'substitution expression: "{node.text}". variable={var}, ' +
+                f'pattern={pattern}, repl={repl}'
             )
 
         # Compile the regular expression.
@@ -1853,8 +1842,8 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         max_group_num = max(referenced_groups) if referenced_groups else 0
         if max_group_num > total_groups:
             raise VariableSubstituterParseError(
-                ('Replacement pattern "{0}" refers to non-existent group(s) ' +
-                 'in "{1}"').format(repl_string, pattern.pattern)
+                f'Replacement pattern "{repl_string}" refers to non-existent ' +
+                f'group(s) in "{pattern.pattern}"'
             )
 
         return _Edit(variable=var, pattern=pattern, repl=repl,
@@ -1941,10 +1930,11 @@ def _do_copy(src: str,
 
     :raise IOError: On error
     """
-    if not path.exists(src):
-        raise IOError('"{0}" does not exist.'.format(src))
-    src = path.abspath(src)
-    dest = path.abspath(dest)
+    if not os.path.exists(src):
+        raise IOError(f'"{src}" does not exist.')
+
+    src = os.path.abspath(src)
+    dest = os.path.abspath(dest)
     ensure_parent_dir_exists(dest)
 
     if not ensure_final_newline:

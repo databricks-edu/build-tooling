@@ -163,10 +163,13 @@ class NotebookCell:
                           the base notebook language.
     """
     command: str
-    guid: Optional[uuid.UUID]
     position: int
     cell_type: CellType
     marked_magic: bool
+    # Note: Can't just use uuid.uuid4() as the default, because it'd be
+    # evaluated as class-definition time, meaning every cell would get the
+    # same default value.
+    guid: Optional[uuid.UUID] = dataclasses.field(default_factory=uuid.uuid4)
 
     def to_json_dict(self) -> Dict[str, Any]:
         """
@@ -224,7 +227,7 @@ class NotebookCell:
 
 
 # An empty cell, used as a sentinel marker.
-EmptyCell = NotebookCell(command='', guid=None, position=0,
+EmptyCell = NotebookCell(command='', position=0,
                          cell_type=CellType.UNKNOWN, marked_magic=True)
 
 @dataclass(frozen=True)
@@ -235,7 +238,7 @@ class Notebook:
     """
     cells: Sequence[NotebookCell]
     path: str
-    guid: uuid.UUID = uuid.uuid4()
+    guid: Optional[uuid.UUID] = dataclasses.field(default_factory=uuid.uuid4)
 
     @property
     def name(self) -> str:

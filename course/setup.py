@@ -29,7 +29,7 @@ setup(
     version=version,
     description='Workflow management tool for Databricks curriculum development',
     install_requires=[
-        'markdown2 >= 2.3.5',
+        'markdown2 == 2.3.7',
         'termcolor >= 1.1.0',
     ],
     author='Databricks Education Team',

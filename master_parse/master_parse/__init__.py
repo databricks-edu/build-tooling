@@ -20,11 +20,10 @@ from enum import Enum
 from string import Template as StringTemplate
 from master_parse.InlineToken import InlineToken, expand_inline_tokens
 from datetime import datetime
-from textwrap import TextWrapper
 from random import SystemRandom
 from db_edu_util import (all_pred, wrap2stdout, error, verbose, set_verbosity,
                          warn, verbosity_is_enabled, info, debug, set_debug,
-                         debug_is_enabled)
+                         debug_is_enabled, squeeze_blank_lines)
 import dataclasses
 from dataclasses import dataclass
 from typing import (Sequence, Optional, Dict, Set, NoReturn, Pattern, Match,
@@ -260,11 +259,12 @@ class Profile:
     name: str
     value: str
 
-class Params(object):
-    '''
+
+class Params:
+    """
     Parsed command-line parameters or manually constructed parameters,
     passed to process_notebooks().
-    '''
+    """
     def __init__(self,
                  path: Optional[str] = None,
                  output_dir: str = DEFAULT_OUTPUT_DIR,
@@ -290,6 +290,7 @@ class Params(object):
                  enable_debug: bool = False,
                  copyright_year: Optional[str] = None,
                  enable_templates: bool = False,
+                 instructor_notes_file: Optional[str] = None,
                  extra_template_vars: Optional[Dict[str, str]] = None):
         self.path = path
         self.output_dir = output_dir or DEFAULT_OUTPUT_DIR
@@ -318,6 +319,7 @@ class Params(object):
         self.course_type = course_type
         self.profile = profile
         self.enable_templates = enable_templates
+        self.instructor_notes_file = instructor_notes_file
         self.extra_template_vars = extra_template_vars or {}
 
         for purpose, file in (('Notebook footer', notebook_footer_path),
@@ -483,7 +485,7 @@ class NotebookGenerator(object):
                  input_name: str,
                  params: Params,
                  parts: bool = True) -> NoReturn:
-        '''
+        """
         Generate output notebook.
 
         :param header:      the notebook header
@@ -491,11 +493,14 @@ class NotebookGenerator(object):
         :param input_name:  the source notebook name
         :param params:      parsed command line parameters
         :param parts:       whether to honor parts or not
-        '''
-
+        """
         verbose(
             f'Generating {self.notebook_user} notebook(s) for "{input_name}"'
         )
+
+        # This is an array of instructor note cells, each cell consolidated
+        # into a single string.
+        consolidated_instructor_notes = []
 
         if params.enable_templates:
             # Process the cell as a template.
@@ -598,7 +603,7 @@ class NotebookGenerator(object):
                 for cell_num, cmd in enumerate(commands):
                     part = cmd.part
                     code = cmd.code
-                    labels = cmd.labels
+                    labels = set(cmd.labels)
                     content = cmd.content
 
                     cell_num += 1 # 1-based, for error reporting
@@ -651,6 +656,10 @@ class NotebookGenerator(object):
                         # and force use of %md-sandbox
 
                         code = CommandCode.MARKDOWN_SANDBOX
+                        consolidated_instructor_notes.append(
+                            '\n'.join(_transform_match(content, self.remove))
+                        )
+
                         content = (
                             [INSTRUCTOR_NOTE_HEADING] +
                             content
@@ -659,7 +668,8 @@ class NotebookGenerator(object):
                     if CommandLabel.TODO in labels:
                         content = self._handle_todo_cell(cell_num, content)
 
-                    if code in (CommandCode.MARKDOWN, CommandCode.MARKDOWN_SANDBOX):
+                    if code in (CommandCode.MARKDOWN,
+                                CommandCode.MARKDOWN_SANDBOX):
                         # Expand inline callouts.
                         (content, sandbox) = expand_inline_tokens(INLINE_TOKENS,
                                                                   content)
@@ -693,7 +703,6 @@ class NotebookGenerator(object):
                         # -- ANSWER (or -- TODO)
                         # -- ALL_NOTEBOOKS
                         labels = labels - {CommandLabel.ALL_NOTEBOOKS}
-
 
                     # Check for profile label.
                     profiles = []
@@ -761,6 +770,21 @@ class NotebookGenerator(object):
 
             if is_IPython:
                 self.generate_ipynb(file_out)
+
+        if ((len(consolidated_instructor_notes) > 0) and
+            (params.instructor_notes_file)):
+            self._write_consolidated_instructor_notes(
+                consolidated_instructor_notes, params.instructor_notes_file
+            )
+
+    def _write_consolidated_instructor_notes(self,
+                                             content: Sequence[str],
+                                             out: str) -> NoReturn:
+
+        output = squeeze_blank_lines(''.join(content))
+        with codecs.open(out, mode='w', encoding='utf-8') as out:
+            out.write('# Instructor Notes\n\n')
+            out.write(output)
 
     def _handle_todo_cell(self,
                           cell_num: int,
@@ -1921,6 +1945,10 @@ def main():
                             action='store',
                             default=DEFAULT_ENCODING_OUT,
                             metavar="ENCODING")
+    arg_parser.add_argument('--instructor-notes',
+                            help='Write instructor notes (as Markdown) to FILE.',
+                            metavar="FILE",
+                            action='store')
     arg_parser.add_argument('--footer',
                             help='By default, even if you specify -nf, this ' +
                                  'tool does not add the notebook footer to ' +
@@ -2051,6 +2079,7 @@ def main():
         r=args.rproject,
         sql=args.sql,
         instructor=args.instructor,
+        instructor_notes_file=args.instructor_notes,
         answers=args.answers,
         exercises=args.exercises,
         creative_commons=args.creativecommons,

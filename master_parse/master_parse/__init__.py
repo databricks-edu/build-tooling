@@ -424,7 +424,7 @@ class NotebookGenerator(object):
 
         # In kept cells, remove the following labels from the content
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
-                       _all_notebooks, _instructor_note, _video,
+                       _all_notebooks, _instructor_note, _video, _profiles,
                        _azure_only, _amazon_only, _ilt_only, _self_paced_only]
 
         self.replace = [(_ipythonReplaceRemoveLine, ''),

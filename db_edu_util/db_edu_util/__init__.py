@@ -238,6 +238,48 @@ def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
     return True
 
 
+def squeeze_blank_lines(s: str) -> str:
+    """
+    Squeeze multiple blank lines to a single blank line.
+
+    >>> s = 'abc\\n\\n\\ndef\\nghi\\n\\n\\n\\n\\n'
+    >>> squeeze_blank_lines(s)
+    'abc\\n\\ndef\\nghi\\n'
+    >>> squeeze_blank_lines('\\n\\n\\n'.join(['a', 'b', 'c']))
+    'a\\n\\nb\\n\\nc\\n'
+    >>> squeeze_blank_lines('')
+    ''
+    >>> squeeze_blank_lines('\\n\\n')
+    '\\n'
+    """
+    saw_blank = False
+    if len(s.strip(' \t')) == 0:
+        return s.strip(' \t')
+
+    buf = []
+    lines = s.split('\n')
+    for line in lines:
+        line = line.strip()
+        if len(line) == 0:
+            if saw_blank:
+                continue
+            saw_blank = True
+        else:
+            saw_blank = False
+        buf.append(line)
+
+    res = '\n'.join(buf)
+    if (len(res) > 0) and res[-1] != '\n':
+        res += '\n'
+
+    # Edge case: Nothing but blank lines will look, to the above loop, like an
+    # empty string. If we had at least one input line, make sure there's a
+    # newline.
+    if (len(res) == 0):
+        res += '\n'
+
+    return res
+
 # ---------------------------------------------------------------------------
 # Fire up doctest if main()
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ from typing import Callable, Iterable, Any
 from textwrap import TextWrapper
 import os
 import sys
+from itertools import dropwhile
 from typing import Optional, NoReturn
 
 __all__ = ['all_pred', 'notebooktools', 'db_cli', 'EnhancedTextWrapper', 'die',
@@ -240,7 +241,8 @@ def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
 
 def squeeze_blank_lines(s: str) -> str:
     """
-    Squeeze multiple blank lines to a single blank line.
+    Squeeze multiple blank lines to a single blank line. Also gets rid of
+    any leading blank lines.
 
     >>> s = 'abc\\n\\n\\ndef\\nghi\\n\\n\\n\\n\\n'
     >>> squeeze_blank_lines(s)
@@ -251,13 +253,15 @@ def squeeze_blank_lines(s: str) -> str:
     ''
     >>> squeeze_blank_lines('\\n\\n')
     '\\n'
+    >>> squeeze_blank_lines('\\n\\na\\n\\nb\\nc')
+    'a\\n\\nb\\nc'
     """
     saw_blank = False
     if len(s.strip(' \t')) == 0:
         return s.strip(' \t')
 
     buf = []
-    lines = s.split('\n')
+    lines = dropwhile(lambda s: len(s.strip()) == 0, s.split('\n'))
     for line in lines:
         line = line.strip()
         if len(line) == 0:

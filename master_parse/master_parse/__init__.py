@@ -281,7 +281,8 @@ class Params:
                  add_footer: bool = False,
                  notebook_footer_path: Optional[str] = None,
                  add_heading: bool = False,
-                 profile: Optional[Profile] = None,
+                 active_profile: Optional[Profile] = None,
+                 all_profiles: Sequence[Profile] = None,
                  course_type: CourseType = CourseType.NONE,
                  notebook_heading_path: Optional[str] = None,
                  encoding_in: str = DEFAULT_ENCODING_IN,
@@ -317,7 +318,8 @@ class Params:
         self.copyright_year = copyright_year or datetime.now().year
         assert(course_type in set(CourseType))
         self.course_type = course_type
-        self.profile = profile
+        self.active_profile = active_profile
+        self.all_profiles = all_profiles or []
         self.enable_templates = enable_templates
         self.instructor_notes_file = instructor_notes_file
         self.extra_template_vars = extra_template_vars or {}
@@ -713,14 +715,15 @@ class NotebookGenerator(object):
                             input_name, cell_num, content
                         )
 
-                    if ((params.profile is not None) and
+                    if ((params.active_profile is not None) and
                         (len(profiles) > 0) and
-                        (params.profile.name not in profiles)):
+                        (params.active_profile.name not in profiles)):
                         # This cell is not in the right profile.
                         debug(f'"{input_name}", cell #{cell_num}: Build ' +
-                              f'profile is "{params.profile.name}", but ' +
-                              f'cell is only valid in {", ".join(profiles)} ' +
-                              f'profile(s). Skipping cell.')
+                              f'profile is "{params.active_profile.name}", ' +
+                              f'but cell is only valid in ' +
+                              f'{", ".join(profiles)} profile(s). Skipping ' +
+                              'cell.')
                         continue
 
                     # Process the cell.
@@ -1280,8 +1283,12 @@ class CellTemplateProcessor(object):
             'self_paced':        self_paced,
         }
 
-        if params.profile:
-            vars[params.profile.name] = params.profile.value
+        if params.active_profile:
+            for prof in params.all_profiles:
+                if prof == params.active_profile:
+                    vars[prof.name] = prof.value or prof.name
+                else:
+                    vars[prof.name] = ''
 
         vars.update(params.extra_template_vars)
         check_for_bad_tags(s)
@@ -1984,9 +1991,14 @@ def main():
                                  'passed via --variables) are available).',
                             action='store_true')
     arg_parser.add_argument('--profile',
-                            help="Build profile, if any. Valid " +
-                                 "values: amazon, azure",
+                            help="Build profile, if any. Be sure to specify " +
+                                 "--all-profiles, as well.",
                             metavar="NAME[=VALUE]",
+                            default=None)
+    arg_parser.add_argument('--all-profiles',
+                            help="Comma-separated list of all build profiles " +
+                                 "supported by the course.",
+                            metavar="PROFILES",
                             default=None)
     arg_parser.add_argument('-v', '--verbose',
                             help="Enable verbose messages.",
@@ -2066,6 +2078,16 @@ def main():
         else:
             arg_parser.error(f'Bad value "{prof_str}" for --profile')
 
+    all_profiles = args.all_profiles
+    if profile:
+        if not all_profiles:
+            warn(f"You've specified --profile, but not --all-profiles. " +
+                 "This is usually an error.")
+        else:
+            all_profiles = [
+                Profile(p, p) for p in re.split(r'[\s,]+', all_profiles)
+            ]
+
     course_types = { c.value : c for c in CourseType if c != CourseType.NONE }
     course_type = course_types[args.course_type]
 
@@ -2092,7 +2114,8 @@ def main():
         enable_verbosity=args.verbose,
         enable_debug=args.debug,
         copyright_year=args.copyright,
-        profile=profile,
+        active_profile=profile,
+        all_profiles=all_profiles,
         course_type=course_type,
         enable_templates=args.templates,
         extra_template_vars=extra_template_vars

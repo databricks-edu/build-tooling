@@ -8,7 +8,7 @@ import re
 import json
 from io import StringIO
 from databricks_cli.cli import cli
-from typing import Optional, Sequence
+from typing import Optional, Sequence, NoReturn
 
 __all__ = ['databricks', 'DatabricksCliError']
 
@@ -34,7 +34,7 @@ class DatabricksCliError(Exception):
 def databricks(args: Sequence[str],
                db_profile: Optional[str] = None,
                capture_stdout: bool = False,
-               verbose: bool = False):
+               verbose: bool = False) -> NoReturn:
     """
     Configure and run the Databricks CLI. Example of use:
 

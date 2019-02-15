@@ -30,9 +30,7 @@ class NotebookError(Exception):
     Base exception class for all notebook exceptions. Instances of this class
     can also be thrown.
     """
-    def __init__(self,
-                 msg # type: str
-                 ):
+    def __init__(self, msg: str):
         Exception.__init__(self, msg)
 
 
@@ -40,9 +38,7 @@ class NotebookParseError(NotebookError):
     """
     Thrown to indicate that a notebook could not be parsed.
     """
-    def __init__(self,
-                 msg # type: str
-                ):
+    def __init__(self, msg: str):
         Exception.__init__(self, msg)
 
 
@@ -129,7 +125,7 @@ class CellType(Enum):
             return CellType.R
         if language == NotebookLanguage.SQL:
             return CellType.SQL
-        raise NotebookError('(BUG): Unknown {language}')
+        raise NotebookError(f'(BUG): Unknown {language}')
 
     @classmethod
     def from_string(cls, s: str) -> CellType:
@@ -147,6 +143,7 @@ class CellType(Enum):
             return values[s]
         except KeyError:
             raise NotebookError(f'Unknown cell type: "{s}"')
+
 
 @dataclass(frozen=True)
 class NotebookCell:
@@ -229,6 +226,7 @@ class NotebookCell:
 # An empty cell, used as a sentinel marker.
 EmptyCell = NotebookCell(command='', position=0,
                          cell_type=CellType.UNKNOWN, marked_magic=True)
+
 
 @dataclass(frozen=True)
 class Notebook:
@@ -371,6 +369,7 @@ def _read_notebook(path: str, encoding: str) -> Sequence[str]:
             buf.append(line[:-1])
 
     return buf
+
 
 def _leading_comment_pattern(comment_string: str) -> str:
     """

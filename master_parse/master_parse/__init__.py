@@ -1850,8 +1850,8 @@ def _do_process_notebooks(params: Params) -> NoReturn:
     for kind in notebook_kinds:
         for user in notebook_users:
             for lang in notebook_languages:
-                if kind != NotebookKind.IPYTHON or \
-                        (kind == NotebookKind.IPYTHON and lang == CommandCode.PYTHON):
+                if ((kind != NotebookKind.IPYTHON) or \
+                    (kind == NotebookKind.IPYTHON and lang == CommandCode.PYTHON)):
                     notebooks.append(NotebookGenerator(kind, user, lang, params))
 
     parser = Parser()

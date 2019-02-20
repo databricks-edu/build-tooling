@@ -12,17 +12,18 @@ import sys
 import docopt
 import traceback
 from textwrap import TextWrapper
-from typing import Sequence
 from collections import namedtuple
 import codecs
 from backports.tempfile import TemporaryDirectory
 import shutil
 from zipfile import ZipFile
+from dataclasses import dataclass
 
-from future import standard_library
-standard_library.install_aliases()
+from typing import Union, Sequence, Optional, NoReturn, Dict, Any
 
 from db_edu_util.notebooktools import *
+from db_edu_util import (error, verbose, set_verbosity, warn, set_debug, info,
+                         verbosity_is_enabled, debug, debug_is_enabled, die)
 
 __all__ = ['Config', 'GendbcError', 'gendbc']
 
@@ -30,7 +31,7 @@ __all__ = ['Config', 'GendbcError', 'gendbc']
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = "2.0.3"
+VERSION = "2.1.0"
 
 PROG = os.path.basename(sys.argv[0])
 
@@ -75,109 +76,55 @@ ERROR_PREFIX = "ERROR: "
 # Classes
 # -----------------------------------------------------------------------------
 
-Config = namedtuple('Config', ('debug', 'verbose', 'encoding', 'dbc_folder',
-                               'flatten', 'show_stack', 'source_dir', 'dbc'))
+@dataclass(frozen=True)
+class Config:
+    """
+    Configuration data. When gendbc is called as a command, it parses
+    the command line arguments into an instance of this class. When called
+    as an API, the caller must supply one of these.
+    """
+    dbc_folder: str
+    source_dir: str
+    dbc: str
+    debug: bool = False
+    verbose: bool = False
+    encoding: str = 'UTF-8'
+    flatten: bool = False
+    show_stack: bool = True
+
 
 class GendbcError(Exception):
-    def __init__(self, msg=''):
+    def __init__(self, msg: str = ''):
         Exception.__init__(self, msg)
+        self.message = msg
 
 
 class UsageError(Exception):
-    def __init__(self, msg=''):
+    def __init__(self, msg: str = ''):
         Exception.__init__(self, msg)
+        self.message = msg
 
 
 class LocalTextWrapper(TextWrapper):
-    def __init__(self, width=COLUMNS, subsequent_indent=''):
+    def __init__(self, width: int = COLUMNS, subsequent_indent: str = ''):
         TextWrapper.__init__(self,
                              width=width,
                              subsequent_indent=subsequent_indent)
 
-    def fill(self, msg):
+    def fill(self, msg: str) -> str:
         wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
         return '\n'.join(wrapped)
-
 
 
 # -----------------------------------------------------------------------------
 # Globals
 # -----------------------------------------------------------------------------
 
-_be_verbose = False
-
-_warning_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
-_debug_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
-_error_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(ERROR_PREFIX))
-_verbose_prefix = os.path.basename(sys.argv[0]) + ': '
-_verbose_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(_verbose_prefix))
-
 # -----------------------------------------------------------------------------
 # Internal functions
 # -----------------------------------------------------------------------------
 
-def _printerr(msg):
-    # type: (str) -> None
-    """
-    Print a message to standard error, automatically adding a newline.
-    Does not wrap the message.
-
-    :param msg: the message.
-    :return: nothing
-    """
-    sys.stderr.write(msg + '\n')
-
-
-def _die(msg):
-    # type: (str) -> None
-    """
-    Print a message to standard error, automatically adding a newline. Then,
-    abort the program with an exit code of 1.
-
-    :param msg: the message.
-    :return: doesn't.
-    """
-    _printerr(msg)
-    sys.exit(1)
-
-def _verbose(msg):
-    # type: (str) -> None
-    """
-    Print a verbose message, if verbosity is enabled. Otherwise, do nothing.
-
-    :param msg: the message.
-    :return: nothing
-    """
-    if _be_verbose:
-        print(_verbose_wrapper.fill(_verbose_prefix + msg))
-
-
-def _error(msg):
-    # type: (str) -> None
-    """
-    Print a message to standard error, with an error prefix, automatically
-    adding a newline and wrapping the message.
-
-    :param msg: the message.
-    :return: nothing
-    """
-    _printerr(_error_wrapper.fill("{}{}".format(ERROR_PREFIX, msg)))
-
-
-def _debug(msg):
-    # type: (str) -> None
-    """
-    Print a debug message to standard output, with a debug prefix,
-    automatically adding a newline and wrapping the message.
-
-    :param msg: the message.
-    :return: nothing
-    """
-    print(_debug_wrapper.fill("{}{}".format(DEBUG_PREFIX, msg)))
-
-
-def _find_notebooks(dir, encoding):
-    # type: (str, str) -> Sequence[str]
+def _find_notebooks(dir: str, encoding: str) -> Sequence[str]:
     """
     Find all source notebooks underneath a directory. Looks for Python,
     Scala, R and SQL files, by extension. Keeps only the ones with a valid
@@ -194,7 +141,7 @@ def _find_notebooks(dir, encoding):
             _, ext = os.path.splitext(f)
             path = os.path.join(dirpath, f)
             if not Notebook.is_source_notebook(path, encoding):
-                _verbose('Skipping non-notebook "{}"'.format(path))
+                verbose('Skipping non-notebook "{}"'.format(path))
                 continue
 
             notebooks.append(path)
@@ -202,35 +149,29 @@ def _find_notebooks(dir, encoding):
     return tuple(notebooks)
 
 
-def _parse_args():
-    # type: () -> dict
+def _parse_args() -> Dict[str, Any]:
     """
     Parse the command line parameters into a Config object. Aborts on error.
 
-    :return: the parsed Config object
+    :return: the parsed arguments
     """
-    global _verbose
-
     args = docopt.docopt(USAGE, version=VERSION, options_first=True)
 
     source_dir = args['SRCDIR']
     if not os.path.exists(source_dir):
-        _error('Source directory "{}" does not exist.'.format(source_dir))
+        error(f'Source directory "{source_dir}" does not exist.')
         raise UsageError()
     elif not os.path.isdir(source_dir):
-        _error('Source directory "{}" is not a directory.'.format(source_dir))
+        error(f'Source directory "{source_dir}" is not a directory.')
         raise UsageError()
 
-    global _be_verbose
-    _be_verbose = args['--verbose']
+    set_verbosity(args['--verbose'])
 
     return args
 
 
-def _adjust_paths (notebooks, # type: Sequence[Notebook]
-                   params     # type: Config
-                   ):
-    # type: (...) -> Sequence[str]
+def _adjust_paths (notebooks: Sequence[Notebook],
+                   params: Config) -> Sequence[str]:
     """
     Adjusts the notebook paths, which means one of two things:
 
@@ -243,7 +184,6 @@ def _adjust_paths (notebooks, # type: Sequence[Notebook]
 
     :return: a list of adjusted paths, in the same order as the notebooks
     """
-
     adj_paths = []
     if params.flatten:
         # Remove all the directory paths, leaving just the base file name.
@@ -258,25 +198,22 @@ def _adjust_paths (notebooks, # type: Sequence[Notebook]
                 paths.add(base)
                 adj_paths.append(base)
         if len(clashes) > 0:
+            clash_str = ', '.join([i for i in clashes])
             raise GendbcError(
-                ('There are multiple notebooks with the following base file ' +
-                 'names, so flattening is not possible: {}').format(
-                    ', '.join([i for i in clashes])
-                )
+                'There are multiple notebooks with the following base file ' +
+                f'names, so flattening is not possible: {clash_str}'
             )
     else:
         # Just strip the source directory from the paths.
         for nb in notebooks:
             if not nb.path.startswith(params.source_dir):
                 raise Exception(
-                    '''(BUG) Notebook "{}" doesn't start with "{}".'''.format(
-                        nb.path, params.source_dir
-                    )
+                    f'''(BUG) Notebook "{nb.path}" doesn't start with ''' +
+                    f'"{params.source_dir}".'
                 )
             if nb.path == params.source_dir:
-                raise Exception(
-                    '(BUG) Notebook IS source path?! "{}"'.format(nb.path)
-                )
+                raise Exception(f'(BUG) Notebook IS source path?! "{nb.path}"')
+
             new_path = nb.path[len(params.source_dir) + 1:]
             adj_paths.append(new_path)
 
@@ -291,10 +228,8 @@ def _adjust_paths (notebooks, # type: Sequence[Notebook]
     return adj_paths
 
 
-def _write_dbc(notebooks, # type: Sequence[Notebook]
-               params     # type: Config
-              ):
-    # type: (...) -> None
+def _write_dbc(notebooks: Sequence[Notebook],
+               params: Config) -> NoReturn:
     """
     Convert a list of notebooks to JSON and write them to the DBC file.
 
@@ -314,7 +249,7 @@ def _write_dbc(notebooks, # type: Sequence[Notebook]
             # Wrinkle: Python JSON notebooks end in ".python", not ".py".
             file, ext = os.path.splitext(zpath)
             if ext == '.py':
-                zpath = "{}.python".format(file)
+                zpath = f"{file}.python"
             out_path = os.path.join(tempdir, zpath)
             dirname = os.path.dirname(zpath)
             if dirname and (dirname != '.'):
@@ -323,7 +258,7 @@ def _write_dbc(notebooks, # type: Sequence[Notebook]
                     os.makedirs(dirpath)
             with codecs.open(out_path, mode='w', encoding=params.encoding) as w:
                 w.write(json)
-            _verbose('Wrote JSON notebook "{}"'.format(out_path))
+            verbose(f'Wrote JSON notebook "{out_path}".')
 
         # Create the zip file.
         shutil.make_archive(params.dbc, 'zip', root_dir=tempdir)
@@ -334,21 +269,19 @@ def _write_dbc(notebooks, # type: Sequence[Notebook]
         # Finally, make_archive() did NOT create a comment in the zip file.
         # Let's add one, to indicate who created the DBC.
         with ZipFile(params.dbc, 'a') as z:
-            z.comment = "gendbc (Python), version {}".format(VERSION)
+            z.comment = f"gendbc (Python), version {VERSION}".encode('ascii')
 
 # -----------------------------------------------------------------------------
 # Public Functions
 # -----------------------------------------------------------------------------
 
-def gendbc(source_dir,  # type: str
-           encoding,    # type: str
-           dbc_path,    # type: str
-           dbc_folder,  # type: str
-           flatten,     # type: bool
-           verbose,     # type: bool
-           debug=False  # type: bool
-          ):
-    # type: (...) -> None
+def gendbc(source_dir: str,
+           encoding: str,
+           dbc_path: str,
+           dbc_folder: str,
+           flatten: bool,
+           verbose: bool,
+           debugging: bool = False) -> NoReturn:
     """
     Generate a DBC from all the notebooks under a specific source directory.
 
@@ -362,11 +295,11 @@ def gendbc(source_dir,  # type: str
                         go in that folder. Otherwise, they'll be at the top
                         of the DBC.
     :param verbose:     Whether or not to emit verbose messages.
-    :param debug:       Whether or not to emit debug messages.
+    :param debugging:   Whether or not to emit debug messages.
 
     :return: nothing
     """
-    params = Config(debug=debug,
+    params = Config(debug=debugging,
                     verbose=verbose,
                     encoding=encoding,
                     dbc_folder=dbc_folder,
@@ -377,20 +310,16 @@ def gendbc(source_dir,  # type: str
 
     if params.dbc_folder and ('/' in params.dbc_folder):
         raise UsageError(
-            ('The specified DBC top folder, "{}", must be a simple directory ' +
-             'name, not a path.').format(params.dbc_folder)
+            f'The specified DBC top folder, "{params.dbc_folder}", must be ' +
+            'a simple directory name, not a path.'
         )
 
     notebook_paths = _find_notebooks(params.source_dir, params.encoding)
 
     if len(notebook_paths) == 0:
-        _die('No source notebooks found under "{}".'.format(
-            params.source_dir
-        ))
+        die(f'No source notebooks found under "{params.source_dir}".')
 
-    emit_debug = _debug if params.debug else None
-
-    notebooks = [parse_source_notebook(i, params.encoding, emit_debug)
+    notebooks = [parse_source_notebook(i, params.encoding, debugging)
                  for i in notebook_paths]
     _write_dbc(notebooks, params)
 
@@ -410,18 +339,18 @@ def main():
                dbc_folder=args['--folder'],
                flatten=args['--flatten'],
                verbose=args['--verbose'],
-               debug=args['--debug'])
+               debugging=args['--debug'])
     except UsageError as e:
         if e.message:
-            _error(e.message)
+            error(e.message)
         # Already reported.
         sys.exit(1)
     except Exception as e:
         if show_stack:
             tb = traceback.format_exc()
-            _printerr(tb)
+            print(tb, file=sys.stderr)
         else:
-            _error(str(e))
+            error(str(e))
         sys.exit(1)
 
 if __name__ == '__main__':

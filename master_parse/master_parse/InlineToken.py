@@ -54,7 +54,7 @@ Doctests:
 And this is a **Hint** with a :WARNING:.
 '''
 
-from __future__ import print_function
+
 
 import re
 from string import Template

@@ -1,61 +1,40 @@
 """
 Helper functions for using the Databricks CLI.
 """
+from __future__ import annotations # PEP 563 (allows annotation forward refs)
 
-from typing import Sequence, Optional, Any
-import os
 import sys
 import re
 import json
-from StringIO import StringIO
-from databricks_cli.configure import provider
+from io import StringIO
 from databricks_cli.cli import cli
+from typing import Optional, Sequence, NoReturn
 
 __all__ = ['databricks', 'DatabricksCliError']
+
+# -----------------------------------------------------------------------------
+# Classes
+# -----------------------------------------------------------------------------
 
 class DatabricksCliError(Exception):
     """
     Thrown to indicate errors with the databricks_cli invocation.
     """
-    def __init__(self,          # type: DatabricksCLIError
-                 code=None,     # type: Optional[str]
-                 message=None   # type: Optional[str]
-                ):
+    def __init__(self,
+                 code: Optional[str] = None,
+                 message: Optional[str] = None):
         super(Exception, self).__init__(message)
         self.code = code
+        self.message = message
 
+# -----------------------------------------------------------------------------
+# Public Functions
+# -----------------------------------------------------------------------------
 
-def _configure_databricks(db_profile):
-    # type: (str) -> provider.DatabricksConfig
-
-    config = provider.get_config_for_profile(db_profile)
-    # If the profile doesn't exist, environment variables can be used.
-    if not config.host:
-        config.host = os.environ.get('DATABRICKS_HOST')
-    if not config.token:
-        config.token = os.environ.get('DATABRICKS_TOKEN')
-    if not config.password:
-        config.password = os.environ.get('DATABRICKS_PASSWORD')
-    if not config.username:
-        config.username = os.environ.get('DATABRICKS_USERNAME')
-
-    if not config.host:
-        raise DatabricksCliError(
-            message='No host for databricks_cli profile "{}"'.format(db_profile)
-        )
-
-    if config.token is None:
-        if (config.username is None) or (config.password is None):
-            raise DatabricksCliError(
-                message=('databricks_cli profile "{}" has no API token AND ' +
-                         'no username and password').format(db_profile)
-            )
-
-    return config
-
-
-def databricks(args, db_profile=None, capture_stdout=False, verbose=False):
-    # type: (Sequence[str], str, bool, bool) -> Optional[str]
+def databricks(args: Sequence[str],
+               db_profile: Optional[str] = None,
+               capture_stdout: bool = False,
+               verbose: bool = False) -> NoReturn:
     """
     Configure and run the Databricks CLI. Example of use:
 
@@ -77,7 +56,6 @@ def databricks(args, db_profile=None, capture_stdout=False, verbose=False):
     if db_profile is None:
         db_profile = 'DEFAULT'
 
-    #config = _configure_databricks(db_profile)
     kwargs = {
         'standalone_mode': False,
         'prog_name': 'databricks',
@@ -85,7 +63,7 @@ def databricks(args, db_profile=None, capture_stdout=False, verbose=False):
     args = ('--profile', db_profile) + tuple(args)
 
     if verbose:
-        print('+ databricks {0}'.format(' '.join(args)))
+        print(f"+ databricks {' '.join(args)}")
 
     buf = None
     saved_stdout = None

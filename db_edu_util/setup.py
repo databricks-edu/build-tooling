@@ -29,10 +29,6 @@ setup(
     version=version,
     description='Library of stuff used by the build tools',
     install_requires=[
-        'docopt >= 0.6.2',
-        'future >= 0.16.0',
-        'backports.tempfile >= 1.0',
-        'typing >= 3.6.6',
     ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

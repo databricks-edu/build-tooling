@@ -17,7 +17,7 @@ import os
 import sys
 from contextlib import contextmanager
 
-VERSION = '1.12.0'
+VERSION = '1.13.0'
 
 @contextmanager
 def chdir(dir):
@@ -43,7 +43,6 @@ setup(
     name='db-build-tooling',
     packages=[],
     install_requires=[
-        'cairocffi==0.9.0',
     ],
     version=VERSION,
     description='Wrapper package for Databricks Training build tools',

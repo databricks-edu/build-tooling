@@ -4,11 +4,11 @@ Utility functions and classes
 Run this module as a main program, or run it through `python -m doctest`,
 to exercise embedded tests.
 """
+from __future__ import annotations # PEP 563 (allows annotation forward refs)
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 import re
 import os
-from os import path
 import contextlib
 import markdown2
 import shutil
@@ -19,16 +19,13 @@ from parsimonious import grammar, expressions
 from parsimonious.exceptions import ParseError, VisitationError
 from textwrap import TextWrapper
 import mimetypes
-
-from future import standard_library
-standard_library.install_aliases()
-
 from string import Template
+from tempfile import TemporaryDirectory
+from db_edu_util import all_pred, EnhancedTextWrapper
 
-# We're using backports.tempfile, instead of tempfile, so we can use
-# TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
-# was added in Python 3.2.
-from backports.tempfile import TemporaryDirectory
+from typing import (Sequence, Any, Set, Optional, Dict, Tuple,
+                    Tuple, NoReturn, Generator, Union, Pattern, Iterable,
+                    Callable, Type, no_type_check)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -92,21 +89,6 @@ WARNING_PREFIX = "*** WARNING: "
 DEBUG_PREFIX = "(DEBUG) "
 
 # ---------------------------------------------------------------------------
-# Custom TextWrapper class
-# ---------------------------------------------------------------------------
-
-class BDCTextWrapper(TextWrapper):
-    def __init__(self, width=COLUMNS, subsequent_indent=''):
-        TextWrapper.__init__(self,
-                             width=width,
-                             subsequent_indent=subsequent_indent)
-
-    def fill(self, msg):
-        wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
-        return '\n'.join(wrapped)
-
-
-# ---------------------------------------------------------------------------
 # Module globals
 # ---------------------------------------------------------------------------
 
@@ -114,118 +96,25 @@ _verbose = False
 _verbose_prefix = ''
 
 # Text wrappers
-_warning_wrapper = BDCTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
+_warning_wrapper = EnhancedTextWrapper(
+    subsequent_indent=' ' * len(WARNING_PREFIX)
+)
 
-_verbose_wrapper = BDCTextWrapper()
+_verbose_wrapper = EnhancedTextWrapper()
 
-_error_wrapper = BDCTextWrapper()
+_error_wrapper = EnhancedTextWrapper()
 
-_info_wrapper = BDCTextWrapper(subsequent_indent=' ' * 4)
+_info_wrapper = EnhancedTextWrapper(subsequent_indent=' ' * 4)
 
-_debug_wrapper = BDCTextWrapper(subsequent_indent = ' ' * len(DEBUG_PREFIX))
+_debug_wrapper = EnhancedTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
 
-_generic_wrapper = BDCTextWrapper()
+_generic_wrapper = EnhancedTextWrapper()
 
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
 
-def set_verbosity(verbose, verbose_prefix):
-    """
-    Set or clear verbose messages.
-
-    :param verbose:        True or False to enable or disable verbosity
-    :param verbose_prefix  string to use as a prefix for verbose messages, or
-                           None (or empty string) for no prefix
-    """
-    global _verbose
-    global _verbose_prefix
-    global _verbose_wrapper
-
-    _verbose = verbose
-    if verbose_prefix:
-        _verbose_prefix = verbose_prefix
-        _verbose_wrapper = BDCTextWrapper(
-            subsequent_indent=' ' * len(verbose_prefix)
-        )
-
-
-def verbosity_is_enabled():
-    """
-    Determine whether verbosity is on or off.
-
-    :return:  True or False
-    """
-    return _verbose
-
-
-def _do_fill(msg, wrapper):
-    s = ''
-    wrapped = [wrapper.fill(line) for line in msg.split('\n')]
-    return '\n'.join(wrapped)
-
-
-def verbose(msg):
-    """
-    Conditionally emit a verbose message. See also set_verbosity().
-
-    :param msg: the message
-    """
-    if _verbose:
-        print(_do_fill("{0}{1}".format(_verbose_prefix, msg), _verbose_wrapper))
-
-
-def debug(msg, debug_enabled=True):
-    '''
-    Conditionally emit a debug message.
-
-    :param msg:            the message
-    :param debug_enabled:  whether debug messages are enabled or not
-    '''
-    if debug_enabled:
-        print(_do_fill("{0}{1}".format(DEBUG_PREFIX, msg), _debug_wrapper))
-
-
-def warning(msg):
-    """
-    Emit a warning message.
-
-    :param msg: The message
-    """
-    print(_do_fill("{0}{1}".format(WARNING_PREFIX, msg), _warning_wrapper))
-
-
-def info(msg):
-    """
-    Emit an informational message.
-
-    :param msg: The message
-    """
-    print(_do_fill(msg, _info_wrapper))
-
-
-def emit_error(msg):
-    """
-    Emit an error message.
-
-    :param msg: The message
-    """
-    print('***')
-    print(_do_fill(msg, _error_wrapper))
-    print('***')
-
-
-def wrap2stdout(msg):
-    """
-    Emit a message to standard output, wrapped at screen boundaries (as
-    determined by the COLUMNS environment variable), without any prefix.
-
-    :param msg: The message
-    """
-    print(_do_fill(msg, _generic_wrapper))
-
-
-def parse_version_string(version):
+def parse_version_string(version: str) -> Tuple[int, int]:
     """
     Parse a semantic version string (e.g., 1.10.30) or a partial
     <major>.<minor> semver string (e.g., 1.10) into a tuple of
@@ -259,41 +148,21 @@ def parse_version_string(version):
     """
     nums = version.split('.')
     if len(nums) not in (2, 3):
-        raise ValueError('"{0}" is a malformed version string'.format(version))
+        raise ValueError(f'"{version}" is a malformed version string')
     try:
         return tuple([int(i) for i in nums])[0:2]
     except ValueError as e:
-        raise ValueError('"{0}" is a malformed version string: {1}'.format(
-            version, e.message
-        ))
+        raise ValueError(f'"{version}" is a malformed version string: {e}')
 
 
-def all_pred(func, iterable):
-    """
-    Similar to the built-in `all()` function, this function ensures that
-    `func()` returns `True` for every element of the supplied iterable.
-    It short-circuits on the first failure.
-
-    :param func:     function or lambda to call with each element
-    :param iterable: the iterable
-
-    :return: `True` if all elements pass, `False` otherwise
-    """
-    for i in iterable:
-        if not func(i):
-            return False
-
-    return True
-
-
-def flatten(it):
+def flatten(it: Iterable[Any]) -> Generator[Any, Any, None]:
     """
     Recursively flatten an iterable. Yields a generator for a new iterable.
 
     NOTE: This function explicitly does NOT treat strings as iterables, even
     though they are.
 
-    :param the iterable to flatten
+    :param it: the iterable to flatten
 
     :return: a generator for the recursively flattened result
 
@@ -327,7 +196,9 @@ def flatten(it):
                 yield i
 
 
-def merge_dicts(dict1, dict2, *dicts):
+def merge_dicts(dict1:  Dict[str, Any],
+                dict2:  Dict[str, Any],
+                *dicts: Dict[str, Any]) -> Dict[str, Any]:
     """
     Merge multiple dictionaries, producing a merged result without modifying
     the arguments.
@@ -350,7 +221,7 @@ def merge_dicts(dict1, dict2, *dicts):
     >>> sorted(list(y.items())) # should not be modified
     [('b', 'Bee'), ('d', 40), ('x', 'Ecks')]
     >>> z = {'z': 'Frammis', 'c': 'Cee'}
-    >>> sorted(list(merge_dicts(x, y, z)))
+    >>> sorted(list(merge_dicts(x, y, z).items()))
     [('a', 10), ('b', 'Bee'), ('c', 'Cee'), ('d', 40), ('x', 'Ecks'), ('z', 'Frammis')]
     """
     res = dict1.copy()
@@ -360,45 +231,9 @@ def merge_dicts(dict1, dict2, *dicts):
     return res
 
 
-def bool_field(d, key, default=False):
+def bool_value(s: Union[str, int]) -> bool:
     """
-    Get a boolean value from a dictionary, parsing it if it's a string.
-
-    :param d:       the dictionary
-    :param key:     the key
-    :param default: the default, if not found
-
-    :return: the value
-
-    :raise ValueError on error
-
-    >>> d = {'a': 0, 'b': 10, 'c': 'false', 'd': 'TRUE', 'e': 'No',\
-             'f': 'yeS', 'g': True, 'h': 'hello'}
-    >>> bool_field(d, 'a')
-    False
-    >>> bool_field(d, 'b')
-    True
-    >>> bool_field(d, 'c')
-    False
-    >>> bool_field(d, 'd')
-    True
-    >>> bool_field(d, 'e')
-    False
-    >>> bool_field(d, 'f')
-    True
-    >>> bool_field(d, 'g')
-    True
-    >>> bool_field(d, 'h')
-    Traceback (most recent call last):
-    ...
-    ValueError: Bad boolean value: "hello"
-    """
-    return bool_value(d.get(key, default))
-
-
-def bool_value(s):
-    """
-    Convert a string to a boolean value. Raises ValueError if the string
+    Convert a string or int to a boolean value. Raises ValueError if the string
     isn't boolean.
 
     :param s: the string
@@ -438,24 +273,63 @@ def bool_value(s):
     elif sl in ('f', 'false', '0', 'no'):
         return False
     else:
-        raise ValueError('Bad boolean value: "{0}"'.format(s))
+        raise ValueError(f'Bad boolean value: "{s}"')
 
 
+def bool_field(d: Dict[str, Any],
+               key: str,
+               default: bool = False) -> bool:
+    """
+    Get a boolean value from a dictionary, parsing it if it's a string.
+
+    :param d:       the dictionary
+    :param key:     the key
+    :param default: the default, if not found
+
+    :return: the value
+
+    :raise ValueError on error
+
+    >>> d = {'a': 0, 'b': 10, 'c': 'false', 'd': 'TRUE', 'e': 'No',\
+             'f': 'yeS', 'g': True, 'h': 'hello'}
+    >>> bool_field(d, 'a')
+    False
+    >>> bool_field(d, 'b')
+    True
+    >>> bool_field(d, 'c')
+    False
+    >>> bool_field(d, 'd')
+    True
+    >>> bool_field(d, 'e')
+    False
+    >>> bool_field(d, 'f')
+    True
+    >>> bool_field(d, 'g')
+    True
+    >>> bool_field(d, 'h')
+    Traceback (most recent call last):
+    ...
+    ValueError: Bad boolean value: "hello"
+    """
+    return bool_value(d.get(key, default))
+
+
+# Regarding the typing: See https://stackoverflow.com/a/49736916/53495
 @contextlib.contextmanager
-def working_directory(path):
+def working_directory(dirpath: str) -> Generator[None, None, None]:
     """
     Simple context manager that runs the code under "with" in a specified
     directory, returning to the original directory when the "with" exits.
     """
     prev = os.getcwd()
     try:
-        os.chdir(path)
+        os.chdir(dirpath)
         yield
     finally:
         os.chdir(prev)
 
 
-def find_in_path(command):
+def find_in_path(command: str) -> str:
     """
     Find a command in the path, or bail.
 
@@ -475,10 +349,10 @@ def find_in_path(command):
         if os.path.isfile(p) and os.access(p, os.X_OK):
             return p
     else:
-        raise Exception("""Can't find "{0}" in PATH.""".format(command))
+        raise Exception(f"""Can't find "{command}" in PATH.""")
 
 
-def ensure_parent_dir_exists(path):
+def ensure_parent_dir_exists(path: str) -> NoReturn:
     """
     Ensures that the parent directory of a path exists.
 
@@ -487,7 +361,10 @@ def ensure_parent_dir_exists(path):
     mkdirp(os.path.dirname(path))
 
 
-def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+def move(src: str,
+         dest: str,
+         ensure_final_newline: bool = False,
+         encoding: str = 'UTF-8') -> NoReturn:
     """
     Copy a source file to a destination file, honoring the --verbose
     command line option and creating any intermediate destination
@@ -508,7 +385,7 @@ def move(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     os.unlink(src)
 
 
-def joinpath(*pieces):
+def joinpath(*pieces: str) -> str:
     """
     Similar to os.path.join(), this function joins the path components, but
     also normalizes the path.
@@ -523,7 +400,7 @@ def joinpath(*pieces):
     return os.path.normpath(os.path.join(*pieces))
 
 
-def rm_rf(path):
+def rm_rf(path: str) -> NoReturn:
     """
     Equivalent of "rm -rf dir", this function is similar to
     shutil.rmtree(dir), except that it doesn't abort if the directory does
@@ -539,23 +416,25 @@ def rm_rf(path):
         elif os.path.isdir(path):
             shutil.rmtree(path)
         else:
-            raise OSError(
-                '"{0}" is neither a file nor a directory'.format(path)
-            )
+            raise OSError(f'"{path}" is neither a file nor a directory')
 
 
-def mkdirp(dir):
+def mkdirp(dir: str) -> NoReturn:
     """
-    Equivalent of "mkdir -p".
+    Equivalent of "mkdir -p". This function is just a front-end to
+    `os.makedirs()`, but it doesn't abort if the directory already exists.
 
     :param dir: The directory to be created, along with any intervening
                 parent directories that don't exist.
     """
-    if not path.exists(dir):
+    if not os.path.exists(dir):
         os.makedirs(dir)
 
 
-def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+def copy(src: str,
+         dest: str,
+         ensure_final_newline: bool = False,
+         encoding: str = 'UTF-8') -> NoReturn:
     """
     Copy a source file to a destination file, honoring the --verbose
     command line option and creating any intermediate destination
@@ -575,7 +454,7 @@ def copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
     )
 
 
-def has_extension(path):
+def has_extension(path: str) -> bool:
     '''
     Simple convenience function that uses os.path.splitext() to determine
     whether a file has an extension or not.
@@ -588,7 +467,7 @@ def has_extension(path):
     return (ext is not None) and (len(ext) > 0)
 
 
-def is_text_file(path):
+def is_text_file(path: str) -> bool:
     '''
     Determine whether a file is a text file or not. This determination is
     based solely on its MIME type, which is based off the file extension.
@@ -609,7 +488,7 @@ def is_text_file(path):
     return is_text
 
 
-def is_pdf(path):
+def is_pdf(path: str) -> bool:
     '''
     Determine whether a file is a PDF file or not. This determination is made
     solely on the MIME type, which is based off the file extension.
@@ -622,7 +501,7 @@ def is_pdf(path):
     return mime_type == 'application/pdf'
 
 
-def is_html(path):
+def is_html(path: str) -> bool:
     '''
     Determine whether a file is an HTML file or not.
 
@@ -635,7 +514,7 @@ def is_html(path):
     return mime_type in ('application/xhtml+xml', 'text/html')
 
 
-def is_markdown(path):
+def is_markdown(path: str) -> bool:
     '''
     Determine whether a file is a Markdown file or not.
 
@@ -647,7 +526,10 @@ def is_markdown(path):
     return extension.lower() in ['.md', '.markdown']
 
 
-def markdown_to_html(markdown, html_out, html_template=None, stylesheet=None):
+def markdown_to_html(markdown: str,
+                     html_out: str,
+                     html_template: Optional[str] = None,
+                     stylesheet: Optional[str] = None) -> NoReturn:
     """
     Convert a Markdown file to HTML, writing it to the specified HTML file.
     If the stylesheet is specified, it is inserted.
@@ -676,13 +558,13 @@ def markdown_to_html(markdown, html_out, html_template=None, stylesheet=None):
             output.write(
                 template.substitute(
                     body=body,
-                    title=path.basename(markdown),
+                    title=os.path.basename(markdown),
                     css=stylesheet
                 )
             )
 
 
-def html_to_pdf(html, pdf_out):
+def html_to_pdf(html: str, pdf_out: str) -> NoReturn:
     '''
     Convert an HTML document to PDF, writing it to the specified PDF file.
 
@@ -694,7 +576,10 @@ def html_to_pdf(html, pdf_out):
     dom.write_pdf(pdf_out)
 
 
-def markdown_to_pdf(markdown, pdf_out, html_template=None, stylesheet=None):
+def markdown_to_pdf(markdown: str,
+                    pdf_out: str,
+                    html_template: Optional[str] = None,
+                    stylesheet: Optional[str] = None) -> NoReturn:
     """
     Convert a Markdown file to PDF, writing it to the specified PDF file.
     If the stylesheet is specified, it is inserted.
@@ -712,7 +597,9 @@ def markdown_to_pdf(markdown, pdf_out, html_template=None, stylesheet=None):
         html_to_pdf(html, pdf_out)
 
 
-def dict_get_and_del(d, key, default=None):
+def dict_get_and_del(d: Dict[str, Any],
+                     key: str,
+                     default: Optional[Any] = None) -> Any:
     """
     Get the value of a key from a dictionary, and remove the key.
 
@@ -740,7 +627,7 @@ def dict_get_and_del(d, key, default=None):
     return default
 
 
-def variable_ref_patterns(variable_name):
+def variable_ref_patterns(variable_name: str) -> Sequence[Pattern]:
     """
     Convert a variable name into a series of regular expressions that will
     match a reference to the variable. (Regular expression alternation syntax
@@ -776,7 +663,8 @@ def variable_ref_patterns(variable_name):
     )
 
 
-def matches_variable_ref(patterns, string):
+def matches_variable_ref(patterns: Sequence[Pattern],
+                         string: str) -> Optional[Sequence[str]]:
     """
     Matches the string against the patterns, returning a 3-tuple on match and
     None on no match.
@@ -813,24 +701,25 @@ def matches_variable_ref(patterns, string):
 # Classes
 # ---------------------------------------------------------------------------
 
-class DefaultStrMixin(object):
+class DefaultStrMixin(ABC):
     """
     Provides default implementations of __str__() and __repr__(). These
     implementations assume that all arguments passed to the constructor are
     captured in same-named fields in `self`.
     """
-    __metaclass__ = ABCMeta
 
     def __str__(self):
         indent = ' ' * (len(self.__class__.__name__) + 1)
         fields = []
         for key in sorted(self.__dict__.keys()):
             value = self.__dict__[key]
-            v = '"{0}"'.format(value) if isinstance(value, str) else value
-            fields.append('{0}={1}'.format(key, v))
+            v = f'"{value}"' if isinstance(value, str) else value
+            fields.append(f'{key}={v}')
 
-        delim = ',\n{0}'.format(indent)
-        return '{0}({1})'.format(self.__class__.__name__, delim.join(fields))
+        delim = f',\n{indent}'
+        class_name = self.__class__.__name__
+        field_str = delim.join(fields)
+        return f'{class_name}({field_str})'
 
     def __repr__(self):
         return self.__str__()
@@ -886,15 +775,15 @@ _VAR_SUBST_EDIT_DELIM1          = '/'
 _VAR_SUBST_EDIT_DELIM2          = '|'
 _VAR_SUBST_EDIT_GROUPREF_PREFIX = '$'
 
-def _replace_tokens(s, tokens):
+def _replace_tokens(s: str, tokens: Dict[str, str]) -> str:
     s2 = s
-    for token, replacement in tokens.items():
+    for token, replacement in list(tokens.items()):
         s2 = s2.replace(token, replacement)
     return s2
 
 # The grammar itself. Some values are substituted, so they can be shared
 # with the code.
-_VAR_SUBST_OPS_RULE = ' / '.join(['"{}"'.format(op) for op in _VAR_SUBST_OPS])
+_VAR_SUBST_OPS_RULE = ' / '.join([f'"{op}"' for op in _VAR_SUBST_OPS])
 _VAR_SUBST_GRAMMAR = _replace_tokens(r'''
 # A line consists of zero or more terms. 
 line                  = term*
@@ -1228,7 +1117,7 @@ class VariableSubstituter(object):
     >>> v.substitute({'file': '01-abc', 'bar': 'tuvw', 'baz': '!!'})
     'Xtu-!!.abc'
     """
-    def __init__(self, template):
+    def __init__(self, template: str):
         """
         Create a new variable substituter.
 
@@ -1242,16 +1131,10 @@ class VariableSubstituter(object):
             self._tokens = list(flatten(visitor.visit(parsimonious_ast)))
 
         except ParseError as e:
-            if e.message:
-                raise VariableSubstituterParseError(
-                    'Failed to parse "{0}: {1}'.format(
-                        self.template, e.message
-                    )
-                )
-            else:
-                raise VariableSubstituterParseError(
-                    'Failed to parse "{0}".'.format(self.template)
+            raise VariableSubstituterParseError(
+                f'Failed to parse "{self.template}": {e}'
             )
+
         except VisitationError as e:
             # This is ugly and would not be necessary if VisitationError
             # contained the original thrown exception. The visitor in this
@@ -1262,20 +1145,22 @@ class VariableSubstituter(object):
             #
             # Since we can't actually test the nested exception, we have to
             # check the text of the message.
-            pat = re.compile(r'^.*VariableSubstituterParseError: (.*)\s*Parse tree:')
-            msg = e.message.replace('\n', ' ')
+            pat = re.compile(
+                r'^.*VariableSubstituterParseError: (.*)\s*Parse tree:'
+            )
+            msg = str(e).replace('\n', ' ')
             m = pat.search(msg)
             if m:
                 raise VariableSubstituterParseError(
-                   'Failed to parse "{0}: {1}'.format(self.template, m.group(1))
+                    f'Failed to parse "{self.template}: {m.group(1)}'
                 )
             else:
                 raise VariableSubstituterParseError(
-                    'Failed to parse "{0}"'.format(self.template)
+                    f'Failed to parse "{self.template}"'
                 )
 
     @property
-    def template(self):
+    def template(self) -> str:
         """
         Get the template.
 
@@ -1283,7 +1168,7 @@ class VariableSubstituter(object):
         """
         return self._template
 
-    def substitute(self, variables):
+    def substitute(self, variables: Dict[str, Any]) -> str:
         """
         Substitute all variable references and ternary IFs in the template,
         using the supplied variables. This method will throw an `KeyError` if
@@ -1298,7 +1183,7 @@ class VariableSubstituter(object):
             return str(variables[varname])
         return self._subst(get_var)
 
-    def safe_substitute(self, variables):
+    def safe_substitute(self, variables: Dict[str, Any]) -> str:
         """
         Substitute all variable references and ternary IFs in the template,
         using the supplied variables. This method will substitute an empty
@@ -1324,7 +1209,7 @@ class VariableSubstituter(object):
 
         return self._subst(get_var)
 
-    def _subst(self, get_var):
+    def _subst(self, get_var: Callable[[str], Any]) -> str:
         """
         Workhorse method for both substitute() and safe_substitute().
 
@@ -1342,7 +1227,7 @@ class VariableSubstituter(object):
             elif type(token) == _Edit:
                 result = token.evaluate(get_var)
             else:
-                raise KeyError('(BUG) Unknown token: {0}'.format(token))
+                raise KeyError(f'(BUG) Unknown token: {token}')
 
             return result
 
@@ -1355,10 +1240,9 @@ class _Token(DefaultStrMixin):
     implementations assume that all arguments passed to the constructor are
     captured in same-named fields in `self`.
     """
-    __metaclass__ = ABCMeta
 
     @abstractmethod
-    def evaluate(self, get_var):
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the token, returning the resulting string.
 
@@ -1368,7 +1252,10 @@ class _Token(DefaultStrMixin):
         """
         pass
 
-    def _expand(self, get_var, tokens, allowed_tokens):
+    def _expand(self,
+                get_var: Callable[[str], Any],
+                tokens: Sequence[Type[_Token]],
+                allowed_tokens: Set[Type[_Token]]) -> str:
         """
         Expands a list of tokens, processing each one by calling its
         evaluate() method.
@@ -1389,7 +1276,10 @@ class _Var(_Token):
     """
     Captures a variable name in the modified (i.e., non-Parsimonious) AST.
     """
-    def __init__(self, name, slice_start=None, slice_end=None):
+    def __init__(self,
+                 name: str,
+                 slice_start: Optional[int] = None,
+                 slice_end: Optional[int] = None):
         """
         Create a new variable reference.
 
@@ -1402,7 +1292,7 @@ class _Var(_Token):
         self.slice_start = slice_start
         self.slice_end   = slice_end
 
-    def evaluate(self, get_var):
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the variable's value, applying any subscripts.
 
@@ -1425,11 +1315,11 @@ class _Var(_Token):
         return v[self.slice_start:end]
 
 
-class _Text(DefaultStrMixin):
+class _Text(_Token):
     """
     Captures arbitrary text in the modified (i.e., non-Parsimonious) AST.
     """
-    def __init__(self, text):
+    def __init__(self, text: str):
         """
         Create a new text container.
 
@@ -1438,7 +1328,7 @@ class _Text(DefaultStrMixin):
         super(_Text, self).__init__()
         self.text = text
 
-    def evaluate(self, get_var):
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the token. In this case, just return the text
 
@@ -1453,15 +1343,23 @@ class _Ternary(_Token):
     """
     Captures the pieces of a ternary IF.
     """
-    def __init__(self, variable, op, to_compare, if_true, if_false):
+    def __init__(self,
+                 variable: str,
+                 op: str,
+                 to_compare: Optional[Sequence[Type[_Token]]],
+                 if_true: Optional[Sequence[Type[_Token]]],
+                 if_false: Optional[Sequence[Type[_Token]]]):
         """
         Create a new _Ternary object.
 
         :param variable:    the variable to substitute and test
         :param op:          the operation (one of OPS)
-        :param to_compare:  the string against which to compare the variable
-        :param if_true:     the string to substitute if the comparison is true
-        :param if_false:    the string to substitute if the comnparison is false
+        :param to_compare:  the string (token) against which to compare the
+                            variable
+        :param if_true:     the string (token) to substitute if the comparison
+                            is true
+        :param if_false:    the string (token) to substitute if the comparison
+                            is false
         """
         super(_Ternary, self).__init__()
         self.variable   = variable
@@ -1470,7 +1368,7 @@ class _Ternary(_Token):
         self.if_true    = if_true
         self.if_false   = if_false
 
-    def evaluate(self, get_var):
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the ternary expression, returning the resulting string.
 
@@ -1494,11 +1392,16 @@ class _Ternary(_Token):
         else:
             return self._expand(get_var, self.if_false, {_Var, _Text})
 
+
 class _Edit(_Token):
     """
     Stores the pieces of an inline variable value edit.
     """
-    def __init__(self, variable, pattern, repl, replace_all=False):
+    def __init__(self,
+                 variable: str,
+                 pattern: Pattern,
+                 repl: str,
+                 replace_all: bool = False):
         """
         Create a new _Edit token.
 
@@ -1508,13 +1411,13 @@ class _Edit(_Token):
                             objects)
         :param replace_all: whether to not to do a global replacement
         """
-        super(_Token, self).__init__()
+        super(_Edit, self).__init__()
         self.variable = variable
         self.pattern = pattern
         self.repl = repl
         self.replace_all = replace_all
 
-    def evaluate(self, get_var):
+    def evaluate(self, get_var: Callable[[str], Any]) -> str:
         """
         Evaluate the edit expression, returning the resulting string.
 
@@ -1529,6 +1432,8 @@ class _Edit(_Token):
         count = 0 if self.replace_all else 1
         return self.pattern.sub(repl, value, count=count)
 
+
+@no_type_check
 class _VarSubstASTVisitor(grammar.NodeVisitor):
     """
     Node visitor, which translates the Parsimonious AST to a list of tokens.
@@ -1590,7 +1495,7 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                 # ${var[:]} is the same as ${var}
                 pass
             elif pat == 'n:':
-                slice_nums = [int(tokens[0]), sys.maxint]
+                slice_nums = [int(tokens[0]), sys.maxsize]
             elif pat == ':n':
                 slice_nums = [0, int(tokens[1])]
             elif pat == 'n':
@@ -1598,10 +1503,10 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
             elif pat == 'n:n':
                 slice_nums = [int(tokens[0]), int(tokens[2])]
             else:
+                token_str = ''.join(tokens)
                 raise VariableSubstituterParseError(
-                    '(BUG) Unrecognized slice pattern "{0}" in "{1}".'.format(
-                        ''.join(tokens), node.text
-                    )
+                    f'(BUG) Unrecognized slice pattern "{token_str}" in ' +
+                    f'"{node.text}".'
                 )
 
         var_name = self._find_recursively(node, self.IDENT_RE)
@@ -1707,11 +1612,10 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         if not all_pred(lambda i: i is not None,
                         [var, op, to_compare, if_true, if_false]):
             raise VariableSubstituterParseError(
-                ('(BUG) Unable to find all expected pieces of parsed ternary ' +
-                 'expression: "{}". var={}, op={}, to_compare={}, if_true={} ' +
-                 'if_false={}').format(
-                    node.text, var, op, to_compare, if_true, if_false
-                )
+                '(BUG) Unable to find all expected pieces of parsed ternary ' +
+                f'expression: "{node.text}". var={var}, op={op}, ' +
+                f'to_compare={to_compare}, if_true={if_true}, ' +
+                f'if_false={if_false}'
             )
         return _Ternary(variable=var, op=op, to_compare=to_compare,
                        if_true=if_true, if_false=if_false)
@@ -1805,9 +1709,8 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
                     re.compile(pattern)
                 except:
                     raise VariableSubstituterParseError(
-                        ('Bad regular expression "{0}" in "{1}".'.format(
-                            child.text, node.text
-                        ))
+                        f'Bad regular expression "{child.text}" in ' +
+                        f'"{node.text}".'
                     )
 
             elif expr.name.startswith('replacement'):
@@ -1822,20 +1725,18 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 
                 leftover = flag_set - {'i', 'g'}
                 if len(leftover) > 0:
+                    flag_str = ', '.join(["'" + c + "'" for c in leftover])
                     raise VariableSubstituterParseError(
-                        'Unknown flag(s) {0} in "{1}"'.format(
-                            ', '.join(["'" + c + "'" for c in leftover]),
-                            node.text
-                        )
+                        f'Unknown flag(s) {flag_str} in "{node.text}"'
                     )
 
         # Make sure we have all the pieces. Note that "repl" is allowed to
         # be empty.
         if not all_pred(lambda i: i is not None, [var, pattern, repl]):
             raise VariableSubstituterParseError(
-                ('(BUG) Unable to find all expected pieces of parsed ' +
-                 'substitution expression: "{}". variable={}, pattern={}, ' +
-                 'repl={}').format(node.text, var, pattern, repl)
+                '(BUG) Unable to find all expected pieces of parsed ' +
+                f'substitution expression: "{node.text}". variable={var}, ' +
+                f'pattern={pattern}, repl={repl}'
             )
 
         # Compile the regular expression.
@@ -1846,8 +1747,8 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
         max_group_num = max(referenced_groups) if referenced_groups else 0
         if max_group_num > total_groups:
             raise VariableSubstituterParseError(
-                ('Replacement pattern "{0}" refers to non-existent group(s) ' +
-                 'in "{1}"').format(repl_string, pattern.pattern)
+                f'Replacement pattern "{repl_string}" refers to non-existent ' +
+                f'group(s) in "{pattern.pattern}"'
             )
 
         return _Edit(variable=var, pattern=pattern, repl=repl,
@@ -1915,7 +1816,10 @@ class _VarSubstASTVisitor(grammar.NodeVisitor):
 # Module-private functions
 # ---------------------------------------------------------------------------
 
-def _do_copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
+def _do_copy(src: str,
+             dest: str,
+             ensure_final_newline: bool = False,
+             encoding: str = 'UTF-8'):
     """
     Workhorse function that actually copies a text file. Used by move() and
     copy(). The source file's mode and other stats are copied, as well as its
@@ -1931,10 +1835,11 @@ def _do_copy(src, dest, ensure_final_newline=False, encoding='UTF-8'):
 
     :raise IOError: On error
     """
-    if not path.exists(src):
-        raise IOError('"{0}" does not exist.'.format(src))
-    src = path.abspath(src)
-    dest = path.abspath(dest)
+    if not os.path.exists(src):
+        raise IOError(f'"{src}" does not exist.')
+
+    src = os.path.abspath(src)
+    dest = os.path.abspath(dest)
     ensure_parent_dir_exists(dest)
 
     if not ensure_final_newline:

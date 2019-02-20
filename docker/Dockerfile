@@ -1,6 +1,6 @@
 # NOTE: Make sure build caching is OFF, or Docker may not pick up the
 # latest version of the tools.
-FROM python:2
+FROM python:3
 RUN touch /etc/in-docker
 RUN pip install git+https://github.com/databricks-edu/build-tooling
 RUN apt-get update && apt-get install -y less zip unzip vim nano

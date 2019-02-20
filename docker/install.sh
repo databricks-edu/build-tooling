@@ -4,10 +4,11 @@
 
 
 IMAGE='databrickseducation/build-tool'
+TAG=${1:-latest}
 
-echo "Pulling $IMAGE ..."
+echo "Pulling $IMAGE:$TAG ..."
 echo ""
-docker pull $IMAGE
+docker pull $IMAGE:$TAG
 
 echo ""
 echo "Updating aliases ..."

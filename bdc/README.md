@@ -400,25 +400,65 @@ copying miscellaneous files.
 
 ### Build Profiles
 
-Some courses need to be slightly different for AWS and Azure. The master
-parser already supports conditional tags (`AZURE_ONLY` and `AMAZON_ONLY`),
-but they must be enabled, and they're not appropriate for all courses.
+The build tools support arbitrary build profiles. If defined in `build.yaml`,
+each build profile:
 
-To enable AWS and Amazon build profiles, set `use_profiles` to `true`.
+- triggers a separate build
+- is built into its own output subdirectory
+- enables build profile-specific notebook tags
+- enables build profile-specific Mustache tags
 
-If `use_profiles` is `true`:
+An example best describes this feature:
 
-- The course is generated twice, once for Amazon (suppressing any notebook
-  cells marked `AZURE_ONLY`) and once for Azure (suppressing any cells marked
-  `AMAZON_ONLY`).
-- The two separate builds are written to `azure` and `amazon` subdirectories
-  underneath the build destination directory.
-- Two separate [bundles](#bundles) are generated, if bundles are enabled.
+```yaml
+profiles:
+  - amazon: Amazon
+  - azure: Azure
+  - sklearn: sklearn
+```
 
-If `use_profiles` is `false`, the course is generated once, into the
-destination directory.
+With that section in your `build.yaml`, `bdc` will build the course three
+times, producing `amazon`, `azure` and `sklearn` subdirectories in the build
+output directory.
 
-`use_profiles` is `false`, by default.
+You can include or exclude cells, based on the active profile, with the
+`PROFILES` tag. For instance:
+
+```
+%md
+-- PROFILES: amazon, azure
+
+This Markdown cell will only be included in the output notebooks for the
+"azure" and "amazon" profiles. It will be suppressed in the "sklearn" build.
+```
+
+In addition, Mustache will be defined for each profile, as shown below:
+
+| ACTIVE PROFILE  | `{{azure}}`                                 | `{{amazon}}`                                 | `{{sklearn}}`
+| ----------------| ------------------------------------------- | -------------------------------------------- | ----------------------------------------------
+| `azure`         | Substitutes as "Azure". Evaluates to `True` | Substitutes as "". Evaluates to `False`      | Substitutes as "". Evaluates to `False`
+| `amazon`        | Substitutes as "". Evaluates to `False`     | Substitutes as "Amazon". Evaluates to `True` | Substitutes as "". Evaluates to `False`
+| `sklearn`       | Substitutes as "". Evaluates to `False`     | Substitutes as "". Evaluates to `False`      | Substitutes as "sklearn". Evaluates to `True`
+
+
+**Backward Compatibility**
+
+For backward compatibility, `build.yaml` still supports:
+
+```yaml
+use_profiles: true
+```
+
+This setting is equivalent to:
+
+```yaml
+profiles:
+  - amazon: Amazon
+  - azure: Azure
+```
+
+The `AMAZON_ONLY` and `AZURE_ONLY` cell tags are still supported, though you
+should prefer the newer `PROFILES` tag.
 
 See also `only_in_profile` in the [Notebooks][#notebooks] section.
 

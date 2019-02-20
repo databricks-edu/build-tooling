@@ -608,6 +608,38 @@ to disable generation of R notebooks. Default: `false`.
 OPTIONAL: `true` to enable generation of SQL notebooks, `false`
 to disable generation of SQL notebooks. Default: `false`.
 
+###### `instructor_notes`
+
+OPTIONAL. If set, this value specifies a path, relative to the build output
+directory (or the build output profile subdirectory), for the consolidated
+instructor notes files for each notebook. If set, the master parser will
+consolidate all instructor note cells in each notebook into a single Markdown
+file for the notebook. The final per-notebook Markdown files will also be
+converted to HTML.
+
+This field supports limited variable substitution. In addition to any
+notebook variables, you can substitute `${target_basename}`, which is the
+base file name of the destination notebook. For instance:
+
+```yaml
+notebook_defaults:
+  master:
+    enabled: true
+    python: true
+    scala: true
+    enable_templates: true
+    instructor_notes: "Instructor-Notes/${target_basename)-notes.md"
+    
+notebooks:
+  - src: Foo.py
+    dest: "$target_lang/$notebook_type/01-Getting-Started.$target_extension"
+```
+
+In that example, for notebook `Foo.py`, the instructor notes will be
+written to `<output-dir>/Instructor-Notes/01-Getting-Started-notes.md`,
+and the corresponding HTML will be written to
+`<output-dir>/Instructor-Notes/01-Getting-Started-notes.html`.
+
 ###### `enable_templates`
 
 OPTIONAL: If `true`, then

@@ -32,7 +32,7 @@ setup(
         'docopt == 0.6.2',
         'markdown2 == 2.3.7',
         'grizzled-python == 2.0.0',
-        'PyYAML == 3.13',
+        'PyYAML >= 4.2b1',
         'pystache == 0.5.4',
         'parsimonious==0.8.1',
         'WeasyPrint==44'

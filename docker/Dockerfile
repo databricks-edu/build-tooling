@@ -2,7 +2,7 @@
 # latest version of the tools.
 FROM python:3
 RUN touch /etc/in-docker
-RUN pip install git+https://github.com/databricks-edu/build-tooling
+RUN pip install git+https://github.com/databricks-edu/build-tooling@snapshot
 RUN apt-get update && apt-get install -y less zip unzip vim nano
 RUN curl "https://s3.amazonaws.com/aws-cli/awscli-bundle.zip" -o "awscli-bundle.zip"
 RUN unzip awscli-bundle.zip

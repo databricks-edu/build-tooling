@@ -29,6 +29,31 @@ you have this command in your `.bashrc` or `.zshrc`:
 . ~/.build-tools-aliases.sh
 ```
 
+### Snapshot releases
+
+From time to time, we push preliminary versions of the build tools to the
+`snapshot` branch. You can install and use a snapshot version by following
+this procedure.
+
+- Run `curl -L https://git.io/fhaLg | bash -s snapshot`
+
+- Set the `BUILD_TOOL_DOCKER_TAG` environment variable to `snapshot`:
+
+```
+export BUILD_TOOL_DOCKER_TAG=snapshot
+```
+
+- Ensure that you're using the _latest_ version of the build tool aliases.
+  They respect that environment variable.
+
+This procedure installs the snapshot release into a _separate_ Docker image
+(`databrickseducation/build-tool:snapshot`). It will not conflict with the 
+installation of the release version of the build tools; that version is
+always installed in `databrickseducation/build-tool:latest`.
+
+To switch back to using the release version, simply unset
+`BUILD_TOOL_DOCKER_TAG` and reload the build tool aliases.
+
 ## Cleaning up "dangling" images
 
 Over time, as you update your Docker image, you might find you're

@@ -327,30 +327,24 @@ class BundleFile:
     dest: str
 
 
-class Bundle(DefaultStrMixin):
-    def __init__(self,
-                 zipfile: str,
-                 files: Optional[Sequence[BundleFile]] = None):
-        """
-        Parsed bundle information.
+@dataclass(frozen=True)
+class Bundle:
+    """
+    Parsed bundle information.
 
-        :param zipfile:  the zip file for the bundle
-        :param files:    a list of BundleFile objects
-        """
-        self.files = files or []
-        self.zipfile = zipfile
+    - zipfile: the zip file for the bundle
+    - files: a list of BundleFile objects
+    """
+    zipfile: str
+    files: Sequence[BundleFile] = dataclasses.field(default_factory=list)
 
 
-class OutputInfo(DefaultStrMixin):
-    def __init__(self,
-                 student_dir: str,
-                 student_dbc: str,
-                 instructor_dir: str,
-                 instructor_dbc: str):
-        self.student_dir = student_dir
-        self.student_dbc = student_dbc
-        self.instructor_dir = instructor_dir
-        self.instructor_dbc = instructor_dbc
+@dataclass(frozen=True)
+class OutputInfo:
+    student_dir: str
+    student_dbc: str
+    instructor_dir: str
+    instructor_dbc: str
 
     @property
     def student_labs_subdir(self) -> str:
@@ -363,26 +357,17 @@ class OutputInfo(DefaultStrMixin):
         return joinpath(self.instructor_dir, base)
 
 
+@dataclass(frozen=True)
 class CourseInfo(DefaultStrMixin):
-    def __init__(self,
-                 name: str,
-                 version: str,
-                 class_setup: str,
-                 schedule: str,
-                 instructor_prep: str,
-                 copyright_year: str,
-                 deprecated: bool,
-                 course_type: master_parse.CourseType,
-                 title: Optional[str] = None):
-        self.name = name
-        self.version = version
-        self.class_setup = class_setup
-        self.schedule = schedule
-        self.instructor_prep = instructor_prep
-        self.copyright_year = copyright_year
-        self.deprecated = deprecated
-        self.course_type = course_type
-        self.title = title or name
+    name: str
+    version: str
+    class_setup: str
+    schedule: str
+    instructor_prep: str
+    copyright_year: str
+    deprecated: bool
+    course_type: master_parse.CourseType
+    title: Optional[str] = None
 
     @property
     def course_id(self) -> str:
@@ -395,21 +380,11 @@ class CourseInfo(DefaultStrMixin):
         return f'{self.name}-{self.version}'
 
 
+@dataclass(frozen=True)
 class NotebookDefaults(DefaultStrMixin):
-    def __init__(self,
-                 dest: Optional[str] = None,
-                 master: Dict[str, Any] = None,
-                 variables: Optional[Dict[AnyStr, AnyStr]] = None):
-        """
-        Create a new NotebookDefaults object.
-
-        :param dest:      The destination value (str)
-        :param variables: Default (unexpanded) variables
-        :param master:    The master parse section (dict, not MasterParseInfo)
-        """
-        self.dest = dest
-        self.master = master or {}
-        self.variables = variables or {}
+    dest: Optional[str] = None
+    master: Optional[Dict[str, Any]] = dataclasses.field(default_factory=dict)
+    variables: Optional[Dict[str, str]] = dataclasses.field(default_factory=dict)
 
 
 # See https://github.com/python/typing/issues/58#issuecomment-326240794
@@ -436,7 +411,8 @@ class MasterParseInfo(DefaultStrMixin):
         'encoding_in': str,
         'encoding_out': str,
         'debug': bool,
-        'enable_templates': bool
+        'enable_templates': bool,
+        'instructor_notes': str,
     }
 
     VALID_HEADING_FIELDS = {
@@ -458,6 +434,7 @@ class MasterParseInfo(DefaultStrMixin):
                  answers: bool = True,
                  exercises: bool = True,
                  instructor: bool = True,
+                 instructor_notes: Optional[str] = None,
                  heading: Optional[NotebookHeading] = None,
                  footer: Optional[NotebookFooter] = None,
                  encoding_in: str = 'UTF-8',
@@ -496,6 +473,7 @@ class MasterParseInfo(DefaultStrMixin):
         self.answers = answers
         self.exercises = exercises
         self.instructor = instructor
+        self.instructor_notes = instructor_notes
         self.heading = heading
         self.footer = footer
         self.encoding_in = encoding_in
@@ -868,10 +846,10 @@ def load_build_yaml(yaml_file: str) -> BuildData:
 
         return v
 
-    def parse_time_subst(dest: str,
-                         src: str,
-                         allow_lang: bool = True,
-                         extra_vars: Dict[str, Any] = None) -> str:
+    def do_parse_level_substitutions(dest: str,
+                                     src: str,
+                                     allow_lang: bool = True,
+                                     extra_vars: Dict[str, Any] = None) -> str:
         # Handles parse-time variable substitution. Some variables are
         # substituted later.
         if extra_vars is None:
@@ -967,7 +945,8 @@ def load_build_yaml(yaml_file: str) -> BuildData:
             elif heading_path is not None:
                 # Resolve the path, relative to the build file.
                 if not path.isabs(heading_path):
-                    heading_path = path.abspath(joinpath(build_yaml_dir, heading_path))
+                    heading_path = path.abspath(joinpath(build_yaml_dir,
+                                                         heading_path))
                 if not path.exists(heading_path):
                     raise BuildConfigError(
                         f'Footer file "{heading_path}" does not exist.'
@@ -986,7 +965,8 @@ def load_build_yaml(yaml_file: str) -> BuildData:
             elif footer_path is not None:
                 # Resolve the path, relative to the build field.
                 if not path.isabs(footer_path):
-                    footer_path = path.abspath(joinpath(build_yaml_dir, footer_path))
+                    footer_path = path.abspath(joinpath(build_yaml_dir,
+                                                        footer_path))
                 if not path.exists(footer_path):
                     raise BuildConfigError(
                         f'Footer file "{footer_path}" does not exist.'
@@ -1034,7 +1014,8 @@ def load_build_yaml(yaml_file: str) -> BuildData:
         variables = merge_dicts(notebook_defaults.variables,
                                 obj.get('variables', {}))
         all_extra_vars = merge_dicts(extra_vars, variables)
-        dest = parse_time_subst(dest, src, extra_vars=all_extra_vars)
+        dest = do_parse_level_substitutions(dest, src,
+                                            extra_vars=all_extra_vars)
         if bool_field(obj, 'skip'):
             verbose(f'Skipping notebook {src}')
             return None
@@ -1119,7 +1100,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
         else:
             return SlideData(
                 src=src,
-                dest=parse_time_subst(dest, src, allow_lang=False,
+                dest=do_parse_level_substitutions(dest, src, allow_lang=False,
                                       extra_vars=extra_vars)
             )
 
@@ -1166,7 +1147,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                 raise BuildConfigError('"bundle" has a file with no "dest".')
 
             src = StringTemplate(src).substitute(src_vars)
-            dest = parse_time_subst(dest, src, allow_lang=False,
+            dest = do_parse_level_substitutions(dest, src, allow_lang=False,
                                     extra_vars=extra_vars)
             file_list.append(BundleFile(src=src, dest=dest))
 
@@ -1181,7 +1162,8 @@ def load_build_yaml(yaml_file: str) -> BuildData:
             verbose(f'Skipping file {src}')
             return None
         else:
-            dest = parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars)
+            dest = do_parse_level_substitutions(dest, src, allow_lang=False,
+                                                extra_vars=extra_vars)
 
             mf = MiscFileData(
                 src=src,
@@ -1265,7 +1247,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                 if os.stat(p).st_size == 0:
                     raise BuildConfigError(f'Dataset "{src}": "{p}" is empty.')
 
-            adj_dest = parse_time_subst(
+            adj_dest = do_parse_level_substitutions(
                 dest, src, allow_lang=False, extra_vars=extra_vars
             )
             return DatasetData(src=src, dest=adj_dest, license=license,
@@ -1802,7 +1784,7 @@ def process_master_notebook(dest_root: str,
                 ext = LANG_EXT[lc_lang]
                 fields = merge_dicts(notebook.variables, {
                     TARGET_LANG: lang_dir,
-                    TARGET_EXTENSION: ext[1:] if ext.startswith('') else ext,
+                    TARGET_EXTENSION: ext[1:] if ext.startswith('.') else ext,
                     NOTEBOOK_TYPE: notebook_type_map.get(notebook_type, '')
                 })
                 dest_subst = VariableSubstituter(
@@ -1812,6 +1794,10 @@ def process_master_notebook(dest_root: str,
                 )
                 if dest_subst.startswith(os.path.sep):
                     dest_subst = dest_subst[len(os.path.sep):]
+
+                dest_base, _ = os.path.splitext(os.path.basename(dest_subst))
+                fields['target_basename'] = dest_base
+
 
                 for f in matches:
                     target = path.normpath(joinpath(target_dir, dest_subst))
@@ -1824,6 +1810,39 @@ def process_master_notebook(dest_root: str,
                         f'notebooks for "{notebook.src}"!'
                     )
 
+    def copy_instructor_notes(temp_file: str, final_dest: str) -> NoReturn:
+        # Need to do some substitution here. We need to get a fully-substituted
+        # destination, from which we can then extract the base file name.
+        lang = list(EXT_LANG.values())[0] # Just choose one. It doesn't matter.
+        ext = LANG_EXT[lang.lower()]
+        nb_dest_subst = VariableSubstituter(notebook.dest).safe_substitute(
+            merge_dicts(notebook.variables, {
+                TARGET_LANG: lang,
+                TARGET_EXTENSION: ext[1:] if ext.startswith('.') else ext,
+                NOTEBOOK_TYPE: notebook_type_map.get(NotebookType.EXERCISES, '')
+            })
+        )
+
+        target_basename, _ = os.path.splitext(os.path.basename(nb_dest_subst))
+
+        # Now we can do substitution on the instructor notes target.
+        final_dest = VariableSubstituter(final_dest).safe_substitute(
+            merge_dicts(notebook.variables, {'target_basename': target_basename})
+        )
+
+        # Copy the generated Markdown file to the target destination.
+        parent = os.path.dirname(final_dest)
+        if not os.path.exists(parent):
+            mkdirp(parent)
+        verbose(f'+ cp {temp_file} {final_dest}')
+        _convert_and_copy_info_file(temp_file, final_dest, build)
+
+        # Convert to HTML.
+        no_ext_path, _ = os.path.splitext(final_dest)
+        html_path = f'{no_ext_path}.html'
+        markdown_to_html(final_dest, html_path,
+                         stylesheet=build.markdown.html_stylesheet)
+
     verbose(f"Running master parse on {src_path}")
     master = notebook.master
     extra_template_vars = {}
@@ -1831,6 +1850,10 @@ def process_master_notebook(dest_root: str,
     extra_template_vars.update(notebook.variables)
     with TemporaryDirectory() as tempdir:
         try:
+            if notebook.master.instructor_notes:
+                temp_instructor_notes = os.path.join(tempdir, 'notes.md')
+            else:
+                temp_instructor_notes = None
             params = master_parse.Params(
                 path=src_path,
                 output_dir=tempdir,
@@ -1851,14 +1874,24 @@ def process_master_notebook(dest_root: str,
                 encoding_out=master.encoding_out,
                 enable_verbosity=verbosity_is_enabled(),
                 copyright_year=build.course_info.copyright_year,
-                profile=profile,
+                active_profile=profile,
+                all_profiles=build.profiles,
                 course_type=build.course_info.course_type,
                 enable_debug=master.debug,
                 enable_templates=master.enable_templates,
+                instructor_notes_file=temp_instructor_notes,
                 extra_template_vars=extra_template_vars
             )
+
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)
+
+            if temp_instructor_notes and os.path.exists(temp_instructor_notes):
+                copy_instructor_notes(
+                    temp_instructor_notes,
+                    os.path.join(dest_root, notebook.master.instructor_notes)
+                )
+
         except Exception as e:
             e_cls = e.__class__.__name__
             error(f"Failed to process {src_path}\n    {e_cls}: {e}")
@@ -1985,7 +2018,7 @@ def make_dbc(build: BuildData, labs_dir: str, dbc_path: str) -> NoReturn:
                dbc_folder=build.top_dbc_folder_name,
                flatten=False,
                verbose=verbosity_is_enabled(),
-               debug=False)
+               debugging=False)
     finally:
         pass
 
@@ -2075,7 +2108,10 @@ def bundle_course(build: BuildData,
     from zipfile import ZipFile
 
     # Expand any run-time variables in zipfile and dest.
-    vars = {PROFILE_VAR: profile or ''}
+    if profile:
+        vars = {PROFILE_VAR: profile.name}
+    else:
+        vars = {PROFILE_VAR: ''}
 
     t = StringTemplate(joinpath(dest_dir, build.bundle_info.zipfile))
     zip_path = t.safe_substitute(vars)
@@ -2836,6 +2872,8 @@ def main():
         die(f'Error in "{course_config}": {e}')
     except BuildError as e:
         die(str(e))
+    except KeyboardInterrupt:
+        die(f'\n*** Interrupted.')
 
 if __name__ == '__main__':
     main()

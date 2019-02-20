@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import (Sequence, Optional, Dict, Set, NoReturn, Pattern, Match,
                     Tuple, List, TextIO, Any)
 
-VERSION = "1.20.0"
+VERSION = "1.20.0-RC1"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional

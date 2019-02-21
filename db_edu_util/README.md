@@ -1,4 +1,3 @@
-# notebooktools
+# db_edu_util
 
-This Python library parses source Databricks notebooks into an internal
-form.
+This library contains various functions and classes shared by the build tools.

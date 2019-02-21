@@ -1,12 +1,9 @@
-# Master Parse Tool
+# Generate a Databricks DBC file
 
-## Introduction
-
-The master parse tool parses Databricks notebooks (in source form) and,
-based on metadata embedded within the notebooks, produces (possibly multiple)
-output notebooks.
-
-It can be used as a command or as a library.
+This directory contains the source code for a tool that will generate a
+DBC file from a set of Databricks notebooks. A DBC file is a special
+container, a package with one or more notebooks, that can be imported
+directly.
 
 Unless you're developing the build tools, you'll never use this tool directly.
 It'll be invoked automatically, via either `bdc` or `course`.
@@ -14,4 +11,3 @@ It'll be invoked automatically, via either `bdc` or `course`.
 For complete documentation on the build tools, please see the [wiki][].
 
 [wiki]: https://github.com/databricks-edu/build-tooling/wiki
-

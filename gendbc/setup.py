@@ -31,7 +31,7 @@ setup(
     install_requires=[
         'docopt >= 0.6.2',
         'future >= 0.16.0',
-        'grizzled-python >= 1.1.0',
+        'grizzled-python == 1.1.0',
         'enum34 >= 1.1.6',
         'backports.tempfile >= 1.0',
         'typing >= 3.6.6',

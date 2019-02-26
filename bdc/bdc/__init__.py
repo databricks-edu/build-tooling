@@ -1209,7 +1209,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
             else:
                 # No extension. Assume dest_is_dir is True, if not set.
                 if mf.dest_is_dir is None:
-                    mf = datasets.replace(mf, dest_is_dir=True)
+                    mf = dataclasses.replace(mf, dest_is_dir=True)
 
                 # Some simple sanity checks.
                 if (not mf.dest_is_dir) and (dest in ('.', '..')):

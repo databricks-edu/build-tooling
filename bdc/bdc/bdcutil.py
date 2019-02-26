@@ -145,11 +145,17 @@ def parse_version_string(version: str) -> Tuple[int, int]:
     Traceback (most recent call last):
     ...
     ValueError: "a.b.c" is a malformed version string...
+    >>> parse_version_string("1.2.3-RC2")
+    (1, 2)
+    >>> parse_version_string("1.2.3-SNAPSHOT")
+    (1, 2)
     """
     nums = version.split('.')
     if len(nums) not in (2, 3):
         raise ValueError(f'"{version}" is a malformed version string')
     try:
+        if '-' in nums[-1]:
+            nums[-1], _ = nums[-1].split('-')
         return tuple([int(i) for i in nums])[0:2]
     except ValueError as e:
         raise ValueError(f'"{version}" is a malformed version string: {e}')

@@ -17,7 +17,7 @@ import os
 import sys
 from contextlib import contextmanager
 
-VERSION = '1.12.0'
+VERSION = '1.12.1'
 
 @contextmanager
 def chdir(dir):
@@ -44,6 +44,7 @@ setup(
     packages=[],
     install_requires=[
         'cairocffi==0.9.0',
+        'tinycss2==0.6.1',
     ],
     version=VERSION,
     description='Wrapper package for Databricks Training build tools',

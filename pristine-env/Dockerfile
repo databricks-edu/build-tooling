@@ -1,7 +1,7 @@
 # NOTE: Make sure build caching is OFF, or Docker may not pick up the
 # latest version of the tools.
 FROM python:3
-RUN apt-get update && apt-get install -y less zip unzip vim nano zsh sudo man 
+RUN apt-get update && apt-get install -y less zip unzip vim nano zsh sudo man autojump
 
 RUN groupadd -g 1001 user
 RUN useradd -r -u 1001 -g user user

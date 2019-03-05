@@ -18,7 +18,11 @@ Run `./install.sh` to create a `pristine-python3` Docker image. This image:
 - contains Python 3, as well as a virtual environment `/usr/local/pythons/3`
   (owned by `user`)
 - ensures if you invoke `bash` or `zsh` within the instance, your default
-  Python is the one in the virtual environment.
+  Python is the one in the virtual environment. The shell used within the
+  environment is:
+  - The value of `$DB_EDU_SHELL`, if not empty.
+  - The value of `$SHELL`, if `$DB_EDU_SHELL` is empty.
+  - `bash` if neither is set.
 
 Other notable aspects of the image:
 

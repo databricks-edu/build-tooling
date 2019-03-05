@@ -4,6 +4,12 @@ This directory contains a Dockerfile that creates a pristine Python 3
 Docker image, with nothing extra installed. This environment is useful 
 for cleanroom testing of the build tools.
 
+When you fire up the image, by virtual of the `py3dock` alias (see below),
+you get an Ubuntu instance with a pristine version of Python 3. You can install
+the build tools (or anything else) and run tests. When you exit the image,
+everything just goes away, and the next time you fire up the image, you start
+all over again with a clean environment. 
+
 ## Create the image
 
 Run `./install.sh` to create a `pristine-python3` Docker image. This image:
@@ -13,9 +19,6 @@ Run `./install.sh` to create a `pristine-python3` Docker image. This image:
   (owned by `user`)
 - ensures if you invoke `bash` or `zsh` within the instance, your default
   Python is the one in the virtual environment.
-
-Every time you fire up the image, you get an instance with a clean Python 3
-environment into which you can install the build tools (or anything else).
 
 Other notable aspects of the image:
 

@@ -27,6 +27,15 @@ from typing import (Sequence, Any, Set, Optional, Dict, Tuple,
                     Tuple, NoReturn, Generator, Union, Pattern, Iterable,
                     Callable, Type, no_type_check)
 
+__all__ = ['read_yaml_file', 'parse_version_string', 'flatten',
+           'merge_dicts', 'bool_value', 'bool_field', 'working_directory',
+           'find_in_path', 'ensure_parent_dir_exists', 'move', 'joinpath',
+           'rm_rf', 'mkdirp', 'copy', 'has_extension', 'is_html', 'is_pdf',
+           'is_text_file', 'is_markdown', 'markdown_to_html',
+           'markdown_to_pdf', 'html_to_pdf', 'dict_get_and_del',
+           'variable_ref_patterns', 'matches_variable_ref', 'DefaultStrMixin',
+           'VariableSubstituter', 'VariableSubstituterParseError',]
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -113,6 +122,26 @@ _generic_wrapper = EnhancedTextWrapper()
 # ---------------------------------------------------------------------------
 # Public functions
 # ---------------------------------------------------------------------------
+
+def read_yaml_file(path: str, encoding: str = 'utf-8') -> Dict[str, Any]:
+    """
+    Load the specified YAML file, handling any include preprecessing.
+
+    :param path:     the path to the file
+    :param encoding: the encoding to use
+
+    :return: the loaded YAML file
+    """
+    from io import StringIO
+    from grizzled.file.includer import Includer
+    import yaml
+
+    inc = Includer(source=path,
+                   include_regex=r'#include\s+"([^"]+)"',
+                   encoding='utf-8')
+    input = StringIO(''.join([line for line in inc]))
+    return yaml.safe_load(input)
+
 
 def parse_version_string(version: str) -> Tuple[int, int]:
     """

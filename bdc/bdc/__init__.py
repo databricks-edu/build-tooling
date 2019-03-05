@@ -4,7 +4,6 @@ from __future__ import annotations # PEP 563 (allows annotation forward refs)
 
 import sys
 
-from collections import namedtuple
 import os
 from os import path
 import re
@@ -44,18 +43,18 @@ PROG = os.path.basename(sys.argv[0])
 
 DB_SHARD_HOME_VAR = 'DB_SHARD_HOME'
 
-USAGE = ("""
-{0}, version {1}
+USAGE = f"""
+{PROG}, version {VERSION}
 
 Usage:
-  {0} (--version)
-  {0} --info [--shell] [BUILD_YAML]
-  {0} (-C | --check) [BUILD_YAML]
-  {0} (-h | --help)
-  {0} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
-  {0} --list-notebooks [BUILD_YAML]
-  {0} --upload [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
-  {0} --download [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
+  {PROG} (--version)
+  {PROG} --info [--shell] [BUILD_YAML]
+  {PROG} (-C | --check) [BUILD_YAML]
+  {PROG} (-h | --help)
+  {PROG} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
+  {PROG} --list-notebooks [BUILD_YAML]
+  {PROG} --upload [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
+  {PROG} --download [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
 
 MASTER_CFG is the build tool's master configuration file.
 
@@ -87,7 +86,7 @@ Options:
                            argument to "databricks".
   --version                Display version and exit.
 
-""".format(PROG, VERSION, DEFAULT_BUILD_FILE))
+"""
 
 DEFAULT_INSTRUCTOR_FILES_SUBDIR = "InstructorFiles"
 DEFAULT_INSTRUCTOR_LABS_DBC = "Instructor-Labs.dbc"
@@ -820,8 +819,6 @@ def load_build_yaml(yaml_file: str) -> BuildData:
 
     :return the Build object, representing the parsed build.yaml
     """
-    import yaml
-
     def required(d: Dict[str, Any],
                  key: str,
                  where: str,
@@ -1432,8 +1429,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
     # Main function logic
 
     verbose(f"Loading {yaml_file}...")
-    with open(yaml_file, 'r') as y:
-        contents = yaml.safe_load(y)
+    contents = read_yaml_file(yaml_file)
 
     bdc_min_version = parse_min_version(
        'bdc_min_version', required(contents, 'bdc_min_version', 'build')

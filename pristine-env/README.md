@@ -1,7 +1,7 @@
 # Pristine Python 3 environment
 
 This directory contains a Dockerfile that creates a pristine Python 3 
-Document image, with nothing extra installed. This environment is useful 
+Docker image, with nothing extra installed. This environment is useful 
 for cleanroom testing of the build tools.
 
 ## Create the image

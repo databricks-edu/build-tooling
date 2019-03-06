@@ -1839,8 +1839,10 @@ def process_master_notebook(dest_root: str,
         # Convert to HTML.
         no_ext_path, _ = os.path.splitext(final_dest)
         html_path = f'{no_ext_path}.html'
+        pdf_path = f'{no_ext_path}.pdf'
         markdown_to_html(final_dest, html_path,
                          stylesheet=build.markdown.html_stylesheet)
+        html_to_pdf(html_path, pdf_path)
 
     verbose(f"Running master parse on {src_path}")
     master = notebook.master

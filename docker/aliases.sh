@@ -7,13 +7,68 @@
 
 # Set BUILD_TOOL_DOCKER_TAG to a different tag (e.g., "snapshot") to use
 # a different tag.
+
 : ${BUILD_TOOL_DOCKER_TAG:=latest}
-alias bdc="docker run -it --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME -e HOME=$HOME -v $HOME:$HOME databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG bdc"
-alias databricks="docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG databricks"
-alias gendbc="docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG gendbc"
-alias master_parse="docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG master_parse"
+
+for i in bdc databricks gendbc master_parse course dbe
+do
+  unalias $i 2>/dev/null
+  unset -f $i 2>/dev/null
+done
+
+function dbe {
+  usage="dbe [latest|snapshot]"
+  case $# in
+    1)
+      case "$1" in
+        latest|snapshot)
+          export BUILD_TOOL_DOCKER_TAG=$1
+          dbe
+          ;;
+        *)
+          echo "$usage" >&2
+          return 1
+          ;;
+      esac
+      ;;
+
+    0)
+      image=databrickseducation/build-tool:${BUILD_TOOL_DOCKER_TAG:-latest}
+      echo "Using build tools in Docker image $image"
+      ;;
+
+    *)
+      echo "$usage" >&1
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+function bdc {
+  docker run -it --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME \
+             -e HOME=$HOME -v $HOME:$HOME \
+             databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG bdc "$@"
+}
+
+function databricks {
+  docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME \
+    databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG databricks "$@"
+}
+
+function gendbc {
+  docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME \
+    databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG gendbc "$@"
+}
+
+function master_parse {
+  docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME \
+    databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG master_parse "$@"
+}
 
 COURSE_ENV_VARS="DB_CONFIG_PATH DB_PROFILE DB_SHARD_HOME COURSE_NAME COURSE_REPO COURSE_HOME COURSE_YAML COURSE_MODULES COURSE_REMOTE_SOURCE COURSE_REMOTE_TARGET PREFIX SOURCE TARGET EDITOR PAGER LESS LESSCHARSET USER"
+
+unset -f create_course_envfile 2>/dev/null
 
 function create_course_envfile {
   : ${1?'Missing file name'}

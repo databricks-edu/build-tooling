@@ -14,7 +14,8 @@ import master_parse
 from gendbc import gendbc
 from db_edu_util.notebooktools import parse_source_notebook, NotebookError
 from db_edu_util import (db_cli, wrap2stdout, error, verbose, set_verbosity,
-                         warn, verbosity_is_enabled, info, die)
+                         warn, verbosity_is_enabled, info, die,
+                         EnhancedTextWrapper)
 from db_edu_util.db_cli import DatabricksCliError
 from grizzled.file import eglob
 from bdc.bdcutil import *
@@ -22,9 +23,11 @@ from string import Template as StringTemplate
 import dataclasses
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
+import codecs
+import shutil
 
 from typing import (Sequence, Any, Type, TypeVar, Set, Optional, Dict,
-                    AnyStr, Tuple, NoReturn, Generator, Union, Pattern, Set)
+                    AnyStr, Tuple, NoReturn, Generator, Union, Callable, Set)
 
 __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
            'bdc_download', 'bdc_upload', 'bdc_check_build',
@@ -36,7 +39,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.30.0-RC1"
+VERSION = "1.30.0-RC2"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])

@@ -606,9 +606,15 @@ def html_to_pdf(html: str, pdf_out: str) -> NoReturn:
     :param html:     the path to the HTML file
     :param pdf_out:  the output PDF file
     '''
-    from weasyprint import HTML
-    dom = HTML(filename=html)
-    dom.write_pdf(pdf_out)
+    import warnings
+
+    # Ignore user warnings emitted by the WeasyPrint package.
+    # See https://docs.python.org/3/library/warnings.html#temporarily-suppressing-warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        from weasyprint import HTML
+        dom = HTML(filename=html)
+        dom.write_pdf(pdf_out)
 
 
 def markdown_to_pdf(markdown: str,

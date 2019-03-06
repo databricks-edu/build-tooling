@@ -10,11 +10,40 @@
 
 : ${BUILD_TOOL_DOCKER_TAG:=latest}
 
-for i in bdc databricks gendbc master_parse course
+for i in bdc databricks gendbc master_parse course dbe
 do
   unalias $i 2>/dev/null
   unset -f $i 2>/dev/null
 done
+
+function dbe {
+  usage="dbe [latest|snapshot]"
+  case $# in
+    1)
+      case "$1" in
+        latest|snapshot)
+          export BUILD_TOOL_DOCKER_TAG=$1
+          dbe
+          ;;
+        *)
+          echo "$usage" >&2
+          return 1
+          ;;
+      esac
+      ;;
+
+    0)
+      image=databrickseducation/build-tool:${BUILD_TOOL_DOCKER_TAG:-latest}
+      echo "Using build tools in Docker image $image"
+      ;;
+
+    *)
+      echo "$usage" >&1
+      return 1
+      ;;
+  esac
+  return 0
+}
 
 function bdc {
   docker run -it --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME \

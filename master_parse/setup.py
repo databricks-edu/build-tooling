@@ -52,7 +52,7 @@ class Test(Command):
     def run(self):
         # Convention: Run the module to run the tests.
         for module_path in ('master_parse/InlineToken.py',):
-            run_cmd(f'python {module_path}')
+            run_cmd('python ' + module_path)
 
 
 setup(

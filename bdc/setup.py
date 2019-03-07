@@ -54,7 +54,7 @@ class Test(Command):
     def run(self):
         # Convention: Run the module to run the tests.
         for module_path in ('bdc/bdcutil.py',):
-            run_cmd(f'python {module_path}')
+            run_cmd('python ' + module_path)
 
 
 setup(
@@ -71,7 +71,7 @@ setup(
         'parsimonious==0.8.1',
         'WeasyPrint==45'
     ],
-    cmdclass                      = {
+    cmdclass = {
         'test': Test
     },
     author='Databricks Education Team',

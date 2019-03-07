@@ -7,6 +7,8 @@
   for backward compatibility.
 - Added the ability to consolidate all instructor notes in a notebook into a
   single file.
+- Fixed bug leading to extra blank lines in native code cells under certain
+  circumstances.
 
 **Version 1.19.0**
 

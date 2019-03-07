@@ -760,6 +760,7 @@ class NotebookGenerator(object):
                         is_first = self._write_command(output, cell_split,
                                                        content, is_first)
 
+                output.write('\n')
 
                 # Optionally add the footer.
                 if params.add_footer:
@@ -926,12 +927,15 @@ class NotebookGenerator(object):
                        cell_split: str,
                        content: List[str],
                        is_first: bool) -> bool:
+
+        trimmed = self._trim_content(content)
+
         if not is_first:
-            output.write(cell_split)
-        output.write('\n'.join(content))
+            output.write(cell_split + '\n')
+        output.write('\n'.join(trimmed))
         return False
 
-    def trim_content(self, content: List[str]) -> List[str]:
+    def _trim_content(self, content: List[str]) -> List[str]:
         trim_top_lines = 0
         for line in content:
             if _command.match(line) or line.strip() == '':
@@ -987,7 +991,6 @@ class NotebookGenerator(object):
             # we usually capture a blank line after COMMAND that needs to be
             # skipped
             skip_one = 1 if modified_content[0] == '' else 0
-
             if self.notebook_kind == NotebookKind.DATABRICKS:
                 # add % command (e.g. %md)
                 s = Parser.code_to_magic[code]

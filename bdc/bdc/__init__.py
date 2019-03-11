@@ -39,7 +39,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.30.0-RC2"
+VERSION = "1.30.0-RC3"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1913,7 +1913,7 @@ def copy_notebooks(build: BuildData,
                 notebook.only_in_profile != profile):
             info(
                 f'Suppressing notebook "{src_path}", which is ' +
-                f'{profile.title()}-only.'
+                f'{profile.name}-only.'
             )
             continue
 

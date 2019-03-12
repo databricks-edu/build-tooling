@@ -17,6 +17,7 @@ import codecs
 import shutil
 from zipfile import ZipFile
 from dataclasses import dataclass
+from tempfile import TemporaryDirectory
 
 from typing import Union, Sequence, Optional, NoReturn, Dict, Any
 
@@ -30,7 +31,7 @@ __all__ = ['Config', 'GendbcError', 'gendbc']
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 
 PROG = os.path.basename(sys.argv[0])
 

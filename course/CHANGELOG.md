@@ -1,5 +1,14 @@
 # Change log for `course`
 
+**Version 2.2.0**
+
+- Added ability to specify build file with `course -f` or `course --build-file`.
+  e.g., `course -f build-ilt.yaml build`
+
+**Version 2.1.0**
+
+- Now implemented in Python 3.
+
 **Version 2.0.7**
 
 - Changed to work with new `db_edu_util` library, which contains 

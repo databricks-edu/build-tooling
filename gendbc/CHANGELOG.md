@@ -1,5 +1,9 @@
 # Change Log for gendbc
 
+**Version 2.1.1**
+
+- Fixed bug arising from missing import of `TemporaryDirectory`.
+
 **Version 2.1.0**
 
 - Now implemented in Python 3. Will _not_ work with Python 2.

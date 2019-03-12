@@ -23,7 +23,7 @@ from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.1.0'
+VERSION = '2.2.0'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -558,7 +558,11 @@ def build_file_path(cfg: Dict[str, str]) -> NoReturn:
     :return: the path to the build file
     """
     res = cfg.get('COURSE_YAML')
-    if not res:
+    if res:
+        if not os.path.sep in res:
+            # Simple file name. Join it with the course home.
+            res = os.path.join(cfg['COURSE_HOME'], res)
+    else:
         res = os.path.join(cfg['COURSE_HOME'], 'build.yaml')
 
     return res
@@ -761,7 +765,7 @@ def build_local(cfg: Dict[str, str]) -> str:
     if not os.path.exists(build_file):
         die('Build file "{}" does not exist.'.format(build_file))
 
-    print(f"\nBuilding {course_name}")
+    print(f"\nBuilding {course_name} using {os.path.basename(build_file)}")
     bdc.bdc_build_course(build_file,
                          dest_dir='',
                          overwrite=True,
@@ -1125,6 +1129,14 @@ def main():
                     cfg = update_config(cfg)
                 except IndexError:
                     die("Saw -n or --name without subsequent course name.")
+
+            elif cmd in ('-f', '--build-file'):
+                try:
+                    i += 1
+                    cfg['COURSE_YAML'] = args[i]
+                    cfg = update_config(cfg)
+                except IndexError:
+                    die("Saw -f or --build-file without subsequent file name.")
 
             elif cmd in ('-h', '--help', 'help', 'usage'):
                 help(cfg)

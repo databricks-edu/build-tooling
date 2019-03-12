@@ -14,7 +14,6 @@ import traceback
 from textwrap import TextWrapper
 from collections import namedtuple
 import codecs
-from backports.tempfile import TemporaryDirectory
 import shutil
 from zipfile import ZipFile
 from dataclasses import dataclass

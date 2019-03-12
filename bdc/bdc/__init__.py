@@ -1,47 +1,33 @@
 #!/usr/bin/env python
 
-from __future__ import (absolute_import, division, print_function)
-
-from builtins import (bytes, dict, int, list, object, range, str,
-                      chr, hex, input, next, oct, open, pow, round, super,
-                      filter, map, zip)
-
-from future import standard_library
-standard_library.install_aliases()
+from __future__ import annotations # PEP 563 (allows annotation forward refs)
 
 import sys
-if sys.version_info[0] != 2:
-    print("bdc only works on Python 2. You're using Python {0}.".format(
-        '.'.join([str(i) for i in sys.version_info[0:3]])
-    ))
-    sys.exit(1)
 
-import subprocess
-import json
-
-from collections import namedtuple
 import os
 from os import path
-import codecs
 import re
 from datetime import datetime
-from ConfigParser import SafeConfigParser, NoOptionError
+from configparser import ConfigParser, NoOptionError
 from enum import Enum
 import master_parse
 from gendbc import gendbc
 from db_edu_util.notebooktools import parse_source_notebook, NotebookError
-from db_edu_util import db_cli
+from db_edu_util import (db_cli, wrap2stdout, error, verbose, set_verbosity,
+                         warn, verbosity_is_enabled, info, die,
+                         EnhancedTextWrapper)
 from db_edu_util.db_cli import DatabricksCliError
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
-from typing import Sequence
+import dataclasses
+from dataclasses import dataclass
+from tempfile import TemporaryDirectory
+import codecs
+import shutil
 
-
-# We're using backports.tempfile, instead of tempfile, so we can use
-# TemporaryDirectory in both Python 3 and Python 2. tempfile.TemporaryDirectory
-# was added in Python 3.2.
-from backports.tempfile import TemporaryDirectory
+from typing import (Sequence, Any, Type, TypeVar, Set, Optional, Dict,
+                    AnyStr, Tuple, NoReturn, Generator, Union, Callable, Set)
 
 __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
            'bdc_download', 'bdc_upload', 'bdc_check_build',
@@ -53,25 +39,25 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.29.0"
+VERSION = "1.30.0-RC3"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
 
 DB_SHARD_HOME_VAR = 'DB_SHARD_HOME'
 
-USAGE = ("""
-{0}, version {1}
+USAGE = f"""
+{PROG}, version {VERSION}
 
 Usage:
-  {0} (--version)
-  {0} --info [--shell] [BUILD_YAML]
-  {0} (-C | --check) [BUILD_YAML]
-  {0} (-h | --help)
-  {0} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
-  {0} --list-notebooks [BUILD_YAML]
-  {0} --upload [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
-  {0} --download [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
+  {PROG} (--version)
+  {PROG} --info [--shell] [BUILD_YAML]
+  {PROG} (-C | --check) [BUILD_YAML]
+  {PROG} (-h | --help)
+  {PROG} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
+  {PROG} --list-notebooks [BUILD_YAML]
+  {PROG} --upload [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
+  {PROG} --download [-v | --verbose] [-P PROF | --dprofile PROF ] SHARD_PATH [BUILD_YAML]
 
 MASTER_CFG is the build tool's master configuration file.
 
@@ -103,7 +89,7 @@ Options:
                            argument to "databricks".
   --version                Display version and exit.
 
-""".format(PROG, VERSION, DEFAULT_BUILD_FILE))
+"""
 
 DEFAULT_INSTRUCTOR_FILES_SUBDIR = "InstructorFiles"
 DEFAULT_INSTRUCTOR_LABS_DBC = "Instructor-Labs.dbc"
@@ -120,7 +106,7 @@ NOTEBOOK_TYPE = 'notebook_type'
 OUTPUT_DIR = 'output_dir'
 PROFILE_VAR = 'profile'
 
-VALID_PROFILES = {'amazon', 'azure'}
+DEFAULT_PROFILES = {'amazon': 'Amazon', 'azure': 'Azure'}
 PROFILE_ABBREVIATIONS = {'amazon' : 'am', 'azure': 'az'}
 
 POST_MASTER_PARSE_VARIABLES = {
@@ -138,7 +124,7 @@ EXT_LANG = {'.py':    'Python',
             '.sql':   'SQL'}
 
 # LANG_EXT: Mapping of language (in lower case) to extension
-LANG_EXT = dict([(v.lower(), k) for k, v in EXT_LANG.items()])
+LANG_EXT = dict([(v.lower(), k) for k, v in list(EXT_LANG.items())])
 
 # Used to create a Scala version notebook in the top-level. This is a string
 # template, with the following variables:
@@ -152,7 +138,7 @@ VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
 // MAGIC * Version ${version}
 // MAGIC * Built ${build_timestamp}
 // MAGIC
-// MAGIC Copyright \u00a9 ${year} Databricks, Inc.
+// MAGIC Copyright \\u00a9 ${year} Databricks, Inc.
 """
 
 # The version notebook file name. Use as a format string, with {0} as the
@@ -165,11 +151,12 @@ ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
 # Globals
 # ---------------------------------------------------------------------------
 
-errors = 0
+errors: int = 0
 
 # ---------------------------------------------------------------------------
 # Classes
 # ---------------------------------------------------------------------------
+
 
 class BuildError(Exception):
     pass
@@ -184,12 +171,19 @@ class BuildConfigError(BuildError):
 
 
 class UnknownFieldsError(BuildConfigError):
-    def __init__(self, parent_section, section_name, unknown_keys):
+    def __init__(self,
+                 parent_section: str,
+                 section: str,
+                 bad_keys: Set[str]):
+        keys = ', '.join(bad_keys)
         super(BuildConfigError, self).__init__(
-            '"{0}": Unknown fields in "{1}" section: {2}'.format(
-                parent_section, section_name, ', '.join(unknown_keys)
-            )
+            f'"{parent_section}": Bad fields in "{section}" section: {keys}'
         )
+
+
+# See https://github.com/python/typing/issues/58#issuecomment-326240794
+NotebookTypeClass = TypeVar('NotebookTypeClass', bound='NotebookType')
+
 
 class NotebookType(Enum):
     EXERCISES = 'exercises'
@@ -197,14 +191,14 @@ class NotebookType(Enum):
     ANSWERS = 'answers'
 
     @classmethod
-    def default_mappings(cls):
+    def default_mappings(cls: Type[NotebookTypeClass]) -> Dict[NotebookType, str]:
         return {
             NotebookType.EXERCISES:  'exercises',
             NotebookType.INSTRUCTOR: 'instructor',
             NotebookType.ANSWERS:    'answers',
         }
 
-    def suffix_for(self):
+    def suffix_for(self) -> str:
         """
         Get the filename suffix for the notebook type (e.g., '_exercises').
 
@@ -213,7 +207,7 @@ class NotebookType(Enum):
         return NotebookType.suffixes()[self]
 
     @classmethod
-    def suffixes(cls):
+    def suffixes(cls: Type[NotebookTypeClass]) -> Dict[NotebookType, str]:
         """
         Get a dict of NotebookType -> suffix mappings
 
@@ -226,84 +220,177 @@ class NotebookType(Enum):
         }
 
     def __repr__(self):
-        return 'NotebookType.{0}'.format(self.name)
+        return f'NotebookType.{self.name}'
 
 
-MiscFileData = namedtuple('MiscFileData', ('src', 'dest', 'is_template',
-                                           'dest_is_dir', 'only_in_profile'))
-SlideData = namedtuple('SlideData', ('src', 'dest'))
-DatasetData = namedtuple('DatasetData', ('src', 'dest', 'license', 'readme'))
-MarkdownInfo = namedtuple('MarkdownInfo', ('html_stylesheet',))
-NotebookHeading = namedtuple('NotebookHeading', ('path', 'enabled'))
-NotebookFooter = namedtuple('NotebookFooter', ('path', 'enabled'))
-BundleFile = namedtuple('BundleFileData', ('src', 'dest'))
+@dataclass(frozen=True)
+class MiscFileData:
+    """
+    Stores miscellaneous file data.
 
-class OutputInfo(DefaultStrMixin):
-    def __init__(self, student_dir, student_dbc, instructor_dir, instructor_dbc):
-        self.student_dir = student_dir
-        self.student_dbc = student_dbc
-        self.instructor_dir = instructor_dir
-        self.instructor_dbc = instructor_dbc
+    Fields:
+
+    src:             path to source file
+    dest:            path to destination
+    is_template:     whether or not the source file is a template
+    dest_is_dir:     whether the destination is a directory or a file
+    only_in_profile: if set, the file is only defined for a particular profile
+    """
+    src: str
+    dest: str
+    is_template: bool
+    dest_is_dir: bool
+    only_in_profile: Optional[str]
+
+
+@dataclass(frozen=True)
+class SlideData:
+    """
+    Stores slide file data.
+
+    Fields:
+
+    src:  path to source file
+    dest: path to destination
+    """
+    src: str
+    dest: str
+
+
+@dataclass(frozen=True)
+class DatasetData:
+    """
+    Stores a dataset specification.
+
+    Fields:
+
+    src:     path to source file
+    dest:    path to destination
+    license: path to license file
+    readme:  path to README
+    """
+    src: str
+    dest: str
+    license: str
+    readme: str
+
+
+@dataclass(frozen=True)
+class MarkdownInfo:
+    """
+    Stores information on how to process Markdown source files.
+
+    Fields:
+
+    html_stylesheet: optional path to stylesheet
+    """
+    html_stylesheet: Optional[str]
+
+
+@dataclass(frozen=True)
+class NotebookHeading:
+    """
+    Stores notebook heading information.
+
+    Fields:
+
+    path:    path to heading file
+    enabled: True if the heading is enabled, False if disabled
+    """
+    path: Optional[str]
+    enabled: bool
+
+
+@dataclass(frozen=True)
+class NotebookFooter:
+    """
+    Stores notebook footer information.
+
+    Fields:
+
+    path:    path to footer file
+    enabled: True if the footer is enabled, False if disabled
+    """
+    path: Optional[str]
+    enabled: bool
+
+
+@dataclass(frozen=True)
+class BundleFile:
+    """
+    Information about a file to include in the bundle.
+
+    Fields:
+
+    src:    path to the source file
+    dest:   path within the bundle
+    """
+    src:  str
+    dest: str
+
+
+@dataclass(frozen=True)
+class Bundle:
+    """
+    Parsed bundle information.
+
+    - zipfile: the zip file for the bundle
+    - files: a list of BundleFile objects
+    """
+    zipfile: str
+    files: Sequence[BundleFile] = dataclasses.field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class OutputInfo:
+    student_dir: str
+    student_dbc: str
+    instructor_dir: str
+    instructor_dbc: str
 
     @property
-    def student_labs_subdir(self):
+    def student_labs_subdir(self) -> str:
         (base, _) = path.splitext(self.student_dbc)
         return joinpath(self.student_dir, base)
 
     @property
-    def instructor_labs_subdir(self):
+    def instructor_labs_subdir(self) -> str:
         (base, _) = path.splitext(self.instructor_dbc)
         return joinpath(self.instructor_dir, base)
 
 
+@dataclass(frozen=True)
 class CourseInfo(DefaultStrMixin):
-    def __init__(self, name, version, class_setup, schedule, instructor_prep,
-                 copyright_year, deprecated, type, title=None):
-        self.name = name
-        self.version = version
-        self.class_setup = class_setup
-        self.schedule = schedule
-        self.instructor_prep = instructor_prep
-        self.copyright_year = copyright_year
-        self.deprecated = deprecated
-        self.type = type
-        self.title = title or name
+    name: str
+    version: str
+    class_setup: str
+    schedule: str
+    instructor_prep: str
+    copyright_year: str
+    deprecated: bool
+    course_type: master_parse.CourseType
+    title: Optional[str] = None
 
     @property
-    def course_id(self):
+    def course_id(self) -> str:
         """
         The course ID, which is a combination of the course name and the
         version.
 
         :return: the course ID string
         """
-        return '{0}-{1}'.format(self.name, self.version)
+        return f'{self.name}-{self.version}'
 
 
-class Bundle(DefaultStrMixin):
-    def __init__(self, zipfile, files=None):
-        """
-        Parsed bundle information.
-
-        :param zipfile:  the zip file for the bundle
-        :param files:    a list of BundleFile objects
-        """
-        self.files = files or []
-        self.zipfile = zipfile
-
-
+@dataclass(frozen=True)
 class NotebookDefaults(DefaultStrMixin):
-    def __init__(self, dest=None, master=None, variables=None):
-        """
-        Create a new NotebookDefaults object.
+    dest: Optional[str] = None
+    master: Optional[Dict[str, Any]] = dataclasses.field(default_factory=dict)
+    variables: Optional[Dict[str, str]] = dataclasses.field(default_factory=dict)
 
-        :param dest:      The destination value (str)
-        :param variables: Default (unexpanded) variables
-        :param master:    The master parse section (dict, not MasterParseInfo)
-        """
-        self.dest = dest
-        self.master = master or {}
-        self.variables = variables or {}
+
+# See https://github.com/python/typing/issues/58#issuecomment-326240794
+MasterParseInfoClass = TypeVar('MasterParseInfoClass', bound='MasterParseInfo')
 
 
 class MasterParseInfo(DefaultStrMixin):
@@ -326,7 +413,8 @@ class MasterParseInfo(DefaultStrMixin):
         'encoding_in': str,
         'encoding_out': str,
         'debug': bool,
-        'enable_templates': bool
+        'enable_templates': bool,
+        'instructor_notes': str,
     }
 
     VALID_HEADING_FIELDS = {
@@ -340,21 +428,21 @@ class MasterParseInfo(DefaultStrMixin):
     }
 
     def __init__(self,
-                 enabled=False,
-                 python=True,
-                 scala=True,
-                 r=False,
-                 sql=False,
-                 answers=True,
-                 exercises=True,
-                 instructor=True,
-                 heading=NotebookHeading(path=None, enabled=True),
-                 footer=NotebookFooter(path=None, enabled=True),
-                 encoding_in='UTF-8',
-                 encoding_out='UTF-8',
-                 target_profile=master_parse.TargetProfile.NONE,
-                 enable_templates=False,
-                 debug=False):
+                 enabled: bool = False,
+                 python: bool = True,
+                 scala: bool = True,
+                 r: bool = False,
+                 sql: bool = False,
+                 answers: bool = True,
+                 exercises: bool = True,
+                 instructor: bool = True,
+                 instructor_notes: Optional[str] = None,
+                 heading: Optional[NotebookHeading] = None,
+                 footer: Optional[NotebookFooter] = None,
+                 encoding_in: str = 'UTF-8',
+                 encoding_out: str = 'UTF-8',
+                 enable_templates: bool = False,
+                 debug: bool = False):
         """
         Create a new parsed master parse data object
 
@@ -370,29 +458,32 @@ class MasterParseInfo(DefaultStrMixin):
         :param footer:           footer information (a NotebookFooter object)
         :param encoding_in:      the encoding of the source notebooks
         :param encoding_out:     the encoding to use when writing notebooks
-        :param target_profile:   the target profile, if any
         :param enable_templates: whether to treat Markdown cells as Mustache
                                  templates
         :param debug:            enable/disable debug messages for the master
                                  parse phase
         """
-        self.enabled          = enabled
-        self.python           = python
-        self.scala            = scala
-        self.r                = r
-        self.sql              = sql
-        self.answers          = answers
-        self.exercises        = exercises
-        self.instructor       = instructor
-        self.heading          = heading
-        self.footer           = footer
-        self.encoding_in      = encoding_in
-        self.encoding_out     = encoding_out
-        self.target_profile   = target_profile
+        if heading is None:
+            heading = NotebookHeading(path=None, enabled=True)
+        if footer is None:
+            footer = NotebookFooter(path=None, enabled=True)
+        self.enabled = enabled
+        self.python = python
+        self.scala = scala
+        self.r = r
+        self.sql = sql
+        self.answers = answers
+        self.exercises = exercises
+        self.instructor = instructor
+        self.instructor_notes = instructor_notes
+        self.heading = heading
+        self.footer = footer
+        self.encoding_in = encoding_in
+        self.encoding_out = encoding_out
         self.enable_templates = enable_templates
-        self.debug            = debug
+        self.debug = debug
 
-    def lang_is_enabled(self, lang):
+    def lang_is_enabled(self, lang: str) -> bool:
         """
         Determine if a specific language is enabled.
 
@@ -402,7 +493,7 @@ class MasterParseInfo(DefaultStrMixin):
         """
         return self.__getattribute__(lang)
 
-    def enabled_langs(self):
+    def enabled_langs(self) -> Sequence[str]:
         """
         Return a list of the enabled languages. e.g., ['scala', 'python']
 
@@ -410,7 +501,7 @@ class MasterParseInfo(DefaultStrMixin):
         """
         return [i for i in self.LANGUAGES if self.__getattribute__(i)]
 
-    def update_from_dict(self, d):
+    def update_from_dict(self, d: Dict[str, Any]) -> NoReturn:
         """
         Update the fields in this master parse record from a dictionary.
         The dictionary should represent a master parse dictionary (e.g., as
@@ -418,7 +509,7 @@ class MasterParseInfo(DefaultStrMixin):
 
         :param d: the dictionary
         """
-        for k in self.VALID_FIELDS.keys():
+        for k in list(self.VALID_FIELDS.keys()):
             if k in d:
                 if k == 'heading':
                     heading_data = d[k]
@@ -437,9 +528,10 @@ class MasterParseInfo(DefaultStrMixin):
                     self.__setattr__(k, d[k])
 
     @classmethod
-    def extra_keys(cls, d):
+    def extra_keys(cls: Type[MasterParseInfoClass],
+                   d:   Dict[str, Any]) -> Optional[Set[str]]:
         """
-        Check a dictionary of master parse value for extra (unknown) keys.
+        Check a dictionary of master parse values for extra (unknown) keys.
 
         :param d: the dictionary to check
 
@@ -448,7 +540,7 @@ class MasterParseInfo(DefaultStrMixin):
         extra = set(d.keys()) - set(cls.VALID_FIELDS.keys())
         heading = d.get('heading') or {}
         for k in (set(heading.keys()) - set(cls.VALID_HEADING_FIELDS.keys())):
-            extra.add('heading.{0}'.format(k))
+            extra.add(f'heading.{k}')
 
         if len(extra) == 0:
             extra = None
@@ -456,7 +548,8 @@ class MasterParseInfo(DefaultStrMixin):
         return extra
 
     @classmethod
-    def from_dict(cls, d):
+    def from_dict(cls: Type[MasterParseInfoClass],
+                  d: Dict[str, Any]) -> MasterParseInfo:
         """
         Create a MasterParseData object from a dictionary of values.
 
@@ -483,7 +576,7 @@ class MasterParseInfo(DefaultStrMixin):
             debug=bool_field(d, 'debug', False)
         )
 
-    def to_dict(self):
+    def to_dict(self) -> Dict[str, Any]:
         """
         Convert this object into a dictionary.
 
@@ -494,20 +587,22 @@ class MasterParseInfo(DefaultStrMixin):
         return res
 
     @classmethod
-    def _parse_footer(cls, footer_data):
+    def _parse_footer(cls: Type[MasterParseInfoClass],
+                      footer_data: Dict[AnyStr, AnyStr]) -> NotebookFooter:
         if footer_data:
-            heading = NotebookFooter(
+            footer = NotebookFooter(
                 path=footer_data.get('path', DEFAULT_NOTEBOOK_FOOTER.path),
                 enabled=bool_field(footer_data, 'enabled',
                                    DEFAULT_NOTEBOOK_FOOTER.enabled)
             )
         else:
-            heading = NotebookHeading(path=None, enabled=True)
+            footer = NotebookFooter(path=None, enabled=True)
 
-        return heading
+        return footer
 
     @classmethod
-    def _parse_heading(cls, heading_data):
+    def _parse_heading(cls: Type[MasterParseInfoClass],
+                       heading_data: Dict[AnyStr, Any]) -> NotebookHeading:
         if heading_data:
             heading = NotebookHeading(
                 path=heading_data.get('path', DEFAULT_NOTEBOOK_HEADING.path),
@@ -520,17 +615,17 @@ class MasterParseInfo(DefaultStrMixin):
         return heading
 
 
-class NotebookData(object, DefaultStrMixin):
+class NotebookData(DefaultStrMixin):
     """
     Parsed notebook data.
     """
-    def __init__(self,
-                 src,
-                 dest,
-                 upload_download=True,
-                 master=None,
-                 variables=None,
-                 only_in_profile=None):
+    def __init__(self: NotebookData,
+                 src: str,
+                 dest: str,
+                 upload_download: bool = True,
+                 master: Optional[MasterParseInfo] = None,
+                 variables: Optional[Dict[AnyStr, AnyStr]] = None,
+                 only_in_profile: Optional[AnyStr] = None):
         """
         Captures parsed notebook data.
 
@@ -554,7 +649,7 @@ class NotebookData(object, DefaultStrMixin):
         self.variables = variables or {}
         self.only_in_profile = only_in_profile
 
-    def master_enabled(self):
+    def master_enabled(self) -> bool:
         """
         Determine whether master notebook processing is enabled for this
         notebook.
@@ -563,7 +658,7 @@ class NotebookData(object, DefaultStrMixin):
         """
         return self.master.enabled
 
-    def total_master_langs(self):
+    def total_master_langs(self) -> int:
         """
         Get the number of output languages produced by the master parser
         for this notebook.
@@ -573,7 +668,7 @@ class NotebookData(object, DefaultStrMixin):
         """
         return len(self.master.enabled_langs()) if self.master.enabled else 0
 
-    def master_multiple_langs(self):
+    def master_multiple_langs(self) -> bool:
         """
         Determine whether the master parser is parsing to multiple languages
         or not.
@@ -585,27 +680,26 @@ class NotebookData(object, DefaultStrMixin):
         return self.total_master_langs() > 0
 
 
-class BuildData(object, DefaultStrMixin):
+class BuildData(DefaultStrMixin):
     """
     Parsed build data.
     """
-    def __init__(self,
-                 build_file_path,
-                 top_dbc_folder_name,
-                 source_base,
-                 output_info,
-                 course_info,
-                 notebooks,
-                 slides,
-                 datasets,
-                 misc_files,
-                 keep_lab_dirs,
-                 markdown_cfg,
-                 notebook_type_map,
-                 use_profiles=False,
-                 course_type=None,
-                 variables=None,
-                 bundle_info=None):
+    def __init__(self: BuildData,
+                 build_file_path: str,
+                 top_dbc_folder_name: str,
+                 source_base: str,
+                 output_info: OutputInfo,
+                 course_info: CourseInfo,
+                 notebooks: Sequence[NotebookData],
+                 slides: Sequence[SlideData],
+                 datasets: Sequence[DatasetData],
+                 misc_files: Sequence[MiscFileData],
+                 keep_lab_dirs: bool,
+                 markdown_cfg: MarkdownInfo,
+                 notebook_type_map: Dict[NotebookType, str],
+                 profiles: Optional[Set[master_parse.Profile]] = None,
+                 variables: Optional[Dict[AnyStr, AnyStr]] = None,
+                 bundle_info: Optional[Bundle] = None):
         """
         Create a new BuildData object.
 
@@ -623,7 +717,7 @@ class BuildData(object, DefaultStrMixin):
         :param markdown_cfg:          parsed MarkdownInfo object
         :param notebook_type_map:     a dict mapping notebook types to strings.
                                       Keys are from the NotebookType enum.
-        :param use_profiles:          whether to use Azure/Amazon build profiles
+        :param profiles:              set of profiles, if any
         :param variables:             a map of user-defined variables
         :param bundle_info            Bundle data, if any
         """
@@ -636,6 +730,7 @@ class BuildData(object, DefaultStrMixin):
         self.output_info = output_info
         self.slides = slides
         self.datasets = datasets
+        self.profiles = set() if profiles is None else profiles
 
         if markdown_cfg.html_stylesheet:
             if path.isabs(markdown_cfg.html_stylesheet):
@@ -645,7 +740,8 @@ class BuildData(object, DefaultStrMixin):
                 # here.
                 p = joinpath(path.dirname(build_file_path),
                              markdown_cfg.html_stylesheet)
-                self.markdown = markdown_cfg._replace(html_stylesheet=p)
+                self.markdown = dataclasses.replace(markdown_cfg,
+                                                    html_stylesheet=p)
         else:
             self.markdown = markdown_cfg
 
@@ -653,8 +749,6 @@ class BuildData(object, DefaultStrMixin):
         self.keep_lab_dirs = keep_lab_dirs
         self.notebook_type_map = notebook_type_map
         self.variables = variables or {}
-        self.use_profiles = use_profiles
-        self.course_type = course_type
         self.bundle_info = bundle_info
 
         if top_dbc_folder_name is None:
@@ -673,11 +767,15 @@ class BuildData(object, DefaultStrMixin):
         )
 
     @property
-    def name(self):
+    def course_type(self) -> master_parse.CourseType:
+        return self.course_info.course_type
+
+    @property
+    def name(self) -> str:
         return self.course_info.name
 
     @property
-    def course_id(self):
+    def course_id(self) -> str:
         """
         The course ID, which is a combination of the course name and the
         version.
@@ -714,26 +812,7 @@ MASTER_PARSE_DEFAULTS = {
 # Functions
 # ---------------------------------------------------------------------------
 
-def error(msg):
-    global errors
-    errors += 1
-    if msg:
-        emit_error(msg)
-
-
-def die(msg, show_usage=False):
-    """
-    Emit a message to standard error, optionally write the usage, and exit.
-    """
-    error(msg)
-    if show_usage:
-        sys.stderr.write(USAGE)
-    sys.stderr.write("\n*** ABORTED\n")
-    sys.exit(1)
-
-
-def load_build_yaml(yaml_file):
-    # type: (str) -> BuildData
+def load_build_yaml(yaml_file: str) -> BuildData:
     """
     Load the YAML configuration file that defines the build for a particular
     class. Returns a BuildData object. Throws BuildConfigError on error.
@@ -743,9 +822,10 @@ def load_build_yaml(yaml_file):
 
     :return the Build object, representing the parsed build.yaml
     """
-    import yaml
-
-    def required(d, key, where, error=None):
+    def required(d: Dict[str, Any],
+                 key: str,
+                 where: str,
+                 error: Optional[str] = None) -> Any:
         """
         Get a required key
 
@@ -753,20 +833,23 @@ def load_build_yaml(yaml_file):
         :param key:    the key
         :param where:  where in the file the key should be (for errors)
         :param error:  error message, or None for default
-        :return:
+        :return: the value
         """
         v = d.get(key)
         if v is None:
             if error:
                 msg = error
             else:
-                msg = 'Missing required "{0}" in "{1}".'.format(key, where)
+                msg = f'Missing required "{key}" in "{where}".'
 
             raise BuildConfigError(msg)
 
         return v
 
-    def parse_time_subst(dest, src, allow_lang=True, extra_vars=None):
+    def do_parse_level_substitutions(dest: str,
+                                     src: str,
+                                     allow_lang: bool = True,
+                                     extra_vars: Dict[str, Any] = None) -> str:
         # Handles parse-time variable substitution. Some variables are
         # substituted later.
         if extra_vars is None:
@@ -775,7 +858,9 @@ def load_build_yaml(yaml_file):
         (base_no_ext, ext) = path.splitext(base_with_ext)
 
         if '@' in dest:
-            raise BuildConfigError('The "@" character is disallowed in destinations.')
+            raise BuildConfigError(
+                'The "@" character is disallowed in destinations.'
+            )
 
         # A certain set of variables is expanded only after master parsing; all
         # others are expanded here. Any references to post master-parse variables
@@ -787,10 +872,11 @@ def load_build_yaml(yaml_file):
         subbed = True
         while subbed:
             subbed = False
-            for pats in POST_MASTER_PARSE_VARIABLES.values():
+            for pats in list(POST_MASTER_PARSE_VARIABLES.values()):
                 m = matches_variable_ref(pats, adj_dest)
                 while m:
-                    var = '@{0}@'.format(m[1].replace(r'$', ''))
+                    varname = m[1].replace(r'$', '')
+                    var = f'@{varname}@'
                     adj_dest = m[0] + var + m[2]
                     subbed = True
                     m = matches_variable_ref(pats, adj_dest)
@@ -816,9 +902,12 @@ def load_build_yaml(yaml_file):
 
         return adj_dest
 
-    def parse_dict(d, fields_spec, outer_section, section):
+    def parse_dict(d: Dict[str, Any],
+                   fields_spec: Dict[str, Any],
+                   outer_section: str,
+                   section: str) -> Dict[str, Any]:
         res = {}
-        for field, type in fields_spec.items():
+        for field, type in list(fields_spec.items()):
             if field not in d:
                 continue
             if type is bool:
@@ -826,9 +915,8 @@ def load_build_yaml(yaml_file):
                     res[field] = bool_value(d[field])
                 except ValueError as e:
                     raise BuildConfigError(
-                        '{0}: Bad value for "{1}" in section "{2}": {3}'.format(
-                            outer_section, field, section, e.message
-                        )
+                        f'{outer_section}: Bad value for "{field}" in ' +
+                        f'section "{section}": {e}'
                     )
                 continue
             # Anything else gets copied as is for now.
@@ -836,7 +924,9 @@ def load_build_yaml(yaml_file):
 
         return res
 
-    def parse_master_section(data, section_name, build_yaml_dir):
+    def parse_master_section(data: Dict[str, Any],
+                             section_name: str,
+                             build_yaml_dir: str) -> Dict[str, Any]:
         # Parse the master section, returning a (possibly partial)
         # dictionary (NOT a MasterParseInfo object).
         extra_keys = MasterParseInfo.extra_keys(data)
@@ -855,10 +945,11 @@ def load_build_yaml(yaml_file):
             elif heading_path is not None:
                 # Resolve the path, relative to the build file.
                 if not path.isabs(heading_path):
-                    heading_path = path.abspath(joinpath(build_yaml_dir, heading_path))
+                    heading_path = path.abspath(joinpath(build_yaml_dir,
+                                                         heading_path))
                 if not path.exists(heading_path):
                     raise BuildConfigError(
-                        'Footer file "{}" does not exist.'.format(heading_path)
+                        f'Footer file "{heading_path}" does not exist.'
                     )
                 heading['path'] = heading_path
 
@@ -874,20 +965,21 @@ def load_build_yaml(yaml_file):
             elif footer_path is not None:
                 # Resolve the path, relative to the build field.
                 if not path.isabs(footer_path):
-                    footer_path = path.abspath(joinpath(build_yaml_dir, footer_path))
+                    footer_path = path.abspath(joinpath(build_yaml_dir,
+                                                        footer_path))
                 if not path.exists(footer_path):
                     raise BuildConfigError(
-                        'Footer file "{}" does not exist.'.format(footer_path)
+                        f'Footer file "{footer_path}" does not exist.'
                     )
                 footer['path'] = footer_path
 
             master['footer'] = footer
 
-
-
         return master
 
-    def parse_notebook_defaults(contents, section_name, build_yaml_dir):
+    def parse_notebook_defaults(contents: Dict[str, Any],
+                                section_name: str,
+                                build_yaml_dir: str) -> NotebookDefaults:
         cfg = contents.get(section_name)
         if not cfg:
             return NotebookDefaults(dest=None, master=None)
@@ -899,28 +991,33 @@ def load_build_yaml(yaml_file):
         res = NotebookDefaults(dest=dict_get_and_del(cfg, 'dest', None),
                                master=master, variables=variables)
 
-        if len(cfg.keys()) > 0:
-            raise UnknownFieldsError("build", section_name, cfg.keys())
+        if len(list(cfg.keys())) > 0:
+            raise UnknownFieldsError("build", section_name, set(cfg.keys()))
 
         return res
 
-    def parse_notebook(obj, notebook_defaults, extra_vars, build_yaml_dir):
+    def parse_notebook(obj: Dict[str, Any],
+                       notebook_defaults: NotebookDefaults,
+                       extra_vars: Dict[str, str],
+                       profiles: Optional[Set[master_parse.Profile]],
+                       build_yaml_dir: str) -> Optional[NotebookData]:
         bad_dest = re.compile('^\.\./*|^\./*')
         src = required(obj, 'src', 'notebooks section')
-        section = 'Notebook "{0}"'.format(src)
+        section = f'Notebook "{src}"'
 
         dest = obj.get('dest', notebook_defaults.dest)
         if not dest:
             raise BuildConfigError(
-                ('Notebook "{0}": Missing "dest" section, and no default ' +
-                 '"dest" in notebook defaults.').format(src)
+                f'Notebook "{src}": Missing "dest" section, and no default ' +
+                '"dest" in notebook defaults.'
             )
         variables = merge_dicts(notebook_defaults.variables,
                                 obj.get('variables', {}))
         all_extra_vars = merge_dicts(extra_vars, variables)
-        dest = parse_time_subst(dest, src, extra_vars=all_extra_vars)
+        dest = do_parse_level_substitutions(dest, src,
+                                            extra_vars=all_extra_vars)
         if bool_field(obj, 'skip'):
-            verbose('Skipping notebook {0}'.format(src))
+            verbose(f'Skipping notebook {src}')
             return None
 
         master = MasterParseInfo() # defaults
@@ -932,8 +1029,8 @@ def load_build_yaml(yaml_file):
         _, dest_ext = os.path.splitext(dest)
         if master.enabled and bad_dest.match(dest):
             raise BuildConfigError(
-                ('Notebook "{0}": Relative destinations ("{1}") are ' +
-                 'disallowed.').format(src, dest)
+                f'Notebook "{src}": Relative destinations ("{dest}") are ' +
+                'disallowed.'
             )
 
         if master.enabled:
@@ -942,40 +1039,44 @@ def load_build_yaml(yaml_file):
                 pat = POST_MASTER_PARSE_VARIABLES[TARGET_LANG]
                 if not matches_variable_ref(pat, dest):
                     raise BuildConfigError(
-                        ('Notebook "{0}": When multiple master parser languages ' +
-                         'are used, you must substitute ${1} in the ' +
-                         'destination.').format(
-                            src, TARGET_LANG
-                        )
+                        f'Notebook "{src}": When multiple master parser ' +
+                        'languages are used, you must substitute ' +
+                        f'${TARGET_LANG} in the destination.'
                     )
         else:
             _, src_ext = os.path.splitext(src)
             if (not dest_ext) or (dest_ext != src_ext):
                 raise BuildConfigError(
-                    ('Notebook "{0}": "master" is disabled, so "dest" should ' +
-                     'have extension "{1}".').format(src, src_ext)
+                    f'Notebook "{src}": "master" is disabled, so "dest" ' +
+                    'should have extension "{src_ext}".'
                 )
-            for pats in POST_MASTER_PARSE_VARIABLES.values():
+            for pats in list(POST_MASTER_PARSE_VARIABLES.values()):
                 m = matches_variable_ref(pats, dest)
                 if m:
                     raise BuildConfigError(
-                      ('Notebook "{0}": "{1}" found in "dest", but "master" ' +
-                       'is disabled.').format(src, m[1])
+                        f'Notebook "{src}": "{m[1]}" found in "dest", but ' +
+                        '"master" is disabled.'
                 )
 
         prof = obj.get('only_in_profile')
-        if prof and (prof not in VALID_PROFILES):
-            raise BuildConfigError(
-                ('Notebook "{0}": Bad value of "{1}" for only_in_profile. ' +
-                 'Must be one of: {2}').format(
-                    src, prof, ', '.join(VALID_PROFILES)
+        if prof:
+            if not profiles:
+                raise BuildConfigError(
+                    f'Notebook "{src}": Bad value of "{prof}" for ' +
+                    'only_in_profile. No profiles are defined in the build.'
                 )
-            )
+            profile_names = [p.name for p in profiles]
+            if prof not in profile_names:
+                name_str = ', '.join(profile_names)
+                raise BuildConfigError(
+                    f'Notebook "{src}": Bad value of "{prof}" for ' +
+                    f'only_in_profile. Must be one of: {name_str}'
+                )
 
         if prof and (not master.enabled):
             raise BuildConfigError(
-                ('Notebook "{0}": only_in_profile is set, but master is ' +
-                 'not enabled.'.format(src))
+                f'Notebook "{src}": only_in_profile is set, but master is ' +
+                'not enabled.'
             )
 
         nb = NotebookData(
@@ -989,20 +1090,24 @@ def load_build_yaml(yaml_file):
 
         return nb
 
-    def parse_slide(obj, extra_vars):
+    def parse_slide(obj: Dict[str, Any],
+                    extra_vars: Dict[str, Any]) -> Optional[SlideData]:
         src = required(obj, 'src', 'notebooks')
         dest = required(obj, 'dest', 'notebooks')
         if bool_field(obj, 'skip'):
-            verbose('Skipping slide {0}'.format(src))
+            verbose(f'Skipping slide {src}')
             return None
         else:
             return SlideData(
                 src=src,
-                dest=parse_time_subst(dest, src, allow_lang=False,
+                dest=do_parse_level_substitutions(dest, src, allow_lang=False,
                                       extra_vars=extra_vars)
             )
 
-    def parse_bundle(obj, output_info, course_info, extra_vars):
+    def parse_bundle(obj: Dict[str, Any],
+                     output_info: OutputInfo,
+                     course_info: CourseInfo,
+                     extra_vars: Dict[str, str]) -> Optional[Bundle]:
         if not obj:
             return None
 
@@ -1033,28 +1138,32 @@ def load_build_yaml(yaml_file):
             src = d['src']
             dest = d['dest']
             if not (dest or src):
-                raise BuildConfigError('"bundle" has a file with no "src" or "dest".')
+                raise BuildConfigError(
+                    '"bundle" has a file with no "src" or "dest".'
+                )
             if not src:
                 raise BuildConfigError('"bundle" has a file with no "src".')
             if not dest:
                 raise BuildConfigError('"bundle" has a file with no "dest".')
 
             src = StringTemplate(src).substitute(src_vars)
-            dest = parse_time_subst(dest, src, allow_lang=False,
+            dest = do_parse_level_substitutions(dest, src, allow_lang=False,
                                     extra_vars=extra_vars)
             file_list.append(BundleFile(src=src, dest=dest))
 
         return Bundle(zipfile=zipfile, files=file_list)
 
-    def parse_misc_file(obj, extra_vars):
+    def parse_misc_file(obj: Dict[str, Any],
+                        extra_vars: Dict[str, str]) -> Optional[MiscFileData]:
         src = required(obj, 'src', 'misc_files')
         dest = required(obj, 'dest', 'misc_files')
 
         if bool_field(obj, 'skip'):
-            verbose('Skipping file {0}'.format(src))
+            verbose(f'Skipping file {src}')
             return None
         else:
-            dest = parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars)
+            dest = do_parse_level_substitutions(dest, src, allow_lang=False,
+                                                extra_vars=extra_vars)
 
             mf = MiscFileData(
                 src=src,
@@ -1068,8 +1177,8 @@ def load_build_yaml(yaml_file):
             # is_template is disallowed for non-text files.
             if mf.is_template and (not is_text_file(src)):
                 raise BuildConfigError(
-                    ('Section misc_files: "{}" is marked as a template' +
-                     "but it is not a text file.").format(src)
+                    f'Section misc_files: "{src}" is marked as a template' +
+                    'but it is not a text file.'
                 )
 
             # We can't check to see whether the target is a directory, since
@@ -1079,47 +1188,47 @@ def load_build_yaml(yaml_file):
                 # It's a file, not a directory.
                 if mf.dest_is_dir:
                     raise BuildConfigError(
-                        ('Section misc_files: "{}" uses a "dest" of "{}", ' +
-                         'which has an extension, so it is assumed to be a ' +
-                         'file. But, "dest_is_dir" is set to true.').format(
-                            src, dest
-                        )
+                        f'Section misc_files: "{src}" uses a "dest" of ' +
+                        f'"{dest}", which has an extension, so it is assumed ' +
+                        'to be a file. But, "dest_is_dir" is set to true.'
                     )
                 if is_markdown(src):
                     if not (is_pdf(dest) or is_html(dest) or is_markdown(dest)):
                         raise BuildConfigError(
-                            ('Section misc_files: "{}" is Markdown, the ' +
-                             'target ("{}") is not a directory and is not ' +
-                             "PDF, HTML or Markdown.").format(src, dest)
+                            f'Section misc_files: "{src}" is Markdown, the ' +
+                            f'target ("{dest}") is not a directory and is ' +
+                            'not PDF, HTML or Markdown.'
                         )
                 if is_html(src):
                     if not (is_pdf(dest) or is_html(dest)):
                         raise BuildConfigError(
-                            ('Section misc_files: "{}" is HTML, the ' +
-                             'target ("{}") is not a directory and is not ' +
-                             "PDF or HTML.").format(src, dest)
+                            f'Section misc_files: "{src}" is HTML, the ' +
+                            f'target ("{dest}") is not a directory and is ' +
+                            'not PDF or HTML.'
                         )
             else:
                 # No extension. Assume dest_is_dir is True, if not set.
                 if mf.dest_is_dir is None:
-                    mf = mf._replace(dest_is_dir=True)
+                    mf = dataclasses.replace(mf, dest_is_dir=True)
 
                 # Some simple sanity checks.
                 if (not mf.dest_is_dir) and (dest in ('.', '..')):
                     raise BuildConfigError(
-                        ('Section misc_files: "{}" has a "dest" of "{}", ' +
-                         '''but "dest_is_dir" is set to false. That's just ''' +
-                         'silly.').format(src, dest)
+                        f'Section misc_files: "{src}" has a "dest" of ' +
+                        f'"{dest}", but "dest_is_dir" is set to false. ' +
+                        "That's just silly."
                     )
 
             return mf
 
 
-    def parse_dataset(obj, extra_vars, build_yaml_dir):
+    def parse_dataset(obj: Dict[str, Any],
+                      extra_vars: Dict[str, Any],
+                      build_yaml_dir: str) -> Optional[DatasetData]:
         src = required(obj, 'src', 'notebooks')
         dest = required(obj, 'dest', 'notebooks')
         if bool_field(obj, 'skip'):
-            verbose('Skipping data set {0}'.format(src))
+            verbose(f'Skipping data set {src}')
             return None
         else:
             src_dir = path.dirname(src)
@@ -1127,51 +1236,46 @@ def load_build_yaml(yaml_file):
             readme = joinpath(src_dir, 'README.md')
             p = joinpath(build_yaml_dir, src)
             if not path.exists(p):
-                raise BuildConfigError('Dataset file "{}" does not exist'.format(p))
+                raise BuildConfigError(f'Dataset file "{p}" does not exist')
 
             for i in (license, readme):
                 p = joinpath(build_yaml_dir, i)
                 if not path.exists(p):
                     raise BuildConfigError(
-                        'Dataset "{}": Required "{}" does not exist.'.format(
-                            src, p
-                        )
+                        f'Dataset "{src}": Required "{p}" does not exist.'
                     )
                 if os.stat(p).st_size == 0:
-                    raise BuildConfigError(
-                        'Dataset "{}": "{}" is empty.'.format(
-                            src, p
-                        )
-                    )
+                    raise BuildConfigError(f'Dataset "{src}": "{p}" is empty.')
 
-            return DatasetData(
-                src=src,
-                dest=parse_time_subst(dest, src, allow_lang=False, extra_vars=extra_vars),
-                license=license,
-                readme=readme
+            adj_dest = do_parse_level_substitutions(
+                dest, src, allow_lang=False, extra_vars=extra_vars
             )
+            return DatasetData(src=src, dest=adj_dest, license=license,
+                               readme=readme)
 
-    def parse_file_section(section, parse, *args):
+    def parse_file_section(section: Dict[str, Any],
+                           parse: Callable[[Any, *Any], Any],
+                           *args: Any) -> Tuple:
         # Use the supplied parse function to parse each element in the
         # supplied section, filtering out None results from the function.
         # Convert the entire result to a tuple.
         return tuple(
-            filter(lambda o: o != None, [parse(i, *args) for i in section])
+            [o for o in [parse(i, *args) for i in section] if o != None]
         )
 
-    def parse_markdown(obj):
+    def parse_markdown(obj: Dict[str, Any]) -> MarkdownInfo:
         if obj:
             stylesheet = obj.get('html_stylesheet')
         else:
             stylesheet = None
         return MarkdownInfo(html_stylesheet=stylesheet)
 
-    def parse_notebook_types(contents):
+    def parse_notebook_types(contents: Dict[str, Any]) -> Dict[NotebookType, Any]:
         res = NotebookType.default_mappings()
         names_to_keys = dict([(t.value, t) for t in NotebookType])
 
         invalid_keys = set()
-        for k, v in contents.get('notebook_type_name', {}).items():
+        for k, v in list(contents.get('notebook_type_name', {}).items()):
             t = names_to_keys.get(k)
             if not t:
                 invalid_keys.add(k)
@@ -1179,39 +1283,34 @@ def load_build_yaml(yaml_file):
                 res[t] = v
 
         if invalid_keys:
+            key_str = ', '.join(invalid_keys)
             raise BuildConfigError(
-                'Unknown key(s) in "notebook_type_name" section: {0}'.format(
-                    ', '.join(invalid_keys)
-                ))
+                f'Unknown key(s) in "notebook_type_name" section: {key_str}'
+            )
         return res
 
-    def parse_min_version(key, value):
+    def parse_min_version(key: str, value: str) -> Optional[Tuple[int, int]]:
         res = contents.get(key)
         if res is not None:
             if isinstance(res, float):
                 raise BuildConfigError(
-                    '"{0}" of the form <major>.<minor> must be quoted.'.format(
-                        key
-                    )
+                    f'"{key}" of the form <major>.<minor> must be quoted.'
                 )
+
             try:
                 # Ignore the match version.
                 res = parse_version_string(res)[0:2]
             except ValueError as e:
-                raise BuildConfigError(
-                    'Bad value of "{0}" for "{1}": {2}'.format(
-                        res, key, e.message
-                    )
-                )
+                raise BuildConfigError(f'Bad value of "{res}" for "{key}": {e}')
+
         return res
 
-    def parse_course_type(data, section):
+    def parse_course_type(data: Dict[str, Any],
+                          section: str) -> master_parse.CourseType:
         course_type = data.get('type')
         if not course_type:
             raise BuildConfigError(
-                'Missing required "{}.type" setting in "{}"'.format(
-                    section, yaml_file
-                )
+                f'Missing required "{section}.type" setting in "{yaml_file}"'
             )
 
         if course_type.lower() == 'self-paced':
@@ -1220,11 +1319,12 @@ def load_build_yaml(yaml_file):
             return master_parse.CourseType.ILT
 
         raise BuildConfigError(
-            ('Unknown value of "{}" for "{}.type". Legal values are ' +
-             '"ilt" and "self-paced".').format(course_type, course_type)
+            f'Unknown value of "{course_type}" for "{course_type}.type". ' +
+            'Legal values are "ilt" and "self-paced".'
         )
 
-    def parse_course_info(course_info_cfg, section_name):
+    def parse_course_info(course_info_cfg: Dict[str, Any],
+                          section_name: str) -> CourseInfo:
         ilt_only = {
             'class_setup':     None,
             'schedule':        None,
@@ -1236,19 +1336,16 @@ def load_build_yaml(yaml_file):
         ilt_only['class_setup'] = course_info_cfg.get('class_setup')
         ilt_only['schedule'] = course_info_cfg.get('schedule')
         ilt_only['instructor_prep'] = course_info_cfg.get('prep')
-        type = parse_course_type(course_info_cfg, section_name)
+        course_type = parse_course_type(course_info_cfg, section_name)
         deprecated = course_info_cfg.get('deprecated', False)
         copyright_year = course_info_cfg.get('copyright_year',
                                              str(datetime.now().year))
 
         if type == master_parse.CourseType.SELF_PACED:
-            for k, v in ilt_only.items():
+            for k, v in list(ilt_only.items()):
                 if v:
-                    warning(
-                      'course_info.{} is ignored for self-paced courses'.format(
-                          k
-                      )
-                )
+                    warn(f'course_info.{k} is ignored for self-paced courses')
+
                 ilt_only[k] = None
 
         return CourseInfo(
@@ -1258,12 +1355,12 @@ def load_build_yaml(yaml_file):
             class_setup=ilt_only['class_setup'],
             schedule=ilt_only['schedule'],
             instructor_prep=ilt_only['instructor_prep'],
-            type=type,
+            course_type=course_type,
             deprecated=deprecated,
             copyright_year=copyright_year
         )
 
-    def parse_output_info(contents):
+    def parse_output_info(contents: Dict[str, Any]) -> OutputInfo:
         student_dir = contents.get('student_dir', DEFAULT_STUDENT_FILES_SUBDIR)
         instructor_dir = contents.get('instructor_dir',
                                       DEFAULT_INSTRUCTOR_FILES_SUBDIR)
@@ -1275,16 +1372,14 @@ def load_build_yaml(yaml_file):
                        ('instructor_dbc', instructor_dbc)):
             if path.dirname(v) != '':
                 raise BuildConfigError(
-                    '"{}" value "{}" is not a simple file name.'.format(k, v)
+                    f'"{k}" value "{v}" is not a simple file name.'
                 )
 
         if student_dir == instructor_dir:
             raise BuildConfigError(
-                ('"student_dir" and "instructor_dir" cannot be the same. ' +
-                 '"student_dir" is "{0}". ' +
-                 '"instructor_dir" is "{1}".').format(
-                    student_dir, instructor_dir
-                )
+                '"student_dir" and "instructor_dir" cannot be the same. ' +
+                f'"student_dir" is "{student_dir}". ' +
+                f'"instructor_dir" is "{instructor_dir}".'
             )
 
         return OutputInfo(student_dir=student_dir,
@@ -1293,11 +1388,51 @@ def load_build_yaml(yaml_file):
                           instructor_dbc=instructor_dbc)
 
 
+    def parse_profiles(contents: Dict[str, Any]) -> Set[master_parse.Profile]:
+        profiles = contents.get('profiles')
+        use_profiles = bool_field(contents, 'use_profiles', False)
+        if profiles and use_profiles:
+            raise BuildConfigError(
+                'You cannot specify both "use_profiles" and "profiles".'
+            )
+
+        if profiles:
+            res = set()
+            for thing in profiles:
+                if isinstance(thing, dict):
+                    if len(list(thing.keys())) != 1:
+                        raise BuildConfigError(f'Malformed profile: {thing}')
+
+                    n = list(thing.keys())[0]
+                    v = thing[n]
+                    if not isinstance(v, str):
+                        raise BuildConfigError(
+                            f'The value of profile "{n}" ("{v}") is not ' +
+                            'a string.'
+                        )
+
+                    res.add(master_parse.Profile(name=n, value=v))
+                    continue
+
+                if isinstance(thing, str):
+                    res.add(master_parse.Profile(name=thing, value=thing))
+                    continue
+
+                raise BuildConfigError(
+                    f'Profile "{thing}" is neither a simple string nor a ' +
+                    '"name: value"'
+                )
+        else:
+            warn('"use_profiles" is deprecated. Use explicit profiles.')
+            res = {master_parse.Profile(name='amazon', value='Amazon'),
+                   master_parse.Profile(name='azure', value='azure')}
+
+        return res
+
     # Main function logic
 
-    verbose("Loading {0}...".format(yaml_file))
-    with open(yaml_file, 'r') as y:
-        contents = yaml.safe_load(y)
+    verbose(f"Loading {yaml_file}...")
+    contents = read_yaml_file(yaml_file)
 
     bdc_min_version = parse_min_version(
        'bdc_min_version', required(contents, 'bdc_min_version', 'build')
@@ -1305,13 +1440,13 @@ def load_build_yaml(yaml_file):
 
     cur_major_minor = parse_version_string(VERSION)[0:2]
     if bdc_min_version > cur_major_minor:
+        version_str = '.'.join(map(str, bdc_min_version))
         raise BuildConfigError(
-            ("This build requires bdc version {0}.x or greater, but " +
-             "you're using bdc version {1}.").format(
-                '.'.join(map(str, bdc_min_version)), VERSION
-            )
+            f"This build requires bdc version {version_str}.x or greater, " +
+            f"but you're using bdc version {VERSION}."
         )
 
+    profiles = parse_profiles(contents)
     variables = contents.get('variables', {})
     notebooks_cfg = required(contents, 'notebooks', 'build')
     slides_cfg = contents.get('slides', [])
@@ -1324,7 +1459,6 @@ def load_build_yaml(yaml_file):
     build_yaml_full = path.abspath(yaml_file)
     build_yaml_dir = path.dirname(build_yaml_full)
     src_base = path.abspath(joinpath(build_yaml_dir, src_base))
-    use_profiles = bool_field(contents, 'use_profiles')
 
     notebook_defaults = parse_notebook_defaults(contents, 'notebook_defaults',
                                                 build_yaml_dir)
@@ -1349,15 +1483,15 @@ def load_build_yaml(yaml_file):
     if notebooks_cfg:
         notebooks = parse_file_section(notebooks_cfg, parse_notebook,
                                        notebook_defaults, variables,
-                                       build_yaml_dir)
+                                       profiles, build_yaml_dir)
 
-        # If there are any profiles in the notebooks, and use_profiles is off,
-        # abort.
-        profiles = {n.only_in_profile for n in notebooks if n.only_in_profile}
-        if (not use_profiles) and (len(profiles) > 0):
+        # If there are any profiles in the notebooks, but no profiles in the
+        # build, abort.
+        nb_profiles = {n.only_in_profile for n in notebooks if n.only_in_profile}
+        if (len(profiles) == 0) and (len(nb_profiles) > 0):
             raise BuildConfigError(
                 'At least one notebook has "only_in_profile" set, but the ' +
-                'build does not specify "use_profiles: true".'
+                'build does not specify any profiles.'
             )
 
     else:
@@ -1374,12 +1508,11 @@ def load_build_yaml(yaml_file):
 
         master_version = parse_version_string(master_parse.VERSION)[0:2]
         if required_master_min_version > master_version:
+            version_str = '.'.join(map(str, required_master_min_version))
             raise BuildConfigError(
-                ("This build requires master_parse version {0}.x or greater, " +
-                 "but you're using master_parse version {1}.").format(
-                     '.'.join(map(str, required_master_min_version)),
-                     master_parse.VERSION
-                )
+                f"This build requires master_parse version {version_str}.x " +
+                "or greater, but you're using master_parse version " +
+                f"{master_parse.VERSION}."
             )
 
     output_info = parse_output_info(contents)
@@ -1400,35 +1533,40 @@ def load_build_yaml(yaml_file):
         markdown_cfg=parse_markdown(contents.get('markdown')),
         notebook_type_map=parse_notebook_types(contents),
         variables=variables,
-        use_profiles=use_profiles,
+        profiles=profiles,
         bundle_info=bundle_info
     )
 
     return data
 
 
-def parse_args():
+def parse_args() -> Dict[str, Any]:
     """
     Parse the command line parameters.
     """
     from docopt import docopt
     return docopt(USAGE, version=VERSION)
 
-def expand_template(src_template_file, build, tempdir, profile):
+
+def expand_template(src_template_file: str,
+                    build: BuildData,
+                    tempdir: str,
+                    profile: Optional[master_parse.Profile]):
     import pystache
 
     variables = {}
     if build.variables:
         variables['variables'] = build.variables
 
-    for p in VALID_PROFILES:
-        if profile == p:
-            variables[p] = p.capitalize()
-        else:
-            variables[p] = ''
+    if profile:
+        for p in build.profiles:
+            if profile == p:
+                variables[p.name] = p.value
+            else:
+                variables[p.name] = ''
 
     course_info_vars = {}
-    for k, v in build.course_info.__dict__.items():
+    for k, v in list(build.course_info.__dict__.items()):
         if v is None:
             continue
         if isinstance(v, Enum):
@@ -1478,7 +1616,7 @@ INFO_PROCESSORS = {
         }
 }
 
-def _get_type(f):
+def _get_type(f: str) -> Optional[str]:
     if is_markdown(f):
         return 'md'
     if is_pdf(f):
@@ -1487,7 +1625,9 @@ def _get_type(f):
         return 'html'
     return None
 
-def _convert_and_copy_info_file(src, dest, build):
+def _convert_and_copy_info_file(src: str,
+                                dest: str,
+                                build: BuildData) -> NoReturn:
     """
     Workhorse function: Takes the source and target, looks up how to process
     them, and processes them.
@@ -1511,15 +1651,16 @@ def _convert_and_copy_info_file(src, dest, build):
     else:
         proc = INFO_PROCESSORS.get(src_type, {}).get(dest_type, None)
         if proc is None:
-            raise Exception(
-                '(BUG: No processor) "{}" -> "{}".'.format(
-                    src, dest
-                )
-            )
+            raise Exception(f'(BUG): No processor. "{src}" -> "{dest}".')
+
         proc(src, dest, build)
 
 
-def copy_info_file(src_file, target, is_template, build, profile):
+def copy_info_file(src_file: str,
+                   target: str,
+                   is_template: bool,
+                   build: BuildData,
+                   profile: Optional[master_parse.Profile]) -> NoReturn:
     """
     Copy a file that contains some kind of readable information (e.g., a
     Markdown file, a PDF, etc.). If the file is a Markdown file, it is also
@@ -1548,33 +1689,35 @@ def copy_info_file(src_file, target, is_template, build, profile):
                 dest_map = INFO_PROCESSORS.get(src_type)
                 if dest_map is None:
                     raise BuildError(
-                        '(BUG: Processor mismatch) "{}" -> "{}".'.format(
-                            src_file, target
-                        )
+                        f'(BUG): Processor mismatch. "{src_file}" -> "{target}".'
                     )
 
-                for dest_type in dest_map.keys():
+                for dest_type in list(dest_map.keys()):
                     (base, _) = path.splitext(path.basename(src_file))
                     out = joinpath(target, base + '.' + dest_type)
                     _convert_and_copy_info_file(real_src, out, build)
 
 
 
-def process_master_notebook(dest_root, notebook, src_path, build, master_profile):
+def process_master_notebook(dest_root: str,
+                            notebook: NotebookData,
+                            src_path: str,
+                            build: BuildData,
+                            profile: Optional[master_parse.Profile]) -> NoReturn:
     """
     Process a master notebook.
 
-    :param dest_root:       top-level target directory for build
-    :param notebook:        the notebook data from the build YAML
-    :param src_path:        the pre-calculated path to the source notebook
-    :param dest_path:       the path to the target directory, calculated
-                            from dest_root and notebook.dest
-    :param build            parsed build data
-    :param master_profile:  master profile, or master_parser.TargetProfile.NONE
+    :param dest_root:   top-level target directory for build
+    :param notebook:    the notebook data from the build YAML
+    :param src_path:    the pre-calculated path to the source notebook
+    :param dest_path:   the path to the target directory, calculated
+                        from dest_root and notebook.dest
+    :param build        parsed build data
+    :param profile:     build profile, or None
 
     :return: None
     """
-    verbose("notebook={0}\ndest_root={1}".format(notebook, dest_root))
+    verbose(f"notebook={notebook}\ndest_root={dest_root}")
     notebook_type_map = build.notebook_type_map
     student_labs_subdir = build.output_info.student_labs_subdir
     instructor_labs_subdir = build.output_info.instructor_labs_subdir
@@ -1640,7 +1783,7 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
                 ext = LANG_EXT[lc_lang]
                 fields = merge_dicts(notebook.variables, {
                     TARGET_LANG: lang_dir,
-                    TARGET_EXTENSION: ext[1:] if ext.startswith('') else ext,
+                    TARGET_EXTENSION: ext[1:] if ext.startswith('.') else ext,
                     NOTEBOOK_TYPE: notebook_type_map.get(notebook_type, '')
                 })
                 dest_subst = VariableSubstituter(
@@ -1651,23 +1794,67 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
                 if dest_subst.startswith(os.path.sep):
                     dest_subst = dest_subst[len(os.path.sep):]
 
+                dest_base, _ = os.path.splitext(os.path.basename(dest_subst))
+                fields['target_basename'] = dest_base
+
+
                 for f in matches:
                     target = path.normpath(joinpath(target_dir, dest_subst))
                     copy(f, target)
                     copied += 1
 
                 if copied == 0:
-                    error('Found no generated {0} {1} notebooks for "{2}"!'.
-                        format(lang, notebook_type.value, notebook.src)
+                    error(
+                        f'Found no generated {lang} {notebook_type.value} ' +
+                        f'notebooks for "{notebook.src}"!'
                     )
 
-    verbose("Running master parse on {0}".format(src_path))
+    def copy_instructor_notes(temp_file: str, final_dest: str) -> NoReturn:
+        # Need to do some substitution here. We need to get a fully-substituted
+        # destination, from which we can then extract the base file name.
+        lang = list(EXT_LANG.values())[0] # Just choose one. It doesn't matter.
+        ext = LANG_EXT[lang.lower()]
+        nb_dest_subst = VariableSubstituter(notebook.dest).safe_substitute(
+            merge_dicts(notebook.variables, {
+                TARGET_LANG: lang,
+                TARGET_EXTENSION: ext[1:] if ext.startswith('.') else ext,
+                NOTEBOOK_TYPE: notebook_type_map.get(NotebookType.EXERCISES, '')
+            })
+        )
+
+        target_basename, _ = os.path.splitext(os.path.basename(nb_dest_subst))
+
+        # Now we can do substitution on the instructor notes target.
+        final_dest = VariableSubstituter(final_dest).safe_substitute(
+            merge_dicts(notebook.variables, {'target_basename': target_basename})
+        )
+
+        # Copy the generated Markdown file to the target destination.
+        parent = os.path.dirname(final_dest)
+        if not os.path.exists(parent):
+            mkdirp(parent)
+        verbose(f'+ cp {temp_file} {final_dest}')
+        _convert_and_copy_info_file(temp_file, final_dest, build)
+
+        # Convert to HTML.
+        no_ext_path, _ = os.path.splitext(final_dest)
+        html_path = f'{no_ext_path}.html'
+        pdf_path = f'{no_ext_path}.pdf'
+        markdown_to_html(final_dest, html_path,
+                         stylesheet=build.markdown.html_stylesheet)
+        html_to_pdf(html_path, pdf_path)
+
+    verbose(f"Running master parse on {src_path}")
     master = notebook.master
     extra_template_vars = {}
     extra_template_vars.update(build.variables)
     extra_template_vars.update(notebook.variables)
     with TemporaryDirectory() as tempdir:
         try:
+            if notebook.master.instructor_notes:
+                temp_instructor_notes = os.path.join(tempdir, 'notes.md')
+            else:
+                temp_instructor_notes = None
             params = master_parse.Params(
                 path=src_path,
                 output_dir=tempdir,
@@ -1688,42 +1875,46 @@ def process_master_notebook(dest_root, notebook, src_path, build, master_profile
                 encoding_out=master.encoding_out,
                 enable_verbosity=verbosity_is_enabled(),
                 copyright_year=build.course_info.copyright_year,
-                target_profile=master_profile,
-                course_type=build.course_info.type,
+                active_profile=profile,
+                all_profiles=build.profiles,
+                course_type=build.course_info.course_type,
                 enable_debug=master.debug,
                 enable_templates=master.enable_templates,
+                instructor_notes_file=temp_instructor_notes,
                 extra_template_vars=extra_template_vars
             )
+
             master_parse.process_notebooks(params)
             move_master_notebooks(master, tempdir)
+
+            if temp_instructor_notes and os.path.exists(temp_instructor_notes):
+                copy_instructor_notes(
+                    temp_instructor_notes,
+                    os.path.join(dest_root, notebook.master.instructor_notes)
+                )
+
         except Exception as e:
-            error("Failed to process {0}\n    {1}: {2}".format(
-                src_path, e.__class__.__name__, e.message
-            ))
+            e_cls = e.__class__.__name__
+            error(f"Failed to process {src_path}\n    {e_cls}: {e}")
             raise
 
-def copy_notebooks(build, labs_dir, dest_root, profile):
+def copy_notebooks(build: BuildData,
+                   labs_dir: str,
+                   dest_root: str,
+                   profile: Optional[master_parse.Profile]) -> NoReturn:
     """
     Copy the notebooks to the destination directory.
     """
     os.makedirs(labs_dir)
 
-    if profile is None:
-        master_profile = master_parse.TargetProfile.NONE
-    elif profile == 'amazon':
-        master_profile = master_parse.TargetProfile.AMAZON
-    elif profile == 'azure':
-        master_profile = master_parse.TargetProfile.AZURE
-    else:
-        assert(False)
-
     for notebook in build.notebooks:
         src_path = joinpath(build.source_base, notebook.src)
         if (profile and notebook.only_in_profile and
                 notebook.only_in_profile != profile):
-            info('Suppressing notebook "{}", which is {}-only.'.format(
-                 src_path, profile.title()
-            ))
+            info(
+                f'Suppressing notebook "{src_path}", which is ' +
+                f'{profile.name}-only.'
+            )
             continue
 
         if notebook.master_enabled():
@@ -1732,7 +1923,7 @@ def copy_notebooks(build, labs_dir, dest_root, profile):
                 notebook=notebook,
                 src_path=src_path,
                 build=build,
-                master_profile=master_profile
+                profile=profile
             )
         else:
             dest_path = joinpath(labs_dir, notebook.dest)
@@ -1741,7 +1932,9 @@ def copy_notebooks(build, labs_dir, dest_root, profile):
         remove_empty_subdirectories(dest_root)
 
 
-def copy_instructor_notes(build, dest_root, profile):
+def copy_instructor_notes(build: BuildData,
+                          dest_root: str,
+                          profile: Optional[master_parse.Profile]) -> NoReturn:
     # Starting at build.source_base, look for instructor notes and course
     # guides. Only keep the ones for the labs and slides we're using.
 
@@ -1787,7 +1980,7 @@ def copy_instructor_notes(build, dest_root, profile):
                              rel_dir,
                              f)
                 (base, _) = path.splitext(path.basename(f))
-                verbose("Copying {0} to {1}".format(s, t))
+                verbose(f"Copying {s} to {t}")
                 copy_info_file(s, t, False, build, profile)
                 if is_html(s):
                     html = s
@@ -1799,7 +1992,7 @@ def copy_instructor_notes(build, dest_root, profile):
                                  build.output_info.instructor_dir,
                                  INSTRUCTOR_NOTES_SUBDIR,
                                  rel_dir,
-                                 base + '.html')
+                                 f"{base}.html")
                     html = t
                     markdown_to_html(s, t,
                                      stylesheet=build.markdown.html_stylesheet)
@@ -1809,13 +2002,13 @@ def copy_instructor_notes(build, dest_root, profile):
                                  build.output_info.instructor_dir,
                                  INSTRUCTOR_NOTES_SUBDIR,
                                  rel_dir,
-                                 base + '.pdf')
+                                 f"{base}.pdf")
                     html_to_pdf(html, t)
 
                 continue
 
 
-def make_dbc(build, labs_dir, dbc_path):
+def make_dbc(build: BuildData, labs_dir: str, dbc_path: str) -> NoReturn:
     """
     Create a DBC file from the labs.
     """
@@ -1826,12 +2019,12 @@ def make_dbc(build, labs_dir, dbc_path):
                dbc_folder=build.top_dbc_folder_name,
                flatten=False,
                verbose=verbosity_is_enabled(),
-               debug=False)
+               debugging=False)
     finally:
         pass
 
 
-def copy_slides(build, dest_root):
+def copy_slides(build: BuildData, dest_root: str) -> NoReturn:
     """
     Copy the slides (if any).
     """
@@ -1845,7 +2038,9 @@ def copy_slides(build, dest_root):
             copy(src, dest)
 
 
-def copy_misc_files(build, dest_root, profile):
+def copy_misc_files(build: BuildData,
+                    dest_root: str,
+                    profile: Optional[master_parse.Profile]) -> NoReturn:
     """
     Copy the miscellaneous files (if any).
     """
@@ -1866,7 +2061,7 @@ def copy_misc_files(build, dest_root, profile):
             copy_info_file(s, t, f.is_template, build, profile)
 
 
-def copy_datasets(build, dest_root):
+def copy_datasets(build: BuildData, dest_root: str) -> NoReturn:
     """
     Copy the datasets (if any).
     """
@@ -1886,57 +2081,64 @@ def copy_datasets(build, dest_root):
             for i in (ds.license, ds.readme):
                 source = joinpath(build.course_directory, i)
                 (base, _) = path.splitext(path.basename(i))
-                pdf = target_for(base + ".pdf", ds.dest)
-                html = target_for(base + ".html", ds.dest)
+                pdf = target_for(f"{base}.pdf", ds.dest)
+                html = target_for(f"{base}.html", ds.dest)
                 markdown_to_html(source, html, stylesheet=css)
                 html_to_pdf(html, pdf)
 
 
-def remove_empty_subdirectories(directory):
+def remove_empty_subdirectories(directory: str) -> NoReturn:
     for dirpath, _, _ in os.walk(directory, topdown=False):
         if len(os.listdir(dirpath)) == 0:
-            verbose("Deleting empty directory {0}".format(dirpath))
+            verbose(f"Deleting empty directory {dirpath}")
             os.rmdir(dirpath)
 
 
-def write_version_notebook(dir, notebook_contents, version):
+def write_version_notebook(dir: str,
+                           notebook_contents: str,
+                           version: str) -> NoReturn:
     nb_path = joinpath(dir, VERSION_NOTEBOOK_FILE.format(version))
     ensure_parent_dir_exists(nb_path)
     with codecs.open(nb_path, 'w', encoding='UTF-8') as out:
         out.write(notebook_contents)
 
 
-def bundle_course(build, dest_dir, profile):
+def bundle_course(build: BuildData,
+                  dest_dir: str,
+                  profile: Optional[master_parse.Profile]) -> NoReturn:
     from zipfile import ZipFile
 
     # Expand any run-time variables in zipfile and dest.
-    vars = {PROFILE_VAR: profile or ''}
+    if profile:
+        vars = {PROFILE_VAR: profile.name}
+    else:
+        vars = {PROFILE_VAR: ''}
 
     t = StringTemplate(joinpath(dest_dir, build.bundle_info.zipfile))
     zip_path = t.safe_substitute(vars)
-    print('Writing bundle {}'.format(zip_path))
+    print(f'Writing bundle {zip_path}')
 
     with ZipFile(zip_path, 'w') as z:
         for file in build.bundle_info.files:
             src = joinpath(dest_dir, file.src)
             if not (path.exists(src)):
                 raise BuildError(
-                    'While building bundle, cannot find "{}".'.format(src)
+                    f'While building bundle, cannot find "{src}".'
                 )
             if path.isdir(src):
                 raise BuildError(
-                    'Cannot make bundle: Source "{}" is a directory'.format(
-                        src
-                    )
+                    f'Cannot make bundle: Source "{src}" is a directory'
                 )
 
             dest = StringTemplate(file.dest).safe_substitute(vars)
             z.write(src, dest)
 
 
-def do_build(build, base_dest_dir, profile=None):
+def do_build(build: BuildData,
+             base_dest_dir: str,
+             profile: Optional[master_parse.Profile] = None) -> NoReturn:
     if profile:
-        dest_dir = joinpath(base_dest_dir, profile)
+        dest_dir = joinpath(base_dest_dir, profile.name)
     else:
         dest_dir = base_dest_dir
 
@@ -1992,8 +2194,9 @@ def do_build(build, base_dest_dir, profile=None):
         rm_rf(labs_full_path)
         rm_rf(instructor_labs)
 
-def build_course(build, dest_dir, overwrite):
-    # type: (BuildData, str, bool) -> None
+def build_course(build: BuildData,
+                 dest_dir: str,
+                 overwrite: bool) -> NoReturn:
     """
 
     :param build:
@@ -2003,36 +2206,41 @@ def build_course(build, dest_dir, overwrite):
     """
 
     if build.course_info.deprecated:
-        raise BuildError('{0} is deprecated and cannot be built.'.format(
-            build.course_info.name
-        ))
+        raise BuildError(
+            f'{build.course_info.name} is deprecated and cannot be built.'
+        )
 
-    verbose('Publishing to "{0}"'.format(dest_dir))
+    verbose(f'Publishing to "{dest_dir}"')
     if path.isdir(dest_dir):
         if not overwrite:
             raise BuildError(
-                ('Directory "{0}" already exists, and you did not specify ' +
-                 'overwrite.').format(dest_dir))
+                f'Directory "{dest_dir}" already exists, and you did not ' +
+                'specify overwrite.'
+            )
 
         rm_rf(dest_dir)
 
-    if not build.use_profiles:
+    if not build.profiles:
         do_build(build, dest_dir, profile=None)
     else:
-        for profile in VALID_PROFILES:
+        for profile in build.profiles:
             info('')
-            info("Building profile {}".format(profile))
+            info(f"Building profile {profile.name}")
             do_build(build, dest_dir, profile)
 
     if errors > 0:
-        raise BuildError("{0} error(s).".format(errors))
+        raise BuildError(f"{errors} error(s).")
 
-    print("\nPublished {0}, version {1} to {2}\n".format(
-        build.course_info.name, build.course_info.version, dest_dir
-    ))
+    print(
+        f'\nPublished {build.course_info.name}, ' +
+        f'version {build.course_info.version} to {dest_dir}\n'
+    )
 
 
-def dbw(subcommand, args, capture_stdout=True, db_profile=None):
+def dbw(subcommand: str,
+        args: Sequence[str],
+        capture_stdout: bool = True,
+        db_profile: Optional[str] = None) -> Optional[str]:
     """
     Invoke "databricks workspace" with specified arguments.
 
@@ -2054,28 +2262,30 @@ def dbw(subcommand, args, capture_stdout=True, db_profile=None):
                              verbose=verbosity_is_enabled())
 
 
-def ensure_shard_path_exists(shard_path, db_profile):
+def ensure_shard_path_exists(shard_path: str,
+                             db_profile: Optional[str]) -> NoReturn:
     try:
         dbw('ls', [shard_path], db_profile=db_profile)
     except DatabricksCliError as e:
         if e.code == 'RESOURCE_DOES_NOT_EXIST':
-            die('Shard path "{0}" does not exist.'.format(shard_path))
+            die(f'Shard path "{shard_path}" does not exist.')
         else:
-            die('Unexpected error with "databricks": {0}'.format(e.message))
+            die(f'Unexpected error with "databricks": {e}')
 
 
-def ensure_shard_path_does_not_exist(shard_path, db_profile):
+def ensure_shard_path_does_not_exist(shard_path: str,
+                                     db_profile: Optional[str]) -> NoReturn:
     try:
         dbw('ls', [shard_path], db_profile=db_profile)
-        die('Shard path "{0}" already exists.'.format(shard_path))
+        die(f'Shard path "{shard_path}" already exists.')
     except DatabricksCliError as e:
         if e.code == 'RESOURCE_DOES_NOT_EXIST':
             pass
         else:
-            die('Unexpected error with "databricks": {0}'.format(e.message))
+            die(f'Unexpected error with "databricks": {e}')
 
 
-def expand_shard_path(shard_path):
+def expand_shard_path(shard_path: str) -> str:
     if shard_path.startswith('/'):
         return shard_path
 
@@ -2084,10 +2294,11 @@ def expand_shard_path(shard_path):
     if home is not None:
         if len(home.strip()) == 0:
             home = None
+
+    db_config = os.path.expanduser('~/.databrickscfg')
     if home is None:
-        db_config = os.path.expanduser('~/.databrickscfg')
         if os.path.exists(db_config):
-            cfg = SafeConfigParser()
+            cfg = ConfigParser()
             cfg.read(db_config)
             try:
                 home = cfg.get('DEFAULT', 'home')
@@ -2095,31 +2306,31 @@ def expand_shard_path(shard_path):
                 pass
 
     if home is None:
-        die(('Shard path "{0}" is relative, but environment variable {1} ' +
-             'does not exist or is empty, and there is no "home" setting in ' +
-             '{2}.').format(shard_path, DB_SHARD_HOME_VAR, db_config))
+        die(f'Shard path "{shard_path}" is relative, but environment ' +
+            f'variable {DB_SHARD_HOME_VAR} does not exist or is empty, and ' +
+            f'there is no "home" setting in "{db_config}".')
 
     if shard_path == '':
         shard_path = home
     else:
-        shard_path = '{0}/{1}'.format(home, shard_path)
+        shard_path = f'{home}/{shard_path}'
 
     return shard_path
 
 
-def notebook_is_transferrable(nb, build):
+def notebook_is_transferrable(nb: NotebookData, build: BuildData) -> bool:
     nb_full_path = path.abspath(joinpath(build.source_base, nb.src))
 
     if not nb.upload_download:
-        info('Skipping notebook "{0}": It has upload_download disabled.'.format(
-            nb_full_path
-        ))
+        info(
+            f'Skipping notebook "{nb_full_path}": upload_download is disabled.'
+        )
         return False
 
     return True
 
 
-def get_sources_and_targets(build):
+def get_sources_and_targets(build: BuildData) -> Dict[str, str]:
     """
     Get the list of source notebooks to be uploaded/downloaded and map them
     to their target names on the shard.
@@ -2194,67 +2405,63 @@ def get_sources_and_targets(build):
     return res
 
 
-def check_for_multiple_upload_download_mappings(notebooks):
+def check_for_extra_up_down_mappings(notebooks: Dict[str, str]) -> Sequence[Tuple[str, str]]:
     """
     Check the result returned by get_sources_and_targets() for sources that
     map to multiple targets.
 
-    :param notebooks: the result of get_get_sources_and_targets()
+    :param notebooks: the result of get_sources_and_targets()
 
     :return: A sequence of (source, targets) tuples of only those results that
              map to multiple targets. The iterator might be empty.
     """
     res = {}
-    for src, targets in notebooks.items():
+    for src, targets in list(notebooks.items()):
         if len(targets) == 1:
             continue
         res[src] = targets
 
     return tuple(res.items())
 
-def upload_notebooks(build, shard_path, db_profile):
-    # type: (BuildData, str, str) -> None
+def upload_notebooks(build: BuildData,
+                     shard_path: str,
+                     db_profile: Optional[str]) -> NoReturn:
     shard_path = expand_shard_path(shard_path)
     notebooks = get_sources_and_targets(build)
 
-    def do_upload(notebooks):
+    def do_upload(notebooks: Dict[str, str]) -> NoReturn:
         ensure_shard_path_does_not_exist(shard_path, db_profile)
 
         with TemporaryDirectory() as tempdir:
             info("Copying notebooks to temporary directory.")
-            for nb_full_path, partial_paths in notebooks.items():
+            for nb_full_path, partial_paths in list(notebooks.items()):
                 if not path.exists(nb_full_path):
-                    warning('Notebook "{}" does not exist. Skipping it.'.format(
-                        nb_full_path
-                    ))
+                    warn(f'Skipping nonexistent notebook "{nb_full_path}".')
                     continue
                 for partial_path in partial_paths:
                     temp_path = joinpath(tempdir, partial_path)
                     dir = path.dirname(temp_path)
                     mkdirp(dir)
-                    verbose('Copying "{0}" to "{1}"'.format(nb_full_path, temp_path))
+                    verbose(f'Copying "{nb_full_path}" to "{temp_path}"')
                     copy(nb_full_path, temp_path)
 
             with working_directory(tempdir):
-                info("Uploading notebooks to {0}".format(shard_path))
+                info(f"Uploading notebooks to {shard_path}")
                 try:
                     dbw('import_dir', ['.', shard_path],
                         capture_stdout=False, db_profile=db_profile)
-                    info("Uploaded {0} notebooks to {1}.".format(
-                        len(notebooks), shard_path
-                    ))
+                    info(f"Uploaded {len(notebooks)} notebooks to " +
+                         f"{shard_path}.")
                 except DatabricksCliError as e:
-                    raise UploadDownloadError(
-                        'Upload failed: {}'.format(e.message)
-                    )
+                    raise UploadDownloadError(f'Upload failed: {e}')
 
     try:
         do_upload(notebooks)
     except UploadDownloadError as e:
         dbw('rm', [shard_path], capture_stdout=False, db_profile=db_profile)
-        die(e.message)
+        die(str(e))
 
-    multiple_mappings = check_for_multiple_upload_download_mappings(notebooks)
+    multiple_mappings = check_for_extra_up_down_mappings(notebooks)
     if len(multiple_mappings) > 0:
         wrap2stdout('\n********')
         wrap2stdout('CAUTION:')
@@ -2263,17 +2470,17 @@ def upload_notebooks(build, shard_path, db_profile):
 
         for src, targets in multiple_mappings:
             wrap2stdout(
-                ('\n"{}" has been uploaded to multiple places. Only edits to ' +
-                 '"{}/{}" will be applied on download.').format(
-                    src, shard_path, targets[0]
-            ))
+                f'\n"{src}" has been uploaded to multiple places. Only edits ' +
+                f'to "{shard_path}/{targets[0]}" will be applied on download.'
+            )
 
         wrap2stdout("\nIf you edit the build file before you run --download, " +
                     "you might lose any edits to those files!")
 
 
-def download_notebooks(build, shard_path, db_profile):
-    # type: (BuildData, str, str) -> None
+def download_notebooks(build: BuildData,
+                       shard_path: str,
+                       db_profile: Optional[str]) -> NoReturn:
     shard_path = expand_shard_path(shard_path)
     notebooks = get_sources_and_targets(build)
 
@@ -2287,17 +2494,15 @@ def download_notebooks(build, shard_path, db_profile):
                 try:
                     dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
                 except DatabricksCliError as e:
-                    raise UploadDownloadError(
-                        "Download failed: {}".format(e.message)
-                    )
+                    raise UploadDownloadError(f"Download failed: {e}")
 
-                for local, remotes in notebooks.items():
+                for local, remotes in list(notebooks.items()):
                     # We only ever download the first one.
                     remote = remotes[0]
                     if not path.exists(remote):
-                        warning(('Cannot find downloaded version of course ' +
-                                 'notebook "{0}".').format(local))
-                    print('"{0}" -> {1}'.format(remote, local))
+                        warn('Cannot find downloaded version of course ' +
+                             f'notebook "{local}".')
+                    print(f'"{remote}" -> {local}')
                     # Make sure there's a newline at the end of each file.
                     move(remote, local, ensure_final_newline=True)
                     # Remove any others, so they're not treated as leftovers.
@@ -2311,30 +2516,31 @@ def download_notebooks(build, shard_path, db_profile):
                     for f in files:
                         leftover_files.append(path.relpath(joinpath(root, f)))
                 if len(leftover_files) > 0:
-                    warning(("These files from {0} aren't in the build file and" +
-                             " were not copied").format(shard_path))
+                    warn(
+                        f"These files from {shard_path} aren't in the build " +
+                        "file and were not copied."
+                    )
                     for f in leftover_files:
-                        print("    {0}".format(f))
+                        print(f"    {f}")
 
     # get_sources_and_targets() returns a dict of
     # local-path -> remote-partial-paths. Reverse it. If there are duplicate
     # (remote) keys, keep only the first one. See upload_notebooks()
     remote_to_local = {}
-    for local, remotes in notebooks.items():
+    for local, remotes in list(notebooks.items()):
         # We only ever download the first one.
         remote = remotes[0]
         if remote in remote_to_local:
-            die('(BUG): Found multiple instances of remote path "{0}"'.format(
-                remote
-            ))
+            die(f'(BUG): Found multiple instances of remote path "{remote}"')
+
         remote_to_local[remote] = local
 
     try:
         do_download(notebooks)
     except UploadDownloadError as e:
-        die(e.message)
+        die(str(e))
 
-    multiple_mappings = check_for_multiple_upload_download_mappings(notebooks)
+    multiple_mappings = check_for_extra_up_down_mappings(notebooks)
     if len(multiple_mappings) > 0:
         wrap2stdout('\n********')
         wrap2stdout('CAUTION:')
@@ -2342,13 +2548,11 @@ def download_notebooks(build, shard_path, db_profile):
         wrap2stdout('Some source files exist more than once in the build file!')
 
         for src, targets in multiple_mappings:
-            wrap2stdout('\n"{}" has ONLY been downloaded from "{}/{}"'.format(
-                    src, shard_path, targets[0]
-            ))
+            wrap2stdout(f'\n"{src}" has ONLY been downloaded from ' +
+                        f"{shard_path}/{targets[0]}.")
 
 
-def print_info(build, shell):
-    # type: (BuildData, bool) -> None
+def print_info(build: BuildData, shell: bool) -> NoReturn:
     """
 
     :param build:
@@ -2356,16 +2560,16 @@ def print_info(build, shell):
     :return:
     """
     if shell:
-        print('COURSE_NAME="{}"; COURSE_VERSION="{}"'.format(
-            build.name, build.course_info.version
-        ))
+        print(
+            f'COURSE_NAME="{build.name}"; ' +
+            f'COURSE_VERSION="{build.course_info.version}"'
+        )
     else:
-        print("Course name:    {}".format(build.name))
-        print("Course version: {}".format(build.course_info.version))
+        print(f"Course name:    {build.name}")
+        print(f"Course version: {build.course_info.version}")
 
 
-def validate_build(build):
-    # type: (BuildData) -> BuildData
+def validate_build(build: BuildData) -> BuildData:
     """
     :param build:
     :return:
@@ -2374,7 +2578,7 @@ def validate_build(build):
     # TODO: Path joins here duplicate logic elsewhere. Consolidate.
     errors = 0
     error_prefix = "ERROR: "
-    wrapper = BDCTextWrapper(subsequent_indent=' ' * len(error_prefix))
+    wrapper = EnhancedTextWrapper(subsequent_indent=' ' * len(error_prefix))
     build_file_dir = path.dirname(path.abspath(build.build_file_path))
 
     def complain(msg):
@@ -2387,9 +2591,7 @@ def validate_build(build):
         return joinpath(build.source_base, src)
 
     if not path.exists(build.source_base):
-        complain('src_base "{}" does not exist.'.format(
-            path.abspath(build.source_base)
-        ))
+        complain(f'src_base "{path.abspath(build.source_base)}" does not exist.')
         errors += 1
 
     headings = set()
@@ -2400,28 +2602,22 @@ def validate_build(build):
     for notebook in build.notebooks:
         src_path = rel_to_src_base(notebook.src)
         if not path.exists(src_path):
-            complain('Notebook "{}" does not exist.'.format(src_path))
+            complain(f'Notebook "{src_path}" does not exist.')
             errors += 1
             continue
 
         if os.stat(src_path).st_size == 0:
-            complain('Notebook "{}" is an empty file. Ignoring it.'.format(
-                src_path
-            ))
+            complain(f'Notebook "{src_path}" is an empty file. Ignoring it.')
             continue
 
         # Attempt to parse the notebook. If it has no cells, ignore it.
         try:
-            nb = parse_source_notebook(src_path, encoding='UTF-8', debug=False)
+            nb = parse_source_notebook(src_path, encoding='UTF-8')
             if len(nb.cells) == 0:
-                complain('Notebook "{}" has no cells. Ignoring it.'.format(
-                    src_path
-                ))
+                complain(f'Notebook "{src_path}" has no cells. Ignoring it.')
                 continue
         except NotebookError as e:
-            complain('Notebook "{}" cannot be parsed: {}'.format(
-                src_path, e.message
-            ))
+            complain(f'Notebook "{src_path}" cannot be parsed: {e}')
             errors += 1
             continue
 
@@ -2439,23 +2635,23 @@ def validate_build(build):
 
     for h in headings:
         if not path.exists(h):
-            complain('Notebook heading "{}" does not exist.'.format(h))
+            complain(f'Notebook heading "{h}" does not exist.')
             errors += 1
 
     for f in footers:
         if not path.exists(f):
-            complain('Notebook footer "{}" does not exist.'.format(f))
+            complain(f'Notebook footer "{f}" does not exist.')
             errors += 1
 
     for misc in build.misc_files:
         src_path = rel_to_build(misc.src)
         if not path.exists(src_path):
-            complain('misc_file "{}" does not exist.'.format(src_path))
+            complain(f'misc_file "{src_path}" does not exist.')
             errors += 1
-        if misc.only_in_profile and (not build.use_profiles):
+        if misc.only_in_profile and (not build.profiles):
             complain(
-                ('misc file "{}" specifies only_in_profile, but profiles ' +
-                 'are not enabled.').format(src_path)
+                f'misc file "{src_path}" specifies only_in_profile, but ' +
+                'profiles are not enabled.'
             )
             errors += 1
 
@@ -2463,27 +2659,28 @@ def validate_build(build):
         for slide in build.slides:
             src_path = rel_to_src_base(slide.src)
             if not path.exists(src_path):
-                complain('Slide "{}" does not exist.'.format(src_path))
+                complain(f'Slide "{src_path}" does not exist.')
                 errors += 1
 
     if build.datasets:
         for dataset in build.datasets:
             src_path = joinpath(build.course_directory, dataset.src)
             if not path.exists(src_path):
-                complain('Dataset "{}" does not exist.'.format(src_path))
+                complain(f'Dataset "{src_path}" does not exist.')
                 errors += 1
 
     if build.markdown and build.markdown.html_stylesheet:
         if not path.exists(build.markdown.html_stylesheet):
-            complain('markdown.html_stylesheet "{}" does not exist.'.format(
-                build.markdown.html_stylesheet
-            ))
+            complain(
+                f'markdown.html_stylesheet "{build.markdown.html_stylesheet}" '+
+                'does not exist.'
+            )
             errors +=1
 
     if errors == 1:
         print("\n*** One error.")
     elif errors > 1:
-        print("\n*** {} errors.".format(errors))
+        print(f"\n*** {errors} errors.")
 
     if errors > 0:
         raise BuildConfigError("Build file validation failure.")
@@ -2491,22 +2688,19 @@ def validate_build(build):
     return build
 
 
-def load_and_validate(build_file):
-    # type: (str) -> BuildData
+def load_and_validate(build_file: str) -> BuildData:
     build = load_build_yaml(build_file)
     return validate_build(build)
 
 
-def init_verbosity(verbose):
-    # type: (bool) -> None
+def init_verbosity(verbose: bool) -> NoReturn:
     if verbose:
         set_verbosity(True, verbose_prefix='bdc: ')
     else:
         set_verbosity(False, verbose_prefix='')
 
 
-def default_output_directory_for_build(build):
-    # type: (BuildData) -> str
+def default_output_directory_for_build(build: BuildData) -> str:
     return joinpath(os.getenv("HOME"), "tmp", "curriculum",
                     build.course_id)
 
@@ -2514,8 +2708,7 @@ def default_output_directory_for_build(build):
 # Exported functions
 # ---------------------------------------------------------------------------
 
-def bdc_check_build(build_file, verbose=False):
-    # type: (str, bool) -> None
+def bdc_check_build(build_file: str, verbose: bool = False) -> NoReturn:
     """
     :param build_file:
     :param verbose:
@@ -2527,11 +2720,10 @@ def bdc_check_build(build_file, verbose=False):
         print('\nNo errors.')
     else:
         # Error messages already printed.
-        raise BuildError('There are problems with "{}".'.format(build_file))
+        raise BuildError(f'There are problems with "{build_file}".')
 
 
-def bdc_get_notebook_paths(build_file):
-    # type: (str) -> Sequence[str]
+def bdc_get_notebook_paths(build_file: str) -> Sequence[str]:
     """
     Get the paths of all source notebooks in a build file. Notebooks that
     are used multiple times are only listed once.
@@ -2545,8 +2737,7 @@ def bdc_get_notebook_paths(build_file):
                        for notebook in build.notebooks])))
 
 
-def bdc_list_notebooks(build_file):
-    # type: (str) -> None
+def bdc_list_notebooks(build_file: str) -> NoReturn:
     """
     Print the paths of notebooks in a build file to standard output. Notebooks
     that appear multiple times in a build are only listed once.
@@ -2558,8 +2749,7 @@ def bdc_list_notebooks(build_file):
         print(p)
 
 
-def bdc_print_info(build_file, shell_format=False):
-    # type: (str, bool) -> None
+def bdc_print_info(build_file: str, shell_format: bool = False) -> NoReturn:
     """
     Display information about the build file to standard output.
 
@@ -2572,8 +2762,10 @@ def bdc_print_info(build_file, shell_format=False):
     print_info(build, shell_format)
 
 
-def bdc_upload(build_file, shard_path, databricks_profile=None, verbose=False):
-    # type: (str, str, str, bool) -> None
+def bdc_upload(build_file: str,
+               shard_path: str,
+               databricks_profile: Optional[str] = None,
+               verbose: bool = False) -> NoReturn:
     """
     Upload a course's source notebooks to Databricks.
 
@@ -2589,8 +2781,10 @@ def bdc_upload(build_file, shard_path, databricks_profile=None, verbose=False):
     upload_notebooks(build, shard_path, databricks_profile)
 
 
-def bdc_download(build_file, shard_path, databricks_profile=None, verbose=False):
-    # type: (str, str, str, bool) -> None
+def bdc_download(build_file: str,
+                 shard_path: str,
+                 databricks_profile: Optional[str] = None,
+                 verbose: bool = False) -> NoReturn:
     """
     Download a course's source notebooks from Databricks and copy them back
     over top of the notebooks on the local disk.
@@ -2607,8 +2801,7 @@ def bdc_download(build_file, shard_path, databricks_profile=None, verbose=False)
     download_notebooks(build, shard_path, databricks_profile)
 
 
-def bdc_output_directory_for_build(build_file):
-    # type: (str) -> str
+def bdc_output_directory_for_build(build_file: str) -> str:
     """
     Determine the default output directory for a particular course.
 
@@ -2620,8 +2813,10 @@ def bdc_output_directory_for_build(build_file):
     return default_output_directory_for_build(build)
 
 
-def bdc_build_course(build_file, dest_dir, overwrite, verbose=False):
-    # type: (str, str, bool, bool) -> None
+def bdc_build_course(build_file: str,
+                     dest_dir: str,
+                     overwrite: bool,
+                     verbose: bool = False) -> NoReturn:
     """
     Build a course.
 
@@ -2655,7 +2850,7 @@ def main():
 
     course_config = opts['BUILD_YAML'] or DEFAULT_BUILD_FILE
     if not os.path.exists(course_config):
-        die('{} does not exist.'.format(course_config))
+        die(f'{course_config} does not exist.')
 
     try:
         if opts['--check']:
@@ -2675,9 +2870,11 @@ def main():
                              opts['--verbose'])
 
     except BuildConfigError as e:
-        die('Error in "{0}": {1}'.format(course_config, e.message))
+        die(f'Error in "{course_config}": {e}')
     except BuildError as e:
-        die(e.message)
+        die(str(e))
+    except KeyboardInterrupt:
+        die(f'\n*** Interrupted.')
 
 if __name__ == '__main__':
     main()

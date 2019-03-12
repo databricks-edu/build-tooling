@@ -1,4 +1,4 @@
-'''
+"""
 Inline token class, used to configure inline callouts for easy search and replace.
 
 Doctests:
@@ -48,46 +48,22 @@ Doctests:
 >>> content = [":HINT: Don't try to do that.",\
                ":FOOBAR: This is foobar.",\
                "And this is a :HINT: with a :WARNING:."]
->>> print("\\n".join(expand_inline_tokens(tokens, content)))
+>>> new_content, _ = expand_inline_tokens(tokens, content)
+>>> import sys
+>>> print('\\n'.join(new_content))
 **Hint** Don't try to do that.
 <img alt="Foobar" title="Foobar" style="vertical-align: text-bottom; position: relative" src="foobar.png"/> This is foobar.
 And this is a **Hint** with a :WARNING:.
-'''
-
-from __future__ import print_function
+"""
 
 import re
 from string import Template
-
-def expand_inline_tokens(tokens, content):
-    '''
-    Expand inline tokens in a list of content strings.
-
-    :param tokens    a list of InlineToken objects representing tokens to find and
-                     expand
-    :param content:  a list of lines to check and expand, if necessary
-
-    :return: A tuple (new_content, needs_sandbox), where new_content is the
-             possibly-changed content and needs_sandbox indicates whether or
-             not the resulting Markdown should be sandboxed.
-    '''
-    new_content = []
-    needs_sandbox = False
-    for line in content:
-        new_line = line
-        for token in tokens:
-            new_line = token.expand_in_string(new_line)
-            needs_sandbox = needs_sandbox or ('style=' in new_line)
-
-        new_content.append(new_line)
-
-    return (new_content, needs_sandbox)
-
+from typing import Sequence, List, Tuple
 
 class InlineToken(object):
-    '''
+    """
     Used to represent inline callouts, for easy search and replace.
-    '''
+    """
     DEFAULT_STYLE = 'vertical-align: text-bottom; position: relative'
     DEFAULT_TEMPLATE = (
         r'''<img alt="${title}" title="${title}" style="${style}" src="${image}"/>'''
@@ -117,21 +93,21 @@ class InlineToken(object):
             self.tag = ':{0}:'.format(self.NON_WORDS_RE.sub('', title).upper())
 
     def expand(self):
-        '''
+        """
         Expand the callout (i.e., fill in its template).
 
         :return: the expanded callout
-        '''
+        """
         return self.template.substitute(self.__dict__)
 
     def expand_in_string(self, str):
-        '''
+        """
         Expand all occurrence of this callout in the supplied string.
 
         :param str: the string to expand
 
         :return: the string with any instances of this callout expanded
-        '''
+        """
         return str.replace(self.tag, self.expand())
 
     def needs_sandbox(self):
@@ -152,6 +128,31 @@ class InlineToken(object):
                 self.title, self.image, self.style, self.template, self.tag
             )
         )
+
+def expand_inline_tokens(tokens: Sequence[InlineToken],
+                         content: List[str]) -> Tuple[Sequence[str], bool]:
+    """
+    Expand inline tokens in a list of content strings.
+
+    :param tokens    a list of InlineToken objects representing tokens to find and
+                     expand
+    :param content:  a list of lines to check and expand, if necessary
+
+    :return: A tuple (new_content, needs_sandbox), where new_content is the
+             possibly-changed content and needs_sandbox indicates whether or
+             not the resulting Markdown should be sandboxed.
+    """
+    new_content = []
+    needs_sandbox = False
+    for line in content:
+        new_line = line
+        for token in tokens:
+            new_line = token.expand_in_string(new_line)
+            needs_sandbox = needs_sandbox or ('style=' in new_line)
+
+        new_content.append(new_line)
+
+    return (new_content, needs_sandbox)
 
 
 if __name__ == '__main__':

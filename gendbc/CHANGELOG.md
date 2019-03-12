@@ -1,5 +1,9 @@
 # Change Log for gendbc
 
+**Version 2.1.0**
+
+- Now implemented in Python 3. Will _not_ work with Python 2.
+
 **Version 2.0.3**
 
 - Updated for addition of new `db_edu_util` library.

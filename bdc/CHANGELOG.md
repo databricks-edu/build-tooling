@@ -1,5 +1,13 @@
 # Change Log for BDC
 
+### Version 1.30.0
+
+- Now implemented in Python 3. Will _not_ work with Python 2.
+- Added support for arbitrary build profiles.
+- Added support for instructor note consolidation.
+- Added support for an include directive in the `build.yaml` file 
+  (e.g., `#include "file.yaml"`)
+
 ### Version 1.29.0
 
 - `bdc` now invokes `databricks` via its API, rather than by shelling out.

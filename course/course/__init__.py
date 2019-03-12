@@ -9,21 +9,21 @@ import sys
 import bdc
 import re
 from contextlib import contextmanager
-from typing import Generator, Sequence, Pattern, Mapping
 from tempfile import NamedTemporaryFile
 from termcolor import colored
 from string import Template as StringTemplate
 import functools
 from subprocess import Popen
-from textwrap import TextWrapper
-from db_edu_util import db_cli
+from db_edu_util import die, error, warn, debug, set_debug, db_cli
 from db_edu_util.db_cli import DatabricksCliError
+from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
+                    Dict, TextIO)
 
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.0.7'
+VERSION = '2.1.0-RC1'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -214,79 +214,12 @@ COLUMNS = int(os.environ.get('COLUMNS', '80')) - 1
 class CourseError(Exception):
     pass
 
-class LocalTextWrapper(TextWrapper):
-    def __init__(self, width=COLUMNS, subsequent_indent=''):
-        TextWrapper.__init__(self,
-                             width=width,
-                             subsequent_indent=subsequent_indent)
-
-    def fill(self, msg):
-        wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
-        return '\n'.join(wrapped)
-
-
-# -----------------------------------------------------------------------------
-# Globals
-# -----------------------------------------------------------------------------
-
-warning_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(WARNING_PREFIX))
-debug_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(DEBUG_PREFIX))
-error_wrapper = LocalTextWrapper(subsequent_indent=' ' * len(ERROR_PREFIX))
-debugging = False
-
 # -----------------------------------------------------------------------------
 # Internal functions
 # -----------------------------------------------------------------------------
 
-def printerr(msg):
-    # type: (str) -> None
-    """
-    Emit an error message, with wrapping.
-
-    :param msg: the message
-    :return: Nothing
-    """
-    sys.stderr.write(error_wrapper.fill(ERROR_PREFIX + msg) + '\n')
-
-
-def die(msg):
-    # type: (str) -> None
-    """
-    Emit an error message, with wrapping. Then, abort the program.
-
-    :param msg: the message
-    :return: Nothing
-    """
-    printerr(msg)
-    sys.exit(1)
-
-
-def warn(msg):
-    # type: (str) -> None
-    """
-    Emit a warning message, with wrapping.
-
-    :param msg: the message
-    :return: Nothing
-    """
-    print(warning_wrapper.fill(WARNING_PREFIX + msg))
-
-
-def debug(msg):
-    # type: (str) -> None
-    """
-    Emit a debug message, with wrapping.
-
-    :param msg: the message
-    :return: Nothing
-    """
-    if debugging:
-        print(debug_wrapper.fill(DEBUG_PREFIX + msg))
-
-
 @contextmanager
-def working_directory(dir):
-    # type: (str) -> Generator
+def working_directory(dir: str) -> Generator[None, None, None]:
     """
     Run a block of code (in a "with" statement) within a specific working
     directory. When the "with" statement ends, cd back to the original
@@ -305,7 +238,7 @@ def working_directory(dir):
 
 
 @contextmanager
-def noop(result, *args, **kw):
+def noop(result: Any, *args: Any, **kw: Any) -> Any:
     """
     A no-op context manager, with is occasionally useful. Yields its first
     positional parameter. Ignores all the others.
@@ -318,8 +251,7 @@ def noop(result, *args, **kw):
 
 
 @contextmanager
-def pager(cfg):
-    # type: (dict) -> file
+def pager(cfg: Dict[str, str]) -> Generator[None, TextIO, None]:
     """
     Provides a convenient way to write output to a pager. This context
     manager yields a file descriptor you can use to write to the pager.
@@ -348,23 +280,22 @@ def pager(cfg):
         if the_pager:
             # In this case, we know we have a NamedTemporaryFile. We can
             # send the temporary file to the pager.
-            p = Popen('{} <{}'.format(the_pager, out.name), shell=True)
+            p = Popen(f'{the_pager} <{out.name}', shell=True)
             p.wait()
 
 
-def check_for_docker(command):
+def check_for_docker(command: str) -> NoReturn:
     # Note: This path is created by the shell script (../docker/create-image.sh)
     # specifically so we can test for it.
     if os.path.exists("/etc/in-docker"):
         raise CourseError(
-            '"{} {}" does not work inside a Docker container.'.format(
-              PROG, command
-            )
+            f'"{PROG} {command}" does not work inside a Docker container.'
         )
 
 
-def cmd(shell_command, quiet=False, dryrun=False):
-    # type: (str, bool, bool) -> None
+def cmd(shell_command: str,
+        quiet: bool = False,
+        dryrun: bool = False) -> NoReturn:
     """
     Run a shell command.
 
@@ -374,16 +305,16 @@ def cmd(shell_command, quiet=False, dryrun=False):
     :raises CourseError: If the command exits with a non-zero status
     """
     if dryrun or (not quiet):
-        print("+ {}".format(shell_command))
+        print(f"+ {shell_command}")
 
     if not dryrun:
         rc = os.system(shell_command)
         if rc != 0:
-            raise CourseError('Command exited with {}'.format(rc))
+            raise CourseError(f'Command exited with {rc}')
 
 
-def databricks(args, db_profile=None):
-    # type: (Sequence[str], Optional[str]) -> None
+def databricks(args: Sequence[str],
+               db_profile: Optional[str] = None) -> NoReturn:
     """
     Runs the specified "databricks" command, trapping any errors and
     aborting.
@@ -394,10 +325,10 @@ def databricks(args, db_profile=None):
     try:
         db_cli.databricks(args, db_profile=db_profile, verbose=True)
     except DatabricksCliError as e:
-        die("*** Command failed: {}".format(e.message))
+        die(f"*** Command failed: {e.message}")
 
-def quote_shell_arg(arg):
-    # type: (str) -> str
+
+def quote_shell_arg(arg: str) -> str:
     """
     Ensure that an argument to be passed to a shell command is quoted.
 
@@ -409,14 +340,12 @@ def quote_shell_arg(arg):
     if q in ('"', "'"):
         # Already quoted, hopefully.
         if arg[-1] != q:
-            raise CourseError(
-                'Mismatched quotes in shell argument: {}'.format(arg)
-            )
+            raise CourseError(f'Mismatched quotes in shell argument: {arg}')
         quoted = arg
     elif ('"' in arg) and ("'" in arg):
         raise CourseError(
-            ('Shell argument cannot be quoted, since it contains ' +
-             'single AND double quotes: {}').format(arg)
+            'Shell argument cannot be quoted, since it contains single AND ' +
+            f'double quotes: {arg}'
         )
     elif "'" in arg:
         quoted = '"' + arg + '"'
@@ -426,8 +355,9 @@ def quote_shell_arg(arg):
     return quoted
 
 
-def load_config(config_path, apply_defaults=True, show_warnings=False):
-    # type: (str, bool, bool) -> dict
+def load_config(config_path: str,
+                apply_defaults: bool = True,
+                show_warnings: bool = False) -> Dict[str, str]:
     """
     Load the configuration file.
 
@@ -453,9 +383,7 @@ def load_config(config_path, apply_defaults=True, show_warnings=False):
                 fields = line.split('=')
                 if len(fields) != 2:
                     bad = True
-                    printerr('"{}", line {}: Malformed line'.format(
-                        config_path, lno
-                    ))
+                    error(f'"{config_path}", line {lno}: Malformed line')
                     continue
 
                 cfg[fields[0]] = fields[1]
@@ -505,8 +433,8 @@ def load_config(config_path, apply_defaults=True, show_warnings=False):
 
         if not allow_override:
             if show_warnings:
-                warn(('''Ignoring "{}" in the configuration file, because ''' +
-                      '''it's calculated at run-time.''').format(e))
+                warn(f'Ignoring "{e}" in the configuration file, because ' +
+                     "it's calculated at run-time.")
             del cfg[e]
 
     if apply_defaults:
@@ -524,8 +452,7 @@ def load_config(config_path, apply_defaults=True, show_warnings=False):
     return cfg
 
 
-def get_self_paced_courses(cfg):
-    # type: (dict) -> Sequence[str]
+def get_self_paced_courses(cfg: Dict[str, str]) -> Sequence[str]:
     """
     Find the names of all self-paced courses by querying the local Git repo
     clone.
@@ -541,9 +468,8 @@ def get_self_paced_courses(cfg):
     for rel_path in self_paced_path.split(':'):
         self_paced_dir = os.path.join(cfg['COURSE_REPO'], rel_path)
         if not os.path.isdir(self_paced_dir):
-            debug('Directory "{}" (in SELF_PACED_PATH) does not exist.'.format(
-                self_paced_dir
-            ))
+            debug(f'Directory "{self_paced_dir}" (in SELF_PACED_PATH) ' +
+                  'does not exist.')
             continue
 
         for f in os.listdir(self_paced_dir):
@@ -558,8 +484,7 @@ def get_self_paced_courses(cfg):
             yield f
 
 
-def update_config(cfg):
-    # type: (dict) -> dict
+def update_config(cfg: Dict[str, str]) -> Dict[str, str]:
     """
     Update the configuration, setting values that depend on course name,
     which is assumed to be set in the configuration.
@@ -569,8 +494,8 @@ def update_config(cfg):
     :return: possibly adjusted configuration
     :raises CourseError: Configuration error.
     """
-    course_name = cfg.get('COURSE_NAME')
-    if not course_name:
+    course = cfg.get('COURSE_NAME')
+    if not course:
         return cfg
 
     from os.path import join, normpath
@@ -579,27 +504,22 @@ def update_config(cfg):
     repo = adj['COURSE_REPO']
 
     self_paced = get_self_paced_courses(cfg)
-    prefix = 'Self-Paced' if course_name in self_paced else ''
+    prefix = 'Self-Paced' if course in self_paced else ''
 
     adj['PREFIX'] = prefix
-    adj['COURSE_HOME'] = normpath(join(repo, 'courses', prefix, course_name))
+    adj['COURSE_HOME'] = normpath(join(repo, 'courses', prefix, course))
     if not adj.get('COURSE_YAML'):
         adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
-    adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course_name)
+    adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course)
     db_shard_home = adj.get('DB_SHARD_HOME')
     if db_shard_home:
-        adj['COURSE_REMOTE_SOURCE'] = '{}/{}/{}'.format(
-            db_shard_home, adj['SOURCE'], course_name
-        )
-        adj['COURSE_REMOTE_TARGET'] = '{}/{}/{}'.format(
-            db_shard_home, adj['TARGET'], course_name
-        )
+        adj['COURSE_REMOTE_SOURCE'] = f'{db_shard_home}/{adj["SOURCE"]}/{course}'
+        adj['COURSE_REMOTE_TARGET'] = f'{db_shard_home}/{adj["TARGET"]}/{course}'
 
     return adj
 
 
-def check_config(cfg, *keys):
-    # type: (dict, str) -> None
+def check_config(cfg: Dict[str, str], *keys: str) -> NoReturn:
     """
     Check the configuration, aborting if required items (COURSE_NAME,
     DB_SHARD_HOME, COURSE_REPO) are missing. Only useful for commands that
@@ -618,13 +538,12 @@ def check_config(cfg, *keys):
     for key in keys:
         if not cfg.get(key):
             raise CourseError(
-                ('{} must be set, either in the environment or in the ' +
-                 'configuration file.').format(key)
+                f'{key} must be set, either in the environment or in the ' +
+                'configuration file.'
             )
 
 
-def build_file_path(cfg):
-    # type: (dict) -> str
+def build_file_path(cfg: Dict[str, str]) -> NoReturn:
     """
     Return the path to the build file for the current course.
 
@@ -640,8 +559,10 @@ def build_file_path(cfg):
     return res
 
 
-def configure(cfg, config_path, key, value):
-    # type: (dict, str, str, str) -> dict
+def configure(cfg: Dict[str, str],
+              config_path: str,
+              key: str,
+              value: str) -> Dict[str, str]:
     """
     Add or update a key=value setting in both the in-memory configuration and
     the stored configuration.
@@ -663,13 +584,14 @@ def configure(cfg, config_path, key, value):
     stored_cfg[key] = value
     with open(config_path, 'w') as f:
         for k, v in sorted(stored_cfg.items()):
-            f.write('{}={}\n'.format(k, v))
+            f.write(f'{k}={v}\n')
 
     return new_cfg
 
 
-def work_on(cfg, course_name, config_path):
-    # type: (Mapping[str,str], str, str) -> Mapping[str,str]
+def work_on(cfg: Dict[str, str],
+            course_name: str,
+            config_path: str) -> Dict[str, str]:
     """
     Change the course name in the configuration. Implicitly updates the
     in-memory configuration by calling update_config().
@@ -679,11 +601,12 @@ def work_on(cfg, course_name, config_path):
     :param config_path:
     :return:
     """
-    return update_config(configure(cfg, config_path, 'COURSE_NAME', course_name))
+    return update_config(
+        configure(cfg, config_path, 'COURSE_NAME', course_name)
+    )
 
 
-def clean(cfg):
-    # type: (dict) -> None
+def clean(cfg: Dict[str, str]) -> NoReturn:
     """
     The guts of the "clean" command, this function deletes the built (target)
     notebooks for current course from the remote Databricks instance.
@@ -706,8 +629,7 @@ def clean(cfg):
                db_profile=db_profile)
 
 
-def clean_source(cfg):
-    # type: (dict) -> None
+def clean_source(cfg: Dict[str, str]) -> NoReturn:
     """
     The guts of the "clean-source" command, this function deletes the source
     notebooks for current course from the remote Databricks instance.
@@ -726,8 +648,7 @@ def clean_source(cfg):
                db_profile=db_profile)
 
 
-def download(cfg):
-    # type: (dict) -> None
+def download(cfg: Dict[str, str]) -> NoReturn:
     """
     Download the source notebooks for the current course from the Databricks
     instance and put them back into the local Git repository. Delegates the
@@ -746,8 +667,7 @@ def download(cfg):
                      verbose=False)
 
 
-def upload(cfg):
-    # type: (dict) -> None
+def upload(cfg: Dict[str, str]) -> NoReturn:
     """
     Upload the source notebooks for the current course from the local Git
     repository to the Databricks instance. Delegates the actual upload to bdc.
@@ -765,8 +685,7 @@ def upload(cfg):
                    verbose=False)
 
 
-def import_dbcs(cfg, build_dir):
-    # type: (dict, str) -> None
+def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
     """
     Find all DBC files under the build output directory for the current course,
     and upload them (import them) into the Databricks instance.
@@ -781,8 +700,7 @@ def import_dbcs(cfg, build_dir):
     remote_target = cfg['COURSE_REMOTE_TARGET']
     db_profile = cfg['DB_PROFILE']
 
-    def import_dbc(dbc):
-        # type: (str) -> None
+    def import_dbc(dbc: str) -> NoReturn:
         '''
         Import a single DBC.
 
@@ -793,19 +711,17 @@ def import_dbcs(cfg, build_dir):
         :return:
         '''
         parent_subpath = os.path.dirname(dbc)
-        dir_to_make = '{}/{}'.format(
-            remote_target, os.path.dirname(parent_subpath)
-        )
+        dir_to_make = f'{remote_target}/{os.path.dirname(parent_subpath)}'
         databricks(('workspace', 'mkdirs', dir_to_make), db_profile=db_profile)
 
         # Language is ignored by databricks, but it's a required option. <sigh>
         databricks(('workspace', 'import', '--format', 'DBC',
                     '--language', 'Python', dbc,
-                    '{}/{}'.format(remote_target, parent_subpath)),
+                    f'{remote_target}/{parent_subpath}'),
                     db_profile=db_profile)
 
 
-    print('Importing all DBCs under "{}"'.format(build_dir))
+    print(f'Importing all DBCs under "{build_dir}"')
     dbcs = []
     with working_directory(build_dir):
         for dirpath, _, filenames in os.walk('.'):
@@ -826,8 +742,7 @@ def import_dbcs(cfg, build_dir):
                 import_dbc(dbc)
 
 
-def build_local(cfg):
-    # type: (dict) -> str
+def build_local(cfg: Dict[str, str]) -> str:
     """
     Build a course without uploading the results.
 
@@ -841,7 +756,7 @@ def build_local(cfg):
     if not os.path.exists(build_file):
         die('Build file "{}" does not exist.'.format(build_file))
 
-    print("\nBuilding {}".format(course_name))
+    print(f"\nBuilding {course_name}")
     bdc.bdc_build_course(build_file,
                          dest_dir='',
                          overwrite=True,
@@ -850,8 +765,7 @@ def build_local(cfg):
     return build_file
 
 
-def build_and_upload(cfg):
-    # type: (dict) -> None
+def build_and_upload(cfg: Dict[str, str]) -> NoReturn:
     """
     Build the current course and upload (import) the built artifacts to the
     Databricks instance.
@@ -867,8 +781,7 @@ def build_and_upload(cfg):
     import_dbcs(cfg, build_dir)
 
 
-def upload_build(cfg):
-    # type: (dict) -> None
+def upload_build(cfg: Dict[str, str]) -> NoReturn:
     """
     Upload an already-built course.
 
@@ -883,8 +796,7 @@ def upload_build(cfg):
     import_dbcs(cfg, build_dir)
 
 
-def install_tools():
-    # type: () -> None
+def install_tools() -> NoReturn:
     """
     Install the build tools. Doesn't work inside a Docker container.
     """
@@ -893,8 +805,9 @@ def install_tools():
     cmd('pip install --upgrade databricks-cli')
 
 
-def browse_directory(cfg, path, subcommand):
-    # (dict, str, str) -> None
+def browse_directory(cfg: Dict[str, str],
+                     path: str,
+                     subcommand: str) -> NoReturn:
     """
     Browse a directory, using whatever tool is configured as OPEN_DIR.
     Does not work inside Docker.
@@ -906,11 +819,11 @@ def browse_directory(cfg, path, subcommand):
     :return: Nothing.
     """
     check_for_docker(subcommand)
-    cmd('{} "{}"'.format(cfg['OPEN_DIR'], path))
+    open_dir = cfg['OPEN_DIR']
+    cmd(f'{open_dir} "{path}"')
 
 
-def edit_file(cfg, path, subcommand):
-    # type: (dict, str, str) -> None
+def edit_file(cfg: Dict[str, str], path: str, subcommand: str) -> NoReturn:
     """
     Edit a file, using the configured EDITOR. Works inside Docker, provided
     EDITOR is set to something installed in the Docker instance (such as
@@ -923,11 +836,11 @@ def edit_file(cfg, path, subcommand):
     :return: Nothing
     """
     check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
-    cmd('{} "{}"'.format(cfg['EDITOR'], path))
+    editor = cfg['EDITOR']
+    cmd(f'{editor} "{path}"')
 
 
-def edit_config(cfg):
-    # type: (dict) -> dict
+def edit_config(cfg: Dict[str, str]) -> Dict[str, str]:
     """
     Edit the "course" configuration file, using the configured EDITOR. Works
     inside Docker, provided EDITOR is set to something installed in the Docker
@@ -943,8 +856,7 @@ def edit_config(cfg):
     return load_config(CONFIG_PATH, show_warnings=True)
 
 
-def git_status(cfg):
-    # type: (dict) -> None
+def git_status(cfg: Dict[str, str]) -> NoReturn:
     """
     Runs a "git status" against the local Git repository.
 
@@ -953,13 +865,12 @@ def git_status(cfg):
     :return: Nothing
     """
     course_repo = cfg['COURSE_REPO']
-    print('+ cd {}'.format(course_repo))
+    print(f'+ cd {course_repo}')
     with working_directory(course_repo):
         cmd("git status")
 
 
-def git_diff(cfg):
-    # type: (dict) -> None
+def git_diff(cfg: Dict[str, str]) -> NoReturn:
     """
     Runs a "git diff" against the local Git repository.
 
@@ -975,11 +886,10 @@ def git_diff(cfg):
         if not pager:
             cmd("git status")
         else:
-            cmd("git status | {}".format(pager))
+            cmd(f"git status | {pager}")
 
 
-def git_difftool(cfg):
-    # type: (dict) -> None
+def git_difftool(cfg: Dict[str, str]) -> NoReturn:
     """
     Runs a "git difftool", using "opendiff", against the local Git repository.
     Does not work inside a Docker container.
@@ -995,8 +905,7 @@ def git_difftool(cfg):
         cmd("git difftool --tool=opendiff --no-prompt")
 
 
-def deploy_images(cfg):
-    # type: (dict) -> None
+def deploy_images(cfg: Dict[str, str]) -> NoReturn:
     """
     Deploy the images for a course to the appropriate S3 location.
 
@@ -1009,8 +918,9 @@ def deploy_images(cfg):
     warn("'deploy-images' is not yet implemented.")
 
 
-def grep(cfg, pattern, case_blind=False):
-    # type: (dict, str, bool) -> None
+def grep(cfg: Dict[str, str],
+         pattern: str,
+         case_blind: bool = False) -> NoReturn:
     """
     Searches for the specified regular expression in every notebook within
     the current course, printing the colorized matches to standard output.
@@ -1027,8 +937,7 @@ def grep(cfg, pattern, case_blind=False):
     :return: Nothing
     """
 
-    def grep_one(path, r, out):
-        # type: (str, Pattern, file) -> None
+    def grep_one(path: str, r: Pattern, out: TextIO) -> NoReturn:
         home = os.environ['HOME']
         if home:
             printable_path = os.path.join(
@@ -1056,7 +965,7 @@ def grep(cfg, pattern, case_blind=False):
                     matches.append(line)
 
         if matches:
-            out.write('\n\n=== {}\n\n'.format(printable_path))
+            out.write(f'\n\n=== {printable_path}\n\n')
             out.write(''.join(matches))
 
     r = None
@@ -1064,9 +973,7 @@ def grep(cfg, pattern, case_blind=False):
         flags = 0 if not case_blind else re.IGNORECASE
         r = re.compile(pattern, flags=flags)
     except Exception as e:
-        die('Cannot compile regular expression "{}": {}'.format(
-            pattern, e.message
-        ))
+        die(f'Cannot compile regular expression "{pattern}": {e}')
 
     check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
     with pager(cfg) as out:
@@ -1074,8 +981,7 @@ def grep(cfg, pattern, case_blind=False):
             grep_one(nb, r, out)
 
 
-def sed(cfg, sed_cmd):
-    # type: (dict, str) -> None
+def sed(cfg: Dict[str, str], sed_cmd: str) -> NoReturn:
     """
     Runs an in-place "sed" edit against every notebook in the course, using
     "sed -E". Requires a version of "sed" that supports the "-i" (in-place
@@ -1094,24 +1000,25 @@ def sed(cfg, sed_cmd):
             # Already quoted, hopefully.
             if sed_cmd[-1] != q:
                 raise CourseError(
-                'Mismatched quotes in sed argument: {}'.format(sed_cmd)
+                    f'Mismatched quotes in sed argument: {sed_cmd}'
                 )
             quoted = sed_cmd
         elif ('"' in sed_cmd) and ("'" in sed_cmd):
             raise CourseError(
-                ('"sed" argument cannot be quoted, since it contains ' +
-                 'single AND double quotes: {}').format(sed_cmd)
+                '"sed" argument cannot be quoted, since it contains ' +
+                f'single AND double quotes: {sed_cmd}'
              )
         elif "'" in sed_cmd:
             quoted = '"' + sed_cmd + '"'
         else:
             quoted = "'" + sed_cmd + "'"
 
-        cmd('sed -E -i "" -e {} "{}"'.format(quoted, nb))
+        cmd(f'sed -E -i "" -e {quoted} "{nb}"')
 
 
-def run_command_on_notebooks(cfg, command, args):
-    # type: (dict, str, Sequence[str]) -> None
+def run_command_on_notebooks(cfg: Dict[str, str],
+                             command: str,
+                             args: Sequence[str]) -> NoReturn:
     """
     Runs a command on every notebook in the current course.
 
@@ -1124,25 +1031,23 @@ def run_command_on_notebooks(cfg, command, args):
     check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
     for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
         if args:
-            quoted = [quote_shell_arg(arg) for arg in args]
-            shell_command = '{} {} {}'.format(command, ' '.join(quoted), nb)
+            quoted = ' '.join([quote_shell_arg(arg) for arg in args])
+            shell_command = f'{command} {quoted} {nb}'
         else:
-            shell_command = '{} {}'.format(command, nb)
+            shell_command = f'{command} {nb}'
 
         try:
-            cmd("{}".format(shell_command))
+            cmd(shell_command)
         except CourseError as e:
-            warn(e.message)
+            warn(str(e))
 
 
-def help(cfg):
-    # type: (dict) -> None
+def help(cfg: Dict[str, str]) -> NoReturn:
     with pager(cfg) as out:
         out.write(USAGE)
 
 
-def print_tool_versions():
-    # type: () -> None
+def print_tool_versions() -> NoReturn:
     import gendbc
     import master_parse
     import db_edu_util
@@ -1151,16 +1056,15 @@ def print_tool_versions():
     s = db_cli.databricks(['--version'], capture_stdout=True).strip()
     db_version = re.sub(r'^.*(\d+\.\d+\.\d+).*$', r'\1', s)
 
-    print("course:                {}".format(VERSION))
-    print("bdc:                   {}".format(bdc.VERSION))
-    print("gendbc:                {}".format(gendbc.VERSION))
-    print("master_parse:          {}".format(master_parse.VERSION))
-    print("db_edu_util (library): {}".format(db_edu_util.VERSION))
-    print("databricks_cli:        {}".format(db_version))
+    print(f"course:                {VERSION}")
+    print(f"bdc:                   {bdc.VERSION}")
+    print(f"gendbc:                {gendbc.VERSION}")
+    print(f"master_parse:          {master_parse.VERSION}")
+    print(f"db_edu_util (library): {db_edu_util.VERSION}")
+    print(f"databricks_cli:        {db_version}")
 
 
-def which(cfg):
-    # type: (dict) -> None
+def which(cfg: Dict[str, str]) -> NoReturn:
     course_name = cfg.get('COURSE_NAME')
     if course_name:
         print(cfg['COURSE_NAME'])
@@ -1173,9 +1077,8 @@ def which(cfg):
 # -----------------------------------------------------------------------------
 
 def main():
-    global debugging
     if os.environ.get('COURSE_DEBUG', 'false') == 'true':
-        debugging = True
+        set_debug(True)
 
     try:
         # Load the configuration and then run it through update_config() to
@@ -1348,18 +1251,18 @@ def main():
                 print(hdr)
                 print('-' * len(hdr))
                 for key in sorted(cfg.keys()):
-                    print('{}="{}"'.format(key, cfg[key]))
+                    print(f'{key}="{cfg[key]}"')
 
             else:
-                die('"{}" is not a valid "course" subcommand.'.format(cmd))
+                die(f'"{cmd}" is not a valid "course" subcommand.')
 
             i += 1
 
     except CourseError as e:
-        printerr(e.message)
+        error(str(e))
 
     except KeyboardInterrupt:
-        printerr('\n*** Interrupted.')
+        error('\n*** Interrupted.')
 
 if __name__ == '__main__':
     main()

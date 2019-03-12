@@ -1,5 +1,15 @@
 # Change Log for Master Parse Tool
 
+**Version 1.20.0**
+
+- Added support for a new `PROFILES` tag that allows arbitrary profiles, not
+  just Amazon and Azure. `AMAZON_ONLY` and `AZURE_ONLY` are still supported,
+  for backward compatibility.
+- Added the ability to consolidate all instructor notes in a notebook into a
+  single file.
+- Fixed bug leading to extra blank lines in native code cells under certain
+  circumstances.
+
 **Version 1.19.0**
 
 - Mustache parsing logic now contains some simple checks for bad Mustache

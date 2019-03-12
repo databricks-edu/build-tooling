@@ -476,12 +476,17 @@ def get_self_paced_courses(cfg: Dict[str, str]) -> Sequence[str]:
             if f[0] == '.':
                 continue
             full_path = os.path.join(self_paced_dir, f)
+
             if not os.path.isdir(full_path):
                 continue
-            build = os.path.join(full_path, "build.yaml")
-            if not os.path.exists(build):
-                continue
-            yield f
+            for course_file in os.listdir(full_path):
+                p = os.path.join(full_path, course_file)
+                if os.path.isdir(p):
+                    continue
+                _, ext = os.path.splitext(course_file)
+                if course_file.startswith("build") and ext == '.yaml':
+                    yield f
+                    break
 
 
 def update_config(cfg: Dict[str, str]) -> Dict[str, str]:
@@ -503,7 +508,7 @@ def update_config(cfg: Dict[str, str]) -> Dict[str, str]:
     adj = cfg.copy()
     repo = adj['COURSE_REPO']
 
-    self_paced = get_self_paced_courses(cfg)
+    self_paced = list(get_self_paced_courses(cfg))
     prefix = 'Self-Paced' if course in self_paced else ''
 
     adj['PREFIX'] = prefix

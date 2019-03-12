@@ -1,3 +1,5 @@
+![Travis](https://travis-ci.org/databricks-edu/build-tooling.svg?branch=master)
+
 # build-tools
 
 This directory contains source for the various build tools used during

@@ -40,36 +40,12 @@ def run_cmd(command_string):
     except OSError as e:
         print(f'Command failed: {e}', file=sys.stderr)
 
-class Test(Command):
-    description = 'run the Nose tests'
-
-    user_options = []
-
-    def __init__(self, dist):
-        Command.__init__(self, dist)
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        # Convention: Run the module to run the tests.
-        for module_path in ('bdc', 'master_parse', 'db_edu_util',):
-            with chdir(module_path):
-                print('\nRunning tests in ' + module_path)
-                run_cmd('python setup.py test')
-
 
 setup(
     name='db-build-tooling',
     packages=[],
     install_requires=[
     ],
-    cmdclass = {
-        'test': Test
-    },
     version=VERSION,
     description='Wrapper package for Databricks Training build tools',
     author='Databricks Education Team',

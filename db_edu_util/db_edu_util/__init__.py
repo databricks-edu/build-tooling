@@ -10,6 +10,7 @@ import os
 import sys
 from itertools import dropwhile
 from typing import Optional, NoReturn
+import itertools
 
 __all__ = ['all_pred', 'notebooktools', 'db_cli', 'EnhancedTextWrapper', 'die',
            'set_verbosity', 'verbosity_is_enabled', 'wrap2stdout', 'verbose',
@@ -207,6 +208,40 @@ def error(msg: str) -> NoReturn:
     print(_error_wrapper.fill(f"{_ERROR_PREFIX}{msg}"))
 
 
+def strip_margin(s: str, margin_char: str = '|') -> str:
+    """
+    Akin to Scala's stripMargin() method on string, this function takes a
+    multiline string and strips leading white space up to a margin character.
+    It allows you to express multiline strings like this:
+
+        s = '''|line 1
+               |line 2
+               |line 3
+            '''
+
+    Then, calling strip_margin on the string results in:
+
+        '''line 1
+        line 2
+        line 3
+        '''
+
+    :param s:           the multiline string
+    :param margin_char: the margin character, defaulting to '|'
+
+    :return: the stripped string
+    """
+    assert len(margin_char) == 1
+    def fix_line(line: str) -> str:
+        adj = ''.join(itertools.dropwhile(lambda c: c in [' ', '\t'], line))
+        if (len(adj) > 0) and (adj[0] == margin_char):
+            return adj[1:]
+        else:
+            return adj
+
+    return '\n'.join(map(fix_line, s.split('\n')))
+
+
 def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
     """
     Similar to the built-in `all()` function, this function ensures that
@@ -217,19 +252,6 @@ def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
     :param iterable: the iterable
 
     :return: `True` if all elements pass, `False` otherwise
-
-    >>> all_pred(lambda x: x > 0, [10, 20, 30, 40])
-    True
-    >>> all_pred(lambda x: x > 0, [0, 20, 30, 40])
-    False
-    >>> all_pred(lambda x: x > 0, [20, 30, 0, 40])
-    False
-    >>> import string
-    >>> all_pred(lambda c: c in string.ascii_uppercase, string.ascii_uppercase)
-    True
-    >>> all_pred(lambda c: c in string.ascii_uppercase, string.ascii_lowercase)
-    False
-    >>> all_pred(lambda c: c in string.ascii_uppercase, 'SADLFKJaLKJSDF')
     False
     """
     for i in iterable:
@@ -243,18 +265,6 @@ def squeeze_blank_lines(s: str) -> str:
     """
     Squeeze multiple blank lines to a single blank line. Also gets rid of
     any leading blank lines.
-
-    >>> s = 'abc\\n\\n\\ndef\\nghi\\n\\n\\n\\n\\n'
-    >>> squeeze_blank_lines(s)
-    'abc\\n\\ndef\\nghi\\n'
-    >>> squeeze_blank_lines('\\n\\n\\n'.join(['a', 'b', 'c']))
-    'a\\n\\nb\\n\\nc\\n'
-    >>> squeeze_blank_lines('')
-    ''
-    >>> squeeze_blank_lines('\\n\\n')
-    '\\n'
-    >>> squeeze_blank_lines('\\n\\na\\n\\nb\\nc')
-    'a\\n\\nb\\nc'
     """
     saw_blank = False
     if len(s.strip(' \t')) == 0:

@@ -703,23 +703,23 @@ class BuildData(DefaultStrMixin):
         """
         Create a new BuildData object.
 
-        :param build_file_path:       path to the build file, for reference
-        :param top_dbc_folder_name:   top-level directory in DBC, or None
-        :param source_base:           value of source base field
-        :param output_info:           info about the output directories and DBCs
-        :param course_info:           parsed CourseInfo object
-        :param notebooks:             list of parsed Notebook objects
-        :param slides:                parsed SlideInfo object
-        :param datasets:              parsed DatasetData object
-        :param misc_files:            parsed MiscFileData object
-        :param keep_lab_dirs:         value of keep_lab_dirs setting
-        :param notebook_heading:      parsed NotebookHeading object
-        :param markdown_cfg:          parsed MarkdownInfo object
-        :param notebook_type_map:     a dict mapping notebook types to strings.
-                                      Keys are from the NotebookType enum.
-        :param profiles:              set of profiles, if any
-        :param variables:             a map of user-defined variables
-        :param bundle_info            Bundle data, if any
+        :param build_file_path:     path to the build file, for reference
+        :param top_dbc_folder_name: top-level directory in DBC, or None
+        :param source_base:         value of source base field
+        :param output_info:         info about the output directories and DBCs
+        :param course_info:         parsed CourseInfo object
+        :param notebooks:           list of parsed Notebook objects
+        :param slides:              parsed SlideInfo object
+        :param datasets:            parsed DatasetData object
+        :param misc_files:          parsed MiscFileData object
+        :param keep_lab_dirs:       value of keep_lab_dirs setting
+        :param notebook_heading:    parsed NotebookHeading object
+        :param markdown_cfg:        parsed MarkdownInfo object
+        :param notebook_type_map:   a dict mapping notebook types to strings.
+                                    Keys are from the NotebookType enum.
+        :param profiles:            set of profiles, if any
+        :param variables:           a map of user-defined variables
+        :param bundle_info          Bundle data, if any
         """
         super(BuildData, self).__init__()
         self.build_file_path = build_file_path
@@ -1635,7 +1635,6 @@ def _convert_and_copy_info_file(src: str,
     :param src:    the source file
     :param dest:   the destination file (not directory)
     :param build:  the parsed build information
-
     """
     src_type = _get_type(src)
     dest_type = _get_type(dest)
@@ -2422,6 +2421,7 @@ def check_for_extra_up_down_mappings(notebooks: Dict[str, str]) -> Sequence[Tupl
         res[src] = targets
 
     return tuple(res.items())
+
 
 def upload_notebooks(build: BuildData,
                      shard_path: str,

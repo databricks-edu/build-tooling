@@ -1378,7 +1378,7 @@ def make_magic(regex_token: str, must_be_word: bool = False) -> Pattern:
         #
         # If you don't understand this, DON'T modify it until you do. It's
         # fragile.
-        adj_token = regex_token + '(?:\Z|\s+)'
+        adj_token = regex_token + r'(?:\Z|\s+)'
     else:
         adj_token = regex_token
 

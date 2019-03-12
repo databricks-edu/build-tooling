@@ -35,26 +35,6 @@ def run_cmd(command_string):
     except OSError as e:
         print(f'Command failed: {e}', file=sys.stderr)
 
-class Test(Command):
-    description = 'run the Nose tests'
-
-    user_options = []
-
-    def __init__(self, dist):
-        Command.__init__(self, dist)
-
-    def initialize_options(self):
-        pass
-
-    def finalize_options(self):
-        pass
-
-    def run(self):
-        # Convention: Run the module to run the tests.
-        for module_path in ('master_parse/InlineToken.py',):
-            run_cmd('python ' + module_path)
-
-
 setup(
     name='master_parse',
     packages=['master_parse'],
@@ -64,9 +44,6 @@ setup(
         'pystache == 0.5.4',
         'nbformat==4.4.0',
     ],
-    cmdclass = {
-        'test': Test
-    },
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',
     license="Creative Commons Attribution-NonCommercial 4.0 International",

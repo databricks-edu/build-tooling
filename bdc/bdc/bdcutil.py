@@ -153,31 +153,6 @@ def parse_version_string(version: str) -> Tuple[int, int]:
     :param version:  the string to parse
 
     :return:  A `(major, minor)` tuple of ints.
-
-    >>> parse_version_string("2.0.3")
-    (2, 0)
-    >>> parse_version_string("2.3")
-    (2, 3)
-    >>> parse_version_string("2")
-    Traceback (most recent call last):
-    ...
-    ValueError: ...
-    >>> parse_version_string("2.4.3.1")
-    Traceback (most recent call last):
-    ...
-    ValueError: "2.4.3.1" is a malformed version string
-    >>> parse_version_string("abc")
-    Traceback (most recent call last):
-    ...
-    ValueError: "abc" is a malformed version string
-    >>> parse_version_string("a.b.c")
-    Traceback (most recent call last):
-    ...
-    ValueError: "a.b.c" is a malformed version string...
-    >>> parse_version_string("1.2.3-RC2")
-    (1, 2)
-    >>> parse_version_string("1.2.3-SNAPSHOT")
-    (1, 2)
     """
     nums = version.split('.')
     if len(nums) not in (2, 3):
@@ -200,13 +175,6 @@ def flatten(it: Iterable[Any]) -> Generator[Any, Any, None]:
     :param it: the iterable to flatten
 
     :return: a generator for the recursively flattened result
-
-    >>> list(flatten(['foobar', range(1, 3), ['a', 'b', range(4, 6)], 'xyz']))
-    ['foobar', 1, 2, 'a', 'b', 4, 5, 'xyz']
-    >>> list(flatten([(1, 2, (3, 4), 5), [6, 7, [[8, 9]], 10]]))
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    >>> list(flatten([(1, 2, (3, 4), 5), [6, 7, [[8, 9]], 10], range(11, 20)]))
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     """
 
     # Special case for strings: Since a string is iterable, but cannot be
@@ -244,20 +212,6 @@ def merge_dicts(dict1:  Dict[str, Any],
 
     :return: The merged dictionary. Keys in dict2 overwrite duplicate keys in
              dict1
-
-    >>> x = {'a': 10, 'b': 30, 'c': 'hello'}
-    >>> y = {'d': 40, 'b': 'Bee', 'x': 'Ecks'}
-    >>> sorted(list(merge_dicts(x, y).items()))
-    [('a', 10), ('b', 'Bee'), ('c', 'hello'), ('d', 40), ('x', 'Ecks')]
-    >>> sorted(list(merge_dicts(y, x).items()))
-    [('a', 10), ('b', 30), ('c', 'hello'), ('d', 40), ('x', 'Ecks')]
-    >>> sorted(list(x.items())) # should not be modified
-    [('a', 10), ('b', 30), ('c', 'hello')]
-    >>> sorted(list(y.items())) # should not be modified
-    [('b', 'Bee'), ('d', 40), ('x', 'Ecks')]
-    >>> z = {'z': 'Frammis', 'c': 'Cee'}
-    >>> sorted(list(merge_dicts(x, y, z).items()))
-    [('a', 10), ('b', 'Bee'), ('c', 'Cee'), ('d', 40), ('x', 'Ecks'), ('z', 'Frammis')]
     """
     res = dict1.copy()
     res.update(dict2)
@@ -274,27 +228,6 @@ def bool_value(s: Union[str, int]) -> bool:
     :param s: the string
 
     :return: the boolean
-
-    >>> bool_value('0')
-    False
-    >>> bool_value(100)
-    True
-    >>> bool_value(0)
-    False
-    >>> bool_value('true')
-    True
-    >>> bool_value('TRUE')
-    True
-    >>> bool_value('yes')
-    True
-    >>> bool_value('YeS')
-    True
-    >>> bool_value('no')
-    False
-    >>> bool_value('booyah')
-    Traceback (most recent call last):
-    ...
-    ValueError: Bad boolean value: "booyah"
     """
     if isinstance(s, bool):
         return s
@@ -324,27 +257,6 @@ def bool_field(d: Dict[str, Any],
     :return: the value
 
     :raise ValueError on error
-
-    >>> d = {'a': 0, 'b': 10, 'c': 'false', 'd': 'TRUE', 'e': 'No',\
-             'f': 'yeS', 'g': True, 'h': 'hello'}
-    >>> bool_field(d, 'a')
-    False
-    >>> bool_field(d, 'b')
-    True
-    >>> bool_field(d, 'c')
-    False
-    >>> bool_field(d, 'd')
-    True
-    >>> bool_field(d, 'e')
-    False
-    >>> bool_field(d, 'f')
-    True
-    >>> bool_field(d, 'g')
-    True
-    >>> bool_field(d, 'h')
-    Traceback (most recent call last):
-    ...
-    ValueError: Bad boolean value: "hello"
     """
     return bool_value(d.get(key, default))
 
@@ -370,13 +282,6 @@ def find_in_path(command: str) -> str:
 
     :param command:  the command to find
     :return: the location. Throws an exception otherwise.
-
-    >>> os.path.basename(find_in_path('python'))
-    'python'
-    >>> find_in_path('asdhf-asdiuq')
-    Traceback (most recent call last):
-    ...
-    Exception: Can't find "asdhf-asdiuq" in PATH.
     """
     path = [p for p in os.getenv('PATH', '').split(os.pathsep) if len(p) > 0]
     for d in path:
@@ -428,9 +333,6 @@ def joinpath(*pieces: str) -> str:
     :param pieces: the path pieces
 
     :return: the joined an normalized path
-
-    >>> joinpath('a///', 'b/') if os.name == 'posix' else 'a/b'
-    'a/b'
     """
     return os.path.normpath(os.path.join(*pieces))
 
@@ -490,27 +392,27 @@ def copy(src: str,
 
 
 def has_extension(path: str) -> bool:
-    '''
+    """
     Simple convenience function that uses os.path.splitext() to determine
     whether a file has an extension or not.
 
     :param path: the path
 
     :return: True or False
-    '''
+    """
     (_, ext) = os.path.splitext(path)
     return (ext is not None) and (len(ext) > 0)
 
 
 def is_text_file(path: str) -> bool:
-    '''
+    """
     Determine whether a file is a text file or not. This determination is
     based solely on its MIME type, which is based off the file extension.
 
     :param path: the path to the file
 
     :return: True or False
-    '''
+    """
     is_text = False
     if is_html(path) or is_markdown(path):
         is_text = True
@@ -524,39 +426,39 @@ def is_text_file(path: str) -> bool:
 
 
 def is_pdf(path: str) -> bool:
-    '''
+    """
     Determine whether a file is a PDF file or not. This determination is made
     solely on the MIME type, which is based off the file extension.
 
     :param path: the path to the file
 
     :return: True or False
-    '''
+    """
     (mime_type, _) = mimetypes.guess_type(path)
     return mime_type == 'application/pdf'
 
 
 def is_html(path: str) -> bool:
-    '''
+    """
     Determine whether a file is an HTML file or not.
 
     :param path: the path to the file
 
     :return: True or False
-    '''
+    """
     import mimetypes
     (mime_type, _) = mimetypes.guess_type(path)
     return mime_type in ('application/xhtml+xml', 'text/html')
 
 
 def is_markdown(path: str) -> bool:
-    '''
+    """
     Determine whether a file is a Markdown file or not.
 
     :param path: the path to the file
 
     :return: True or False
-    '''
+    """
     (_, extension) = os.path.splitext(path)
     return extension.lower() in ['.md', '.markdown']
 
@@ -600,12 +502,12 @@ def markdown_to_html(markdown: str,
 
 
 def html_to_pdf(html: str, pdf_out: str) -> NoReturn:
-    '''
+    """
     Convert an HTML document to PDF, writing it to the specified PDF file.
 
     :param html:     the path to the HTML file
     :param pdf_out:  the output PDF file
-    '''
+    """
     import warnings
 
     # Ignore user warnings emitted by the WeasyPrint package.
@@ -649,16 +551,6 @@ def dict_get_and_del(d: Dict[str, Any],
     :param default:  the default value, if the key isn't present
 
     :return: The value, with d possibly modified
-
-    >>> d = {'a': 10, 'b': 20, 'c': 30}
-    >>> dict_get_and_del(d, 'a')
-    10
-    >>> sorted(list(d.items()))
-    [('b', 20), ('c', 30)]
-    >>> dict_get_and_del(d, 'x', -1)
-    -1
-    >>> sorted(list(d.items()))
-    [('b', 20), ('c', 30)]
     """
     if key in d:
         res = d[key]
@@ -717,17 +609,6 @@ def matches_variable_ref(patterns: Sequence[Pattern],
              the portion of the string preceding the variable reference,
              the variable reference, and the portion of the string following
              the variable reference
-
-    >>> pats = variable_ref_patterns
-    >>> matches_variable_ref(pats('foo'), '$foo')
-    ('', '$foo', '')
-    >>> matches_variable_ref(pats('hello'), 'This is ${hello} a')
-    ('This is ', '${hello}', ' a')
-    >>> matches_variable_ref(pats('foobar'), "abc $bar cdef.")
-    >>> matches_variable_ref(pats('nb'), '$foo bar ${nb == "abc" ? "one" : "two"}')
-    ('$foo bar ', '${nb == "abc" ? "one" : "two"}', '')
-    >>> matches_variable_ref(pats('nb'), '$foo bar ${nb=="abc"?"one":"two"}')
-    ('$foo bar ', '${nb=="abc"?"one":"two"}', '')
     """
 
     for p in patterns:
@@ -999,164 +880,6 @@ class VariableSubstituter(object):
       undefined variables. (This behavior differs from `string.Template`)
 
     Variable identifiers can consist of alphanumeric and underscore characters.
-
-    >>> template = '$foo $$ ${bar} ${a == "hello" ? "woof" : "x"}'
-    >>> v = VariableSubstituter(template)
-    >>> v.template == template
-    True
-    >>> v.substitute({'foo': 'FOO', 'bar': 'BAR', 'a': 'hello'})
-    'FOO $ BAR woof'
-    >>> v.substitute({'foo': 'FOO', 'a': 'hello'})
-    Traceback (most recent call last):
-    ...
-    KeyError: 'bar'
-    >>> v.safe_substitute({'foo': 'FOO', 'a': 'hello'})
-    'FOO $  woof'
-    >>> v = VariableSubstituter('${foo $bar')
-    Traceback (most recent call last):
-    ...
-    VariableSubstituterParseError: Failed to parse ...
-    >>> v = VariableSubstituter('${foo} $bar')
-    >>> v.substitute({'foo': 10, 'bar': 20})
-    '10 20'
-    >>> v.substitute({'foo': '', 'bar': ''})
-    ' '
-    >>> v = VariableSubstituter('$foo bar ${baz/[a-z]/x/gi}')
-    >>> v.substitute({'foo': 'Jimmy', 'baz': 'John'})
-    'Jimmy bar xxxx'
-    >>> v = VariableSubstituter('$foo bar ${baz/[a-z]\/[a-z]/x\/y/i}')
-    >>> v.substitute({'foo': 'Jimmy', 'baz': 'b/d/c/e'})
-    'Jimmy bar x/y/c/e'
-    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y|i}')
-    >>> v.substitute({'foo': 'Jimmy', 'baz': 'b/d/c/e'})
-    'Jimmy bar x/y/c/e'
-    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y|igx}')
-    Traceback (most recent call last):
-    ...
-    VariableSubstituterParseError: Failed to parse ...
-    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y') # missing last |
-    Traceback (most recent call last):
-    ...
-    VariableSubstituterParseError: Failed to parse ...
-    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y|') # no }
-    Traceback (most recent call last):
-    ...
-    VariableSubstituterParseError: Failed to parse ...
-    >>> v = VariableSubstituter('$foo bar ${baz|[a-z]/[a-z]|x/y|}') # no flags
-    >>> v.substitute({'foo': 'Jimmy', 'baz': 'B/d/c/e'})
-    'Jimmy bar B/x/y/e'
-    >>> v = VariableSubstituter('${foo|[a-z]+/\d+|FOOBAR|g}')
-    >>> v.substitute({'foo': 'abcdef/123/999-/vbn/789'})
-    'FOOBAR/999-/FOOBAR'
-    >>> v = VariableSubstituter('${file|^(\d+)|$1s|g}')
-    >>> v.substitute({'file': '01-Why-Spark.py'})
-    '01s-Why-Spark.py'
-    >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2|g}')
-    >>> v.substitute({'file': '01-Why-Spark.py'})
-    '01s-Why-Spark.py'
-    >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2$3|g}')
-    Traceback (most recent call last):
-    ...
-    VariableSubstituterParseError: Failed to parse ...non-existent group...
-    >>> v = VariableSubstituter('${file|^(\d+)(-.*)$|$1s$2\$4\$2|}')
-    >>> v.substitute({'file': '01-Why-Spark.py'})
-    '01s-Why-Spark.py$4$2'
-    >>> v = VariableSubstituter('${file|abcdef|ZYXWVU|}')
-    >>> v.substitute({'file': 'abcdef abcdef'})
-    'ZYXWVU abcdef'
-    >>> v.substitute({'file': 'foobar'})
-    'foobar'
-    >>> v = VariableSubstituter('${file|^[.*$|x|}')
-    Traceback (most recent call last):
-    ...
-    VariableSubstituterParseError: Failed to parse ...Bad regular expression ...
-    >>> v = VariableSubstituter('${file/abc//}')
-    >>> v.substitute({'file': 'abc123abc'})
-    '123abc'
-    >>> v = VariableSubstituter('${file/abc//g}')
-    >>> v.substitute({'file': 'abc123abc'})
-    '123'
-    >>> v = VariableSubstituter('${file/\d//g}')
-    >>> v.substitute({'file': 'abc123abc2'})
-    'abcabc'
-    >>> v = VariableSubstituter('${file/\d//}')
-    >>> v.substitute({'file': 'abc123abc2'})
-    'abc23abc2'
-    >>> v = VariableSubstituter(r'${file/\.py$//}')
-    >>> v.substitute({'file': 'Foobar.py'})
-    'Foobar'
-    >>> v = VariableSubstituter(r'${foo == "$bar" ? "BAR" : "NOT BAR"}')
-    >>> v.substitute({"foo": "x", "bar": "y"})
-    'NOT BAR'
-    >>> v.substitute({"foo": "x", "bar": "x"})
-    'BAR'
-    >>> v = VariableSubstituter(r'''${foo == "$bar" ? "It matches $$bar." : "It's $foo, not $bar"}''')
-    >>> v.substitute({"foo": "hello", "bar": "hello"})
-    'It matches $bar.'
-    >>> v.substitute({"foo": "hello", "bar": "goodbye"})
-    "It's hello, not goodbye"
-    >>> v = VariableSubstituter(r'''${x == "abc${foo}def" ? "YES" : "NO"}''')
-    >>> v.substitute({"foo": "quux", "x": "abcquuxdef"})
-    'YES'
-    >>> v.substitute({"foo": "quux", "x": "abc---def"})
-    'NO'
-    >>> v = VariableSubstituter(r'''${foo == "ab\\"" ?  "YES" : "NO"}''')
-    >>> v.substitute({'foo': 'xxx'})
-    'NO'
-    >>> v.substitute({'foo': 'ab"'})
-    'YES'
-    >>> v = VariableSubstituter(r'\\"a\\"b\\"c\\"d\\"')
-    >>> v.substitute({})
-    '\"a\"b\"c\"d\"'
-    >>> v = VariableSubstituter(r'${x == "ab\$c${foo}def" ? "YES" : "NO"}')
-    >>> v.substitute({"foo": "quux", "x": "abcquuxdef"})
-    'NO'
-    >>> v.substitute({"foo": "quux", "x": "ab$cquuxdef"})
-    'YES'
-    >>> v = VariableSubstituter(r'$foo ${foo} ${foo[0]} ${foo[-1]} ${foo[2:-1]} ${foo[-11:0]}')
-    >>> v.substitute({'foo': "Boy, howdy"})
-    'Boy, howdy Boy, howdy B y y, howd '
-    >>> v = VariableSubstituter('${foo[]}')
-    Traceback (most recent call last):
-    ...
-    VariableSubstituterParseError: Failed to parse ...
-    >>> v = VariableSubstituter('${foo[:]} $foo ${foo}')
-    >>> v.substitute({'foo': 'hello'})
-    'hello hello hello'
-    >>> v = VariableSubstituter('${foo[2:]}')
-    >>> v.substitute({'foo': 'hello'})
-    'llo'
-    >>> v = VariableSubstituter('${foo[:2]}')
-    >>> v.substitute({'foo': 'hello'})
-    'he'
-    >>> v = VariableSubstituter('${foo[100000]}')
-    >>> v.substitute({'foo': 'hello'})
-    'o'
-    >>> v = VariableSubstituter('${foo[1:100000000]}')
-    >>> v.substitute({'foo': 'hello'})
-    'ello'
-    >>> v = VariableSubstituter('${x[0]}')
-    >>> v.substitute({'x': ''})
-    ''
-    >>> v = VariableSubstituter('${x[10000]}')
-    >>> v.substitute({'x': ''})
-    ''
-    >>> v = VariableSubstituter(r'${foo == "abc" ? "${bar[0]}" : "${bar[1]}"}')
-    >>> v.substitute({'foo': 'abc', 'bar': 'WERTYU'})
-    'W'
-    >>> v.substitute({'foo': 'xxx', 'bar': 'WERTYU'})
-    'E'
-    >>> v = VariableSubstituter(r'${file/^\d+/X${bar[2]}/}')
-    >>> v.substitute({'file': '01-abc', 'bar': "ABC"})
-    'XC-abc'
-    >>> v.substitute({'file': '01-abc', 'bar': "A"})
-    'XA-abc'
-    >>> v = VariableSubstituter(r'${file/^\d+/X${bar[2]}-$baz/}')
-    >>> v.substitute({'file': '01-abc', 'bar': 'tuvw', 'baz': '!!'})
-    'Xv-!!-abc'
-    >>> v = VariableSubstituter(r'${file/^\d+-(.*)$/X${bar[0:2]}-$baz.$1/}')
-    >>> v.substitute({'file': '01-abc', 'bar': 'tuvw', 'baz': '!!'})
-    'Xtu-!!.abc'
     """
     def __init__(self, template: str):
         """

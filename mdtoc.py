@@ -62,10 +62,14 @@ for line in codecs.open(sys.argv[1], mode='r', encoding='utf-8').readlines():
     if level > max_level:
         continue
 
-    link = '#' + text.lower().replace(' ', '-').replace(r'`', '').replace('\\', '')
+    link_id = ''.join(
+        [c for c in text.lower().replace(' ', '-')
+         if c not in ['\\', '.', ',', '`', '`', '"', "'"]]
+    )
+    link = '#' + link_id
 
     indent = ' ' * 4 * level
 
     print(f'{indent}- [{text}]({link})')
 
-    
+

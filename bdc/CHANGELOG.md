@@ -1,6 +1,11 @@
 # Change Log for BDC
 
-### Version 1.30.0
+**Version 1.31.0**
+
+- Updated to use new `db_cli.Workspace` class to interact with the Databricks
+  workspace.
+
+**Version 1.30.0**
 
 - Now implemented in Python 3. Will _not_ work with Python 2.
 - Added support for arbitrary build profiles.
@@ -8,15 +13,15 @@
 - Added support for an include directive in the `build.yaml` file 
   (e.g., `#include "file.yaml"`)
 
-### Version 1.29.0
+**Version 1.29.0**
 
 - `bdc` now invokes `databricks` via its API, rather than by shelling out.
 
-### Version 1.28.0
+**Version 1.28.0**
 
 - A file in the `misc_files` section can now be marked with `only_in_profile`.
 
-### Version 1.27.0
+**Version 1.27.0**
 
 - `bdc` now ignores notebooks that are empty files or contain no cells,
   spitting out a warning.
@@ -26,12 +31,12 @@
 - Refactored `bdc` so that its functionality is available as a library, as
   well as from the command line.
 
-### Version 1.26.1
+**Version 1.26.1**
 
 - Now uses `namedtuple._replace` to copy a `namedtuple` while replacing one
   value, instead of custom code.
 
-### Version 1.26.0
+**Version 1.26.0**
 
 - `bdc --upload` and `bdc --download` now support multiple instances of a 
   source file. The source file will be uploaded to all the target places.
@@ -42,34 +47,34 @@
 - `markdown.html_stylesheet` path is now assumed to be relative to the build
   file, unless it's absolute (which isn't recommended).
 
-### Version 1.25.0
+**Version 1.25.0**
 
 - In `misc_files`, if the destination does not have an extension, it is now
   assumed to be a directory, and `dest_is_dir` is inferred to be true.
   You can force it to be false, if need be, but only if the destination
   doesn't have an extension.
 
-### Version 1.24.1
+**Version 1.24.1**
 
 - Fixed a misleading error message when `misc_files` specifies a target
   destination of directory, but `dest_is_dir` isn't set.
 
-### Version 1.24.0
+**Version 1.24.0**
 
 - The `zipfile` and `dest` in the `bundle` section can now substitute the
   current output profile ("amazon" or "azure").
 
-### Version 1.23.2
+**Version 1.23.2**
 
 - Fixed handling of `DB_SHARD_HOME` to ensure that the environment variable
   actually has a non-empty value, not just that it is present.
 
-### Version 1.23.1
+**Version 1.23.1**
 
 - Fixed to pass `notebook_defaults.variables` variables into the master
   parser, making them available to Markdown cell templates.
   
-### Version 1.23.0
+**Version 1.23.0**
 
 - Fixed a (newly introduced) bug that caused an abort when copying instructor
   notes.
@@ -77,7 +82,7 @@
 - Instructor notes and guides are now converted to HTML and PDF, where
   appropriate, just like other docs. 
 
-### Version 1.22.0
+**Version 1.22.0**
 
 - Added ability for files in `misc_files` section to be templates, with
   variables substituted in them. See the sample `build.yaml` for details.
@@ -100,21 +105,21 @@
   header.
 - `course_info` now supports a `title` attribute.
 
-### Version 1.21.0
+**Version 1.21.0**
 
 - Added `course_info.type` build setting, which can be `ilt` or `self-paced`.
   This `build.yaml` setting is now required.
 
-### Version 1.20.0
+**Version 1.20.0**
 
 - Added `--info` and `--shell` command line parameters.
 
-### Version 1.19.0
+**Version 1.19.0**
 
 - Added ability to specify `debug: true` in a `master` section to enable
   master parse-level debug messages for individual notebooks. 
 
-### Version 1.18.2
+**Version 1.18.2**
 
 Fixed bug relating to upload and download capability: If two notebooks
 with separate profiles ("amazon" and "azure") map to the same `dest` value,
@@ -142,22 +147,22 @@ even if there are no destination conflicts. The prefix is placed _after_ any
 numerals in the destination file name; if there are no numerals, it's placed
 at the beginning.
 
-### Version 1.18.1
+**Version 1.18.1**
 
 * Fixed bug: `databricks` command profile wasn't being passed all the places
   it should've been.
   
-### Version 1.18.0
+**Version 1.18.0**
 
 * `--upload` and `--download` now honor a `--dbprofile` option to specify
   the authentication profile to use with the `databricks-cli`. This option
   corresponds directly to the `--profile` argument to the `databricks` command.
 
-### Version 1.17.0
+**Version 1.17.0**
 
 * Added support for Amazon and Azure target profiles.
 
-### Version 1.16.0
+**Version 1.16.0**
 
 * Variables can now be defined in the `notebook_defaults` section and in the
   individual notebooks. These variables are expanded at notebook processing
@@ -165,7 +170,7 @@ at the beginning.
   `${target_lang}`. They can also override variables in the build-wide
   "variables" section.
 
-### Version 1.15.0
+**Version 1.15.0**
 
 * The ternary IF variable substitution syntax now supports simple variable
   substitutions within the comparison string, the "true" string, and the
@@ -203,7 +208,7 @@ ${foo/\d/ABC${bar[0]}DEF/g}
 * Fixed a bug: Escaped "$" (i.e., "$$") sequences weren't properly being
   unescaped.
 
-### Version 1.14.0
+**Version 1.14.0**
 
 * Variable substitution now supports a simple inline variable edit capability.
   General format: `${var/regex/replacement/flags}` where `regex` is a
@@ -218,7 +223,7 @@ ${foo/\d/ABC${bar[0]}DEF/g}
 ${foo|[a-z]+/\d+|FOOBAR|g}
 ```
 
-### Version 1.13.0
+**Version 1.13.0**
 
 * Variable substitution now supports a C-like ternary `if` syntax. For instance:
 
@@ -228,16 +233,16 @@ ${variable == "foo" ? "Got foo" : "No foo"}
 
 * Added doctests to `bdc/bdcutil.py`. Just run the module to run the tests.
 
-### Version 1.12.2
+**Version 1.12.2**
 
 * Revised default Version-x.x.x file, removing an excess new line.
 
-### Version 1.12.1
+**Version 1.12.1**
 
 * Fixed upload and download capabilities to handle new (nonexistent) notebooks
   better.
 
-### Version 1.12.0
+**Version 1.12.0**
 
 * Added `top_dbc_folder_name` to `build.yaml`, allowing specification of the
   topmost folder in the generated DBC. Defaults to the course name. See
@@ -246,7 +251,7 @@ ${variable == "foo" ? "Got foo" : "No foo"}
   either environment variable "DB_SHARD_HOME" is set or `~/.databrickscfg`
   has a `home` setting in the `DEFAULT` section. See the README for details.
 
-### Version 1.11.0
+**Version 1.11.0**
 
 * Added ability to enable or disable a footer that is automatically added to
   each generated notebook. The feature is controlled by a per-notebook
@@ -260,13 +265,13 @@ ${variable == "foo" ? "Got foo" : "No foo"}
 * Added `master_parse_min_version`, which is required for any course that
   uses the master parser.
 
-### Version 1.10.1
+**Version 1.10.1**
 
 * Fixed `--upload` and `--download`, which broke due to all the changes in
   1.10.0.
 * Added Python 2 check. (Python 3 is no longer supported.)
 
-### Version 1.10.0
+**Version 1.10.0**
 
 * `bdc` now generates a version-stamped notebook, with version information,
   at the top level of the generated build, providing an easy way for students
@@ -313,14 +318,14 @@ ${variable == "foo" ? "Got foo" : "No foo"}
   suppress the automatic insertion of the target language.
 * Moved some general-purpose functions into separate `bdcutil` module.
 
-### Version 1.9.0
+**Version 1.9.0**
 
 * The master configuration file (`bdc.cfg`) is no longer used. `bdc` locates
   `gendbc` via the path, and it allows specification of the output directory
   via a new `-d` (or `--dest`) option.
 * Updated documentation in the README.
 
-### Version 1.8.0
+**Version 1.8.0**
 
 * Added ability to upload and download entire course via `databricks`
   CLI.
@@ -332,18 +337,18 @@ ${variable == "foo" ? "Got foo" : "No foo"}
   insertion of a target language, use a destination path that starts with
   "/".
 
-### Version 1.7.0
+**Version 1.7.0**
 
 * Added `--list-notebooks` option, providing a quick way to get a listing
   of all the notebooks in a course.
 
-### Version 1.6.0
+**Version 1.6.0**
 
 * Changed to support notebook heading changes in master parser.
   Notebook heading is automatically added by the build tool, unless
   the `notebook_heading.enabled` parameter is set to `false`.
 
-### Version 1.5.0
+**Version 1.5.0**
 
 * Updated to support `notebook_heading` override parameter in the
   `master` section for a notebook. This parameter, if defined, must
@@ -352,12 +357,12 @@ ${variable == "foo" ? "Got foo" : "No foo"}
   the `--notebook-heading` master parse command-line parameter, and it's
   optional.
 
-### Version 1.4.1
+**Version 1.4.1**
 
 * Emit tool name (bdc) as prefix on verbose messages. 
 * When -v is specified, invoke master parser with new _verbose_ argument.
 
-### Version 1.4.0
+**Version 1.4.0**
 
 * Updated to work with newest version of master parser, which produces
   three kinds of notebooks (instructor, exercises, answers).

@@ -2,8 +2,10 @@
 
 **Version 2.3.0**
 
-- Updated to use new `db_cli.Workspace` class to interact with the Databricks
-  workspace.
+- Updated to use new `databricks.Workspace` class to interact with the 
+  Databricks workspace.
+- `course install-tools` is now deprecated, because it isn't possible to update
+  a Docker container from within itself.
 
 **Version 2.2.0**
 

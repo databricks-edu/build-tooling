@@ -14,8 +14,8 @@ from termcolor import colored
 from string import Template as StringTemplate
 import functools
 from subprocess import Popen
-from db_edu_util import die, error, warn, debug, set_debug, db_cli
-from db_edu_util.db_cli import DatabricksRestError
+from db_edu_util import die, error, warn, debug, info, set_debug, databricks
+from db_edu_util.databricks import DatabricksError
 from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
                     Dict, TextIO)
 
@@ -90,7 +90,7 @@ SUBCOMMANDS
   {0} (--version, -V)    Display version and exit
   {0} toolversions       Display course, bdc, gendbc, and master_parse versions
                          and exit.
-  {0} install-tools    * Install the build tools.
+  {0} install-tools      Deprecated. Use: curl -L https://git.io/fhaLg | bash
   {0} work-on <name>     Specify and remember the course to build, 
                          upload, etc.
   {0} which              Print the name of the current course.
@@ -618,7 +618,7 @@ def clean(cfg: Dict[str, str]) -> NoReturn:
     # it's easier (and costs no more time, really) than to issue a REST call
     # to check whether it exists in the first place. And "rm" will die if
     # called on a nonexistent remote path.
-    w = db_cli.Workspace(profile=db_profile)
+    w = databricks.Workspace(profile=db_profile)
     w.mkdirs(remote_target)
     w.rm(remote_target, recursive=True)
 
@@ -637,7 +637,7 @@ def clean_source(cfg: Dict[str, str]) -> NoReturn:
     db_profile = cfg['DB_PROFILE']
     remote_source = cfg['COURSE_REMOTE_SOURCE']
 
-    w = db_cli.Workspace(profile=db_profile)
+    w = databricks.Workspace(profile=db_profile)
     w.mkdirs(remote_source)
     w.rm(remote_source, recursive=True)
 
@@ -706,7 +706,7 @@ def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
         '''
         parent_subpath = os.path.dirname(dbc)
         dir_to_make = f'{remote_target}/{os.path.dirname(parent_subpath)}'
-        w = db_cli.Workspace(profile=db_profile)
+        w = databricks.Workspace(profile=db_profile)
         w.mkdirs(dir_to_make)
         w.import_dbc(dbc, f'{remote_target}/{parent_subpath}')
 
@@ -724,7 +724,7 @@ def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
             warn('No DBCs found.')
         else:
             clean(cfg)
-            w = db_cli.Workspace(profile=db_profile)
+            w = databricks.Workspace(profile=db_profile)
             w.mkdirs(remote_target)
             for dbc in dbcs:
                 print('\nImporting {}\n'.format(os.path.join(build_dir, dbc)))
@@ -789,9 +789,10 @@ def install_tools() -> NoReturn:
     """
     Install the build tools. Doesn't work inside a Docker container.
     """
-    check_for_docker("install-tools")
-    cmd('pip install --upgrade git+https://github.com/databricks-edu/build-tooling')
-    cmd('pip install --upgrade databricks-cli')
+    info('"course install-tools" is deprecated, because it is not possible '
+         'to update a Docker container from within itself. To update the '
+         'build tools, run the following command:\n\n'
+         'curl -L https://git.io/fhaLg | bash')
 
 
 def browse_directory(cfg: Dict[str, str],
@@ -1040,7 +1041,7 @@ def print_tool_versions() -> NoReturn:
     import gendbc
     import master_parse
     import db_edu_util
-    from db_edu_util import db_cli
+    from db_edu_util import databricks
 
     print(f"course:                {VERSION}")
     print(f"bdc:                   {bdc.VERSION}")

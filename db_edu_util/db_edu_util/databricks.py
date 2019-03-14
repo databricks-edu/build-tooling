@@ -178,6 +178,11 @@ class RESTClient(object):
             if not home:
                 home = section.get('home')
 
+            if not home:
+                username = section.get('username')
+                if username:
+                    home = f'/Users/{username}'
+
             if home:
                 while home[-1] == '/':
                     home = home[:-1]

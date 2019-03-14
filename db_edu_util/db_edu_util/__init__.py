@@ -2,7 +2,7 @@
 Utility library used by build tools.
 """
 
-VERSION = '1.4.0'
+VERSION = '1.5.0'
 
 from typing import Callable, Iterable, Any
 from textwrap import TextWrapper

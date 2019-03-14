@@ -514,8 +514,13 @@ def update_config(cfg: Dict[str, str]) -> Dict[str, str]:
     if not db_shard_home:
         # Let the databricks Workspace layer figure out the appropriate value
         # for home.
-        w = databricks.Workspace(adj['DB_PROFILE'])
-        db_shard_home = w.home
+        try:
+            w = databricks.Workspace(adj['DB_PROFILE'])
+            db_shard_home = w.home
+        except databricks.DatabricksError as e:
+            # Ignore config errors. ~/.databrickscfg might not be there.
+            if e.code != databricks.StatusCode.CONFIG_ERROR:
+                raise
 
     if db_shard_home:
         adj['COURSE_REMOTE_SOURCE'] = f'{db_shard_home}/{adj["SOURCE"]}/{course}'

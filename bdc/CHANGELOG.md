@@ -2,7 +2,7 @@
 
 **Version 1.31.0**
 
-- Updated to use new `db_cli.Workspace` class to interact with the Databricks
+- Updated to use new `databricks.Workspace` class to interact with the Databricks
   workspace.
 
 **Version 1.30.0**

@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+**Version 1.32.0**
+
+- Removed direct support for `DB_SHARD_HOME` and the `home` configuration 
+  option, since the `databricks` package supports both.
+
 **Version 1.31.0**
 
 - Updated to use new `databricks.Workspace` class to interact with the Databricks

@@ -23,7 +23,7 @@ from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.3.0'
+VERSION = '2.4.0'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -501,7 +501,14 @@ def update_config(cfg: Dict[str, str]) -> Dict[str, str]:
     if not adj.get('COURSE_YAML'):
         adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
     adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course)
+
     db_shard_home = adj.get('DB_SHARD_HOME')
+    if not db_shard_home:
+        # Let the databricks Workspace layer figure out the appropriate value
+        # for home.
+        w = databricks.Workspace(adj['DB_PROFILE'])
+        db_shard_home = w.home
+
     if db_shard_home:
         adj['COURSE_REMOTE_SOURCE'] = f'{db_shard_home}/{adj["SOURCE"]}/{course}'
         adj['COURSE_REMOTE_TARGET'] = f'{db_shard_home}/{adj["TARGET"]}/{course}'
@@ -511,9 +518,8 @@ def update_config(cfg: Dict[str, str]) -> Dict[str, str]:
 
 def check_config(cfg: Dict[str, str], *keys: str) -> NoReturn:
     """
-    Check the configuration, aborting if required items (COURSE_NAME,
-    DB_SHARD_HOME, COURSE_REPO) are missing. Only useful for commands that
-    actual do work.
+    Check the configuration, aborting if required items (COURSE_NAME and
+    COURSE_REPO) are missing. Only useful for commands that actually do work.
 
     :param cfg:  the configuration
     :param keys: the keys to require. If not specified, defaults to the
@@ -524,7 +530,7 @@ def check_config(cfg: Dict[str, str], *keys: str) -> NoReturn:
     :raises ConfigError: on error
     """
     if not keys:
-        keys = ('COURSE_NAME', 'DB_SHARD_HOME', 'COURSE_REPO')
+        keys = ('COURSE_NAME', 'COURSE_REPO')
     for key in keys:
         if not cfg.get(key):
             raise CourseError(
@@ -1253,6 +1259,9 @@ def main():
             i += 1
 
     except CourseError as e:
+        error(str(e))
+
+    except bdc.BDCError as e:
         error(str(e))
 
     except KeyboardInterrupt:

@@ -31,7 +31,8 @@ from typing import (Sequence, Any, Type, TypeVar, Set, Optional, Dict,
 
 __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
            'bdc_download', 'bdc_upload', 'bdc_check_build',
-           'bdc_print_info']
+           'bdc_print_info', 'BuildError', 'UploadDownloadError',
+           'BuildConfigError', 'UnknownFieldsError']
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -39,12 +40,10 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.31.0"
+VERSION = "1.32.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
-
-DB_SHARD_HOME_VAR = 'DB_SHARD_HOME'
 
 USAGE = f"""
 {PROG}, version {VERSION}
@@ -154,32 +153,66 @@ ANSWERS_NOTEBOOK_PATTERN = re.compile('^.*_answers\..*$')
 errors: int = 0
 
 # ---------------------------------------------------------------------------
-# Classes
+# Exported Exceptions
 # ---------------------------------------------------------------------------
 
+class BDCError(Exception):
+    """
+    Base class for all build errors. Sometimes thrown on its own.
+    """
+    def __init__(self, message: str):
+        super().__init__(message)
+        self._message = message
 
-class BuildError(Exception):
+    @property
+    def message(self):
+        return self._message
+
+
+class BuildError(BDCError):
+    """
+    Thrown when an error is encountered while building a course.
+    """
     pass
 
 
-class UploadDownloadError(Exception):
+class UploadDownloadError(BDCError):
+    """
+    Thrown to indicate an error uploading or downloading notebooks.
+    """
     pass
 
 
 class BuildConfigError(BuildError):
+    """
+    Subclass of BuildError indicating an error with the build configuration
+    (YAML) file.
+    """
     pass
 
 
 class UnknownFieldsError(BuildConfigError):
+    """
+    Subclass of BuildConfigError indicating that there are unknown fields
+    in a configuration section.
+    """
     def __init__(self,
                  parent_section: str,
                  section: str,
                  bad_keys: Set[str]):
+        """
+        :param parent_section: the parent section
+        :param section:        the section containing the bad fields
+        :param bad_keys:       the bad fields
+        """
         keys = ', '.join(bad_keys)
         super(BuildConfigError, self).__init__(
             f'"{parent_section}": Bad fields in "{section}" section: {keys}'
         )
 
+# ---------------------------------------------------------------------------
+# Classes
+# ---------------------------------------------------------------------------
 
 # See https://github.com/python/typing/issues/58#issuecomment-326240794
 NotebookTypeClass = TypeVar('NotebookTypeClass', bound='NotebookType')
@@ -2243,9 +2276,11 @@ def ensure_shard_path_exists(shard_path: str,
         w.ls(shard_path)
     except DatabricksError as e:
         if e.code == databricks.StatusCode.NOT_FOUND:
-            die(f'Shard path "{shard_path}" does not exist.')
+            raise BDCError(f'Shard path "{shard_path}" does not exist.')
+        elif e.code == databricks.StatusCode.CONFIG_ERROR:
+            raise BDCError(f'"databricks" configuration error: {e.message}')
         else:
-            die(f'Unexpected error with "databricks": {e}')
+            raise BDCError(f'Unexpected error with "databricks": {e}')
 
 
 def ensure_shard_path_does_not_exist(shard_path: str,
@@ -2253,45 +2288,14 @@ def ensure_shard_path_does_not_exist(shard_path: str,
     try:
         w = databricks.Workspace(db_profile)
         w.ls(shard_path)
-        die(f'Shard path "{shard_path}" already exists.')
+        raise BDCError(f'Shard path "{shard_path}" already exists.')
     except DatabricksError as e:
         if e.code == databricks.StatusCode.NOT_FOUND:
             pass
+        elif e.code == databricks.StatusCode.CONFIG_ERROR:
+            raise BDCError(f'"databricks" configuration error: {e.message}')
         else:
-            die(f'Unexpected error with "databricks": {e}')
-
-
-def expand_shard_path(shard_path: str) -> str:
-    if shard_path.startswith('/'):
-        return shard_path
-
-    # Relative path. Look for DB_SHARD_HOME environment variable.
-    home = os.getenv(DB_SHARD_HOME_VAR)
-    if home is not None:
-        if len(home.strip()) == 0:
-            home = None
-
-    db_config = os.path.expanduser('~/.databrickscfg')
-    if home is None:
-        if os.path.exists(db_config):
-            cfg = ConfigParser()
-            cfg.read(db_config)
-            try:
-                home = cfg.get('DEFAULT', 'home')
-            except NoOptionError:
-                pass
-
-    if home is None:
-        die(f'Shard path "{shard_path}" is relative, but environment ' +
-            f'variable {DB_SHARD_HOME_VAR} does not exist or is empty, and ' +
-            f'there is no "home" setting in "{db_config}".')
-
-    if shard_path == '':
-        shard_path = home
-    else:
-        shard_path = f'{home}/{shard_path}'
-
-    return shard_path
+            raise BDCError(f'Unexpected error with "databricks": {e}')
 
 
 def notebook_is_transferrable(nb: NotebookData, build: BuildData) -> bool:
@@ -2403,7 +2407,6 @@ def check_for_extra_up_down_mappings(notebooks: Dict[str, str]) -> Sequence[Tupl
 def upload_notebooks(build: BuildData,
                      shard_path: str,
                      db_profile: Optional[str]) -> NoReturn:
-    shard_path = expand_shard_path(shard_path)
     notebooks = get_sources_and_targets(build)
 
     def do_upload(notebooks: Dict[str, str]) -> NoReturn:
@@ -2437,7 +2440,7 @@ def upload_notebooks(build: BuildData,
     except UploadDownloadError as e:
         w = databricks.Workspace(profile=db_profile)
         w.rm(shard_path)
-        die(str(e))
+        raise
 
     multiple_mappings = check_for_extra_up_down_mappings(notebooks)
     if len(multiple_mappings) > 0:
@@ -2459,7 +2462,6 @@ def upload_notebooks(build: BuildData,
 def download_notebooks(build: BuildData,
                        shard_path: str,
                        db_profile: Optional[str]) -> NoReturn:
-    shard_path = expand_shard_path(shard_path)
     notebooks = get_sources_and_targets(build)
 
     def do_download(notebooks):
@@ -2510,14 +2512,13 @@ def download_notebooks(build: BuildData,
         # We only ever download the first one.
         remote = remotes[0]
         if remote in remote_to_local:
-            die(f'(BUG): Found multiple instances of remote path "{remote}"')
+            raise BDCError(
+                f'(BUG): Found multiple instances of remote path "{remote}"'
+            )
 
         remote_to_local[remote] = local
 
-    try:
-        do_download(notebooks)
-    except UploadDownloadError as e:
-        die(str(e))
+    do_download(notebooks)
 
     multiple_mappings = check_for_extra_up_down_mappings(notebooks)
     if len(multiple_mappings) > 0:
@@ -2532,12 +2533,6 @@ def download_notebooks(build: BuildData,
 
 
 def print_info(build: BuildData, shell: bool) -> NoReturn:
-    """
-
-    :param build:
-    :param shell:
-    :return:
-    """
     if shell:
         print(
             f'COURSE_NAME="{build.name}"; ' +
@@ -2850,7 +2845,7 @@ def main():
 
     except BuildConfigError as e:
         die(f'Error in "{course_config}": {e}')
-    except BuildError as e:
+    except BDCError as e:
         die(str(e))
     except KeyboardInterrupt:
         die(f'\n*** Interrupted.')

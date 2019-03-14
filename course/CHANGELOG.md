@@ -1,5 +1,10 @@
 # Change log for `course`
 
+**Version 2.4.0**
+
+- Removed direct support for `DB_SHARD_HOME` and the `home` configuration 
+  option, since the `databricks` package supports both.
+
 **Version 2.3.0**
 
 - Updated to use new `databricks.Workspace` class to interact with the 

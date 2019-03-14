@@ -1,5 +1,10 @@
 # Change log for `course`
 
+**Version 2.3.0**
+
+- Updated to use new `db_cli.Workspace` class to interact with the Databricks
+  workspace.
+
 **Version 2.2.0**
 
 - Added ability to specify build file with `course -f` or `course --build-file`.

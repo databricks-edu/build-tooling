@@ -23,7 +23,7 @@ from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.2.0'
+VERSION = '2.3.0'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")

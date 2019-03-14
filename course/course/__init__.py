@@ -708,14 +708,7 @@ def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
         dir_to_make = f'{remote_target}/{os.path.dirname(parent_subpath)}'
         w = db_cli.Workspace(profile=db_profile)
         w.mkdirs(dir_to_make)
-        w.import_dbc(remote_source, recursive=True)
-
-        # Language is ignored by databricks, but it's a required option. <sigh>
-        databricks(('workspace', 'import', '--format', 'DBC',
-                    '--language', 'Python', dbc,
-                    f'{remote_target}/{parent_subpath}'),
-                    db_profile=db_profile)
-
+        w.import_dbc(dbc, f'{remote_target}/{parent_subpath}')
 
     print(f'Importing all DBCs under "{build_dir}"')
     dbcs = []
@@ -731,8 +724,8 @@ def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
             warn('No DBCs found.')
         else:
             clean(cfg)
-            databricks(('workspace', 'mkdirs', remote_target),
-                       db_profile=db_profile)
+            w = db_cli.Workspace(profile=db_profile)
+            w.mkdirs(remote_target)
             for dbc in dbcs:
                 print('\nImporting {}\n'.format(os.path.join(build_dir, dbc)))
                 import_dbc(dbc)

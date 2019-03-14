@@ -357,12 +357,12 @@ class Workspace(RESTClient):
                 f'Unable to create "{workspace_path}" on "{self._host}": {e}'
             )
 
-    def import_file(self,
-                    local_path: str,
-                    workspace_path: str,
-                    overwrite: bool = False) -> NoReturn:
+    def import_notebook(self,
+                        local_path: str,
+                        workspace_path: str,
+                        overwrite: bool = False) -> NoReturn:
         """
-        Imports a file to the specified remote workspace path.
+        Imports a notebook to the specified remote workspace path.
 
         :param local_path:     the path to the local file
         :param workspace_path: the path to the target file in the Databricks
@@ -444,7 +444,33 @@ class Workspace(RESTClient):
                     # Not a supported file object_type. Skip it.
                     continue
 
-                self.import_file(cur_src, cur_dst, overwrite)
+                self.import_notebook(cur_src, cur_dst, overwrite)
+
+    def import_dbc(self, dbc_path: str, workspace_folder: str) -> NoReturn:
+        """
+        Imports a DBC into a remote folder.
+
+        :param dbc_path:         the path to the (local) DBC
+        :param workspace_folder: the path to the (nonexistent) remote folder
+
+        :raises DatabricksRestError: on error. The code field will be set
+            to StatusCode.ALREADY_EXISTS if the remote folder exists already.
+            It will be set to StatusCode.NOT_FOUND if the local directory
+            doesn't exist. It'll be set to something else otherwise.
+        """
+
+        try:
+            url = self._workspace_url('import')
+            params = {'path': workspace_folder, 'format': 'DBC'}
+            self._issue_post(url, params, file=dbc_path)
+
+        except DatabricksRestError:
+            raise
+
+        except Exception as e:
+            raise DatabricksRestError(
+                f'Unable to import "{dbc_path}" to "{self._host}": {e}'
+            )
 
     def export_dir(self, workspace_path: str, local_dir: str) -> NoReturn:
         """

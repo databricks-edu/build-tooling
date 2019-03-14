@@ -1,5 +1,11 @@
 # notebooktools Change Log
 
+**Version 1.3.0**
+
+- The `db_edu_util.db_cli` package's `databricks` function has been replaced
+  with a `Workspace` class that implements the few capabilities we need
+  directly against the Databricks REST API.
+
 **Version 1.2.0**
 
 - Converted to Python 3. Added `ExtendedTextWrapper`, to consolidate code

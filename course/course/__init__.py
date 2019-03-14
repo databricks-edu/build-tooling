@@ -15,7 +15,7 @@ from string import Template as StringTemplate
 import functools
 from subprocess import Popen
 from db_edu_util import die, error, warn, debug, set_debug, db_cli
-from db_edu_util.db_cli import DatabricksCliError
+from db_edu_util.db_cli import DatabricksRestError
 from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
                     Dict, TextIO)
 
@@ -311,21 +311,6 @@ def cmd(shell_command: str,
         rc = os.system(shell_command)
         if rc != 0:
             raise CourseError(f'Command exited with {rc}')
-
-
-def databricks(args: Sequence[str],
-               db_profile: Optional[str] = None) -> NoReturn:
-    """
-    Runs the specified "databricks" command, trapping any errors and
-    aborting.
-
-    :param args:       the arguments (e.g., ('workspace', 'ls', ...))
-    :param db_profile: the Databricks profile to use, or None for the default
-    """
-    try:
-        db_cli.databricks(args, db_profile=db_profile, verbose=True)
-    except DatabricksCliError as e:
-        die(f"*** Command failed: {e.message}")
 
 
 def quote_shell_arg(arg: str) -> str:
@@ -633,9 +618,9 @@ def clean(cfg: Dict[str, str]) -> NoReturn:
     # it's easier (and costs no more time, really) than to issue a REST call
     # to check whether it exists in the first place. And "rm" will die if
     # called on a nonexistent remote path.
-    databricks(('workspace', 'mkdirs', remote_target), db_profile=db_profile)
-    databricks(('workspace', 'rm', '--recursive', remote_target),
-               db_profile=db_profile)
+    w = db_cli.Workspace(profile=db_profile)
+    w.mkdirs(remote_target)
+    w.rm(remote_target, recursive=True)
 
 
 def clean_source(cfg: Dict[str, str]) -> NoReturn:
@@ -652,9 +637,9 @@ def clean_source(cfg: Dict[str, str]) -> NoReturn:
     db_profile = cfg['DB_PROFILE']
     remote_source = cfg['COURSE_REMOTE_SOURCE']
 
-    databricks(('workspace', 'mkdirs', remote_source), db_profile=db_profile)
-    databricks(('workspace', 'rm', '--recursive', remote_source),
-               db_profile=db_profile)
+    w = db_cli.Workspace(profile=db_profile)
+    w.mkdirs(remote_source)
+    w.rm(remote_source, recursive=True)
 
 
 def download(cfg: Dict[str, str]) -> NoReturn:
@@ -721,7 +706,9 @@ def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
         '''
         parent_subpath = os.path.dirname(dbc)
         dir_to_make = f'{remote_target}/{os.path.dirname(parent_subpath)}'
-        databricks(('workspace', 'mkdirs', dir_to_make), db_profile=db_profile)
+        w = db_cli.Workspace(profile=db_profile)
+        w.mkdirs(dir_to_make)
+        w.import_dbc(remote_source, recursive=True)
 
         # Language is ignored by databricks, but it's a required option. <sigh>
         databricks(('workspace', 'import', '--format', 'DBC',
@@ -1062,15 +1049,11 @@ def print_tool_versions() -> NoReturn:
     import db_edu_util
     from db_edu_util import db_cli
 
-    s = db_cli.databricks(['--version'], capture_stdout=True).strip()
-    db_version = re.sub(r'^.*(\d+\.\d+\.\d+).*$', r'\1', s)
-
     print(f"course:                {VERSION}")
     print(f"bdc:                   {bdc.VERSION}")
     print(f"gendbc:                {gendbc.VERSION}")
     print(f"master_parse:          {master_parse.VERSION}")
     print(f"db_edu_util (library): {db_edu_util.VERSION}")
-    print(f"databricks_cli:        {db_version}")
 
 
 def which(cfg: Dict[str, str]) -> NoReturn:

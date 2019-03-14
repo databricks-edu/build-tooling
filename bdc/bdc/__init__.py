@@ -16,7 +16,7 @@ from db_edu_util.notebooktools import parse_source_notebook, NotebookError
 from db_edu_util import (db_cli, wrap2stdout, error, verbose, set_verbosity,
                          warn, verbosity_is_enabled, info, die,
                          EnhancedTextWrapper)
-from db_edu_util.db_cli import DatabricksCliError
+from db_edu_util.db_cli import DatabricksRestError
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
@@ -39,7 +39,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.30.0"
+VERSION = "1.30.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -2236,37 +2236,13 @@ def build_course(build: BuildData,
     )
 
 
-def dbw(subcommand: str,
-        args: Sequence[str],
-        capture_stdout: bool = True,
-        db_profile: Optional[str] = None) -> Optional[str]:
-    """
-    Invoke "databricks workspace" with specified arguments.
-
-    :param subcommand:     the "databricks workspace" subcommand
-    :param args:           arguments, as a list
-    :param capture_stdout: True to capture and return standard output. False
-                           otherwise.
-    :param db_profile:     The --profile argument for the "databricks" command,
-                           if any; None otherwise.
-
-    :return: the string containing standard output, if capture_stdout is True.
-             None otherwise.
-    :raises DatabricksCliError: if the command fails. If possible, the code
-            field will be set
-    """
-    args = ('workspace', subcommand) + tuple(args)
-    return db_cli.databricks(args, capture_stdout=capture_stdout,
-                             db_profile=db_profile,
-                             verbose=verbosity_is_enabled())
-
-
 def ensure_shard_path_exists(shard_path: str,
                              db_profile: Optional[str]) -> NoReturn:
     try:
-        dbw('ls', [shard_path], db_profile=db_profile)
-    except DatabricksCliError as e:
-        if e.code == 'RESOURCE_DOES_NOT_EXIST':
+        w = db_cli.Workspace(db_profile)
+        w.ls(shard_path)
+    except DatabricksRestError as e:
+        if e.code == db_cli.StatusCode.NOT_FOUND:
             die(f'Shard path "{shard_path}" does not exist.')
         else:
             die(f'Unexpected error with "databricks": {e}')
@@ -2275,10 +2251,11 @@ def ensure_shard_path_exists(shard_path: str,
 def ensure_shard_path_does_not_exist(shard_path: str,
                                      db_profile: Optional[str]) -> NoReturn:
     try:
-        dbw('ls', [shard_path], db_profile=db_profile)
+        w = db_cli.Workspace(db_profile)
+        w.ls(shard_path)
         die(f'Shard path "{shard_path}" already exists.')
-    except DatabricksCliError as e:
-        if e.code == 'RESOURCE_DOES_NOT_EXIST':
+    except DatabricksRestError as e:
+        if e.code == db_cli.StatusCode.NOT_FOUND:
             pass
         else:
             die(f'Unexpected error with "databricks": {e}')
@@ -2448,17 +2425,18 @@ def upload_notebooks(build: BuildData,
             with working_directory(tempdir):
                 info(f"Uploading notebooks to {shard_path}")
                 try:
-                    dbw('import_dir', ['.', shard_path],
-                        capture_stdout=False, db_profile=db_profile)
-                    info(f"Uploaded {len(notebooks)} notebooks to " +
+                    w = db_cli.Workspace(profile=db_profile)
+                    w.import_dir('.', shard_path)
+                    info(f"Uploaded {len(notebooks)} notebooks to "
                          f"{shard_path}.")
-                except DatabricksCliError as e:
+                except DatabricksRestError as e:
                     raise UploadDownloadError(f'Upload failed: {e}')
 
     try:
         do_upload(notebooks)
     except UploadDownloadError as e:
-        dbw('rm', [shard_path], capture_stdout=False, db_profile=db_profile)
+        w = db_cli.Workspace(profile=db_profile)
+        w.rm(shard_path)
         die(str(e))
 
     multiple_mappings = check_for_extra_up_down_mappings(notebooks)
@@ -2492,8 +2470,9 @@ def download_notebooks(build: BuildData,
             info("Downloading notebooks to temporary directory")
             with working_directory(tempdir):
                 try:
-                    dbw('export_dir', [shard_path, '.'], db_profile=db_profile)
-                except DatabricksCliError as e:
+                    w = db_cli.Workspace(profile=db_profile)
+                    w.export_dir(shard_path, '.')
+                except DatabricksRestError as e:
                     raise UploadDownloadError(f"Download failed: {e}")
 
                 for local, remotes in list(notebooks.items()):

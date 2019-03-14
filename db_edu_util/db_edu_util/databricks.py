@@ -117,7 +117,8 @@ class RESTClient(object):
             for required in ('host', 'token'):
                 if required not in keys:
                     raise DatabricksError(
-                        message=f'[{profile}] in "{config_file}" has "host" value.',
+                        message=f'[{profile}] in "{config_file}" is missing a '
+                                f'value for "{required}".',
                         code=StatusCode.CONFIG_ERROR
                     )
 

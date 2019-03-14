@@ -4,6 +4,8 @@
 
 - Removed direct support for `DB_SHARD_HOME` and the `home` configuration 
   option, since the `databricks` package supports both.
+- Now creates directory `~/.databricks` if it doesn't already exist. This fix
+  addresses [Issue #70](https://github.com/databricks-edu/build-tooling/issues/70).
 
 **Version 2.3.0**
 

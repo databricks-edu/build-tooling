@@ -329,7 +329,7 @@ def quote_shell_arg(arg: str) -> str:
         quoted = arg
     elif ('"' in arg) and ("'" in arg):
         raise CourseError(
-            'Shell argument cannot be quoted, since it contains single AND ' +
+            'Shell argument cannot be quoted, since it contains single AND '
             f'double quotes: {arg}'
         )
     elif "'" in arg:
@@ -357,6 +357,14 @@ def load_config(config_path: str,
     bad = False
     comment = re.compile("^\s*#.*$")
     cfg = {}
+    parent_dir = os.path.dirname(config_path)
+    if os.path.isfile(parent_dir):
+        raise CourseError(
+            f'''"{parent_dir}" already exists, but it isn't a directory.'''
+        )
+    if not os.path.exists(parent_dir):
+        os.makedirs(parent_dir)
+
     if os.path.exists(config_path):
         with open(config_path) as f:
             for (i, line) in enumerate([l.rstrip() for l in f.readlines()]):

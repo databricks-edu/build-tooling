@@ -13,10 +13,10 @@ from enum import Enum
 import master_parse
 from gendbc import gendbc
 from db_edu_util.notebooktools import parse_source_notebook, NotebookError
-from db_edu_util import (db_cli, wrap2stdout, error, verbose, set_verbosity,
+from db_edu_util import (databricks, wrap2stdout, error, verbose, set_verbosity,
                          warn, verbosity_is_enabled, info, die,
                          EnhancedTextWrapper)
-from db_edu_util.db_cli import DatabricksRestError
+from db_edu_util.databricks import DatabricksError
 from grizzled.file import eglob
 from bdc.bdcutil import *
 from string import Template as StringTemplate
@@ -2239,10 +2239,10 @@ def build_course(build: BuildData,
 def ensure_shard_path_exists(shard_path: str,
                              db_profile: Optional[str]) -> NoReturn:
     try:
-        w = db_cli.Workspace(db_profile)
+        w = databricks.Workspace(db_profile)
         w.ls(shard_path)
-    except DatabricksRestError as e:
-        if e.code == db_cli.StatusCode.NOT_FOUND:
+    except DatabricksError as e:
+        if e.code == databricks.StatusCode.NOT_FOUND:
             die(f'Shard path "{shard_path}" does not exist.')
         else:
             die(f'Unexpected error with "databricks": {e}')
@@ -2251,11 +2251,11 @@ def ensure_shard_path_exists(shard_path: str,
 def ensure_shard_path_does_not_exist(shard_path: str,
                                      db_profile: Optional[str]) -> NoReturn:
     try:
-        w = db_cli.Workspace(db_profile)
+        w = databricks.Workspace(db_profile)
         w.ls(shard_path)
         die(f'Shard path "{shard_path}" already exists.')
-    except DatabricksRestError as e:
-        if e.code == db_cli.StatusCode.NOT_FOUND:
+    except DatabricksError as e:
+        if e.code == databricks.StatusCode.NOT_FOUND:
             pass
         else:
             die(f'Unexpected error with "databricks": {e}')
@@ -2425,17 +2425,17 @@ def upload_notebooks(build: BuildData,
             with working_directory(tempdir):
                 info(f"Uploading notebooks to {shard_path}")
                 try:
-                    w = db_cli.Workspace(profile=db_profile)
+                    w = databricks.Workspace(profile=db_profile)
                     w.import_dir('.', shard_path)
                     info(f"Uploaded {len(notebooks)} notebooks to "
                          f"{shard_path}.")
-                except DatabricksRestError as e:
+                except DatabricksError as e:
                     raise UploadDownloadError(f'Upload failed: {e}')
 
     try:
         do_upload(notebooks)
     except UploadDownloadError as e:
-        w = db_cli.Workspace(profile=db_profile)
+        w = databricks.Workspace(profile=db_profile)
         w.rm(shard_path)
         die(str(e))
 
@@ -2470,9 +2470,9 @@ def download_notebooks(build: BuildData,
             info("Downloading notebooks to temporary directory")
             with working_directory(tempdir):
                 try:
-                    w = db_cli.Workspace(profile=db_profile)
+                    w = databricks.Workspace(profile=db_profile)
                     w.export_dir(shard_path, '.')
-                except DatabricksRestError as e:
+                except DatabricksError as e:
                     raise UploadDownloadError(f"Download failed: {e}")
 
                 for local, remotes in list(notebooks.items()):

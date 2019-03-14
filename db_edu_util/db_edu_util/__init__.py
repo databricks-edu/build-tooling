@@ -11,9 +11,8 @@ import sys
 from itertools import dropwhile
 from typing import Optional, NoReturn
 import itertools
-from databricks_cli.workspace import cli
 
-__all__ = ['all_pred', 'notebooktools', 'db_cli', 'EnhancedTextWrapper', 'die',
+__all__ = ['all_pred', 'notebooktools', 'databricks', 'EnhancedTextWrapper', 'die',
            'set_verbosity', 'verbosity_is_enabled', 'wrap2stdout', 'verbose',
            'debug', 'error', 'warn', 'info', 'set_debug', 'debug_is_enabled']
 

@@ -20,7 +20,7 @@ import base64
 from typing import Optional, Sequence, NoReturn, Tuple, Dict, Any
 
 
-__all__ = ['DatabricksRestError', 'Workspace', 'StatusCode',
+__all__ = ['DatabricksError', 'Workspace', 'StatusCode',
            'ObjectInfo', 'ObjectType', 'NotebookLanguage']
 
 API_PATH = 'api/2.0'
@@ -30,15 +30,24 @@ WORKSPACE_PATH = f'{API_PATH}/workspace'
 # Private Functions
 # -----------------------------------------------------------------------------
 
-def _map_rest_error(json_data: Dict[str, str]) -> Tuple[StatusCode, str]:
+def _map_rest_error(json_data: Dict[str, str]) -> Tuple[StatusCode,
+                                                        Optional[str]]:
+    """
+    Map a Databricks REST API error (from the returned JSON) into a
+    status code and a message.
+
+    :param json_data: the JSON returned from the REST API
+
+    :return: A (status code, message) tuple. The message may be None.
+    """
     error_code = json_data.get('error_code')
     rest_message = json_data.get('message')
     if error_code == 'RESOURCE_DOES_NOT_EXIST':
         code = StatusCode.NOT_FOUND
-        message = rest_message or None
+        message = rest_message
     elif error_code == 'RESOURCE_ALREADY_EXISTS':
         code = StatusCode.ALREADY_EXISTS
-        message = rest_message or None
+        message = rest_message
     elif error_code:
         code = StatusCode.UNKNOWN_ERROR
         if rest_message:
@@ -56,12 +65,15 @@ def _map_rest_error(json_data: Dict[str, str]) -> Tuple[StatusCode, str]:
 # -----------------------------------------------------------------------------
 
 class StatusCode(Enum):
+    """
+    Status codes used in DatabricksError exceptions.
+    """
     NOT_FOUND = auto()
     ALREADY_EXISTS = auto()
     CONFIG_ERROR = auto()
     UNKNOWN_ERROR = auto()
 
-class DatabricksRestError(Exception):
+class DatabricksError(Exception):
     """
     Thrown to indicate errors with the databricks_cli invocation.
     """
@@ -84,7 +96,7 @@ class RESTClient(object):
     def _get_profile(self, profile: str) -> Tuple[str, str]:
         config_file = os.path.expanduser("~/.databrickscfg")
         if not os.path.exists(config_file):
-            raise DatabricksRestError(
+            raise DatabricksError(
                 message=f'"{config_file}" does not exist.',
                 code=StatusCode.CONFIG_ERROR
             )
@@ -93,7 +105,7 @@ class RESTClient(object):
         try:
             cfg.read(config_file)
         except Exception as e:
-            raise DatabricksRestError(
+            raise DatabricksError(
                 message=f'Cannot read "{config_file}": {e}',
                 code=StatusCode.CONFIG_ERROR
             )
@@ -104,7 +116,7 @@ class RESTClient(object):
             keys = set(section.keys())
             for required in ('host', 'token'):
                 if required not in keys:
-                    raise DatabricksRestError(
+                    raise DatabricksError(
                         message=f'[{profile}] in "{config_file}" has "host" value.',
                         code=StatusCode.CONFIG_ERROR
                     )
@@ -117,7 +129,7 @@ class RESTClient(object):
             return (host, section['token'])
 
         except KeyError:
-            raise DatabricksRestError(
+            raise DatabricksError(
                 message=f'"{config_file}" has no "{profile}" profile.',
                 code=StatusCode.CONFIG_ERROR
             )
@@ -128,7 +140,7 @@ class RESTClient(object):
         data = resp.json()
         if resp.status_code != 200:
             (code, message) = _map_rest_error(data)
-            raise DatabricksRestError(code=code, message=message)
+            raise DatabricksError(code=code, message=message)
 
         return resp
 
@@ -151,7 +163,7 @@ class RESTClient(object):
         data = resp.json()
         if resp.status_code != 200:
             (code, message) = _map_rest_error(data)
-            raise DatabricksRestError(code=code, message=message)
+            raise DatabricksError(code=code, message=message)
 
         return resp
 
@@ -159,7 +171,7 @@ class RESTClient(object):
         content_type = resp.headers.get('Content-Type', '<unknown>').split(';')
         if content_type[0] not in ['application/json', 'text/json']:
             print(resp.text)
-            raise DatabricksRestError(
+            raise DatabricksError(
                 f"Got back unknown content object_type: {content_type}"
             )
 
@@ -267,7 +279,7 @@ class Workspace(RESTClient):
 
         :param profile: the name of the "~/.databrickscfg" profile to use.
 
-        :raises DatabricksRestError: configuration failure
+        :raises DatabricksError: configuration failure
         """
         super().__init__(profile)
 
@@ -279,7 +291,7 @@ class Workspace(RESTClient):
 
         :return: the list of files/folders
 
-        :raises DatabricksRestError: on error, or on file not found. The
+        :raises DatabricksError: on error, or on file not found. The
                 code field will be set appropriately.
         """
         url = self._workspace_url('list')
@@ -299,11 +311,11 @@ class Workspace(RESTClient):
                 )
             return files
 
-        except DatabricksRestError:
+        except DatabricksError:
             raise
 
         except Exception as e:
-            raise DatabricksRestError(
+            raise DatabricksError(
                 f'Unable to list "{workspace_path}" on "{self._host}": {e}'
             )
 
@@ -315,7 +327,7 @@ class Workspace(RESTClient):
         :param recursive:      if the path is a directory, do a recursive
                                removal if True, otherwise don't.
 
-        :raises DatabricksRestError: on error, or on file not found. The
+        :raises DatabricksError: on error, or on file not found. The
                 code field will be set appropriately.
         """
         url = self._workspace_url('delete')
@@ -323,11 +335,11 @@ class Workspace(RESTClient):
         try:
             self._issue_post(url, payload)
 
-        except DatabricksRestError:
+        except DatabricksError:
             raise
 
         except Exception as e:
-            raise DatabricksRestError(
+            raise DatabricksError(
                 f'Unable to remove "{workspace_path}" on "{self._host}": {e}'
             )
 
@@ -339,7 +351,7 @@ class Workspace(RESTClient):
 
         :param workspace_path: path to folder to create
 
-        :raises DatabricksRestError: on error. The code field will be set
+        :raises DatabricksError: on error. The code field will be set
             to StatusCode.ALREADY_EXISTS if something exists in any
             prefix of the input path. Otherwise, it'll be set to
             StatusCode.UNKNOWN_ERROR.
@@ -349,11 +361,11 @@ class Workspace(RESTClient):
         try:
             self._issue_post(url, payload)
 
-        except DatabricksRestError:
+        except DatabricksError:
             raise
 
         except Exception as e:
-            raise DatabricksRestError(
+            raise DatabricksError(
                 f'Unable to create "{workspace_path}" on "{self._host}": {e}'
             )
 
@@ -370,7 +382,7 @@ class Workspace(RESTClient):
                                extension is stripped.
         :param overwrite:      whether or not to overwrite existing files
 
-        :raises DatabricksRestError: on error. The code field will be set
+        :raises DatabricksError: on error. The code field will be set
             to StatusCode.ALREADY_EXISTS if the remote folder exists already.
             It will be set to StatusCode.NOT_FOUND if the local directory
             doesn't exist. It'll be set to something else otherwise.
@@ -390,11 +402,11 @@ class Workspace(RESTClient):
             url = self._workspace_url('import')
             self._issue_post(url, payload, file=local_path)
 
-        except DatabricksRestError:
+        except DatabricksError:
             raise
 
         except Exception as e:
-            raise DatabricksRestError(
+            raise DatabricksError(
                 f'Unable to remove "{workspace_path}" on "{self._host}": {e}'
             )
 
@@ -412,13 +424,13 @@ class Workspace(RESTClient):
                                and overwrite is False, the import will fail.
         :param overwrite:      whether or not to overwrite existing files
 
-        :raises DatabricksRestError: on error. The code field will be set
+        :raises DatabricksError: on error. The code field will be set
             to StatusCode.ALREADY_EXISTS if the remote folder exists already.
             It will be set to StatusCode.NOT_FOUND if the local directory
             doesn't exist. It'll be set to something else otherwise.
         """
         if not os.path.isdir(local_dir):
-            raise DatabricksRestError(
+            raise DatabricksError(
                 code=StatusCode.NOT_FOUND,
                 message=f'Directory "{local_dir}" does not exist'
             )
@@ -453,7 +465,7 @@ class Workspace(RESTClient):
         :param dbc_path:         the path to the (local) DBC
         :param workspace_folder: the path to the (nonexistent) remote folder
 
-        :raises DatabricksRestError: on error. The code field will be set
+        :raises DatabricksError: on error. The code field will be set
             to StatusCode.ALREADY_EXISTS if the remote folder exists already.
             It will be set to StatusCode.NOT_FOUND if the local directory
             doesn't exist. It'll be set to something else otherwise.
@@ -464,11 +476,11 @@ class Workspace(RESTClient):
             params = {'path': workspace_folder, 'format': 'DBC'}
             self._issue_post(url, params, file=dbc_path)
 
-        except DatabricksRestError:
+        except DatabricksError:
             raise
 
         except Exception as e:
-            raise DatabricksRestError(
+            raise DatabricksError(
                 f'Unable to import "{dbc_path}" to "{self._host}": {e}'
             )
 
@@ -479,13 +491,13 @@ class Workspace(RESTClient):
         :param workspace_path: the remote path
         :param local_dir:      the local directory, which may or may not exist.
 
-        :raises DatabricksRestError: on error
+        :raises DatabricksError: on error
         """
 
         # This code is adapted from the databricks-cli
         # WorkspaceApi.export_workspace_dir() method.
         if os.path.isfile(local_dir):
-            raise DatabricksRestError(
+            raise DatabricksError(
                 code=StatusCode.ALREADY_EXISTS,
                 message=f'Local directory {local_dir} exists and is not a '
                         'directory'
@@ -511,7 +523,7 @@ class Workspace(RESTClient):
         :param workspace_path: the path to the remote notebook
         :param local_path:     the local path
 
-        :raises DatabricksRestError: on error, including if the local path
+        :raises DatabricksError: on error, including if the local path
             already exists
         """
         url = self._workspace_url('export')
@@ -520,15 +532,15 @@ class Workspace(RESTClient):
             resp = self._issue_get(url, params)
             data = resp.json()
             if 'content' not in data:
-                raise DatabricksRestError('No "content" in JSON response.')
+                raise DatabricksError('No "content" in JSON response.')
             with open(local_path, 'wb') as f:
                 f.write(base64.b64decode(data['content']))
 
-        except DatabricksRestError:
+        except DatabricksError:
             raise
 
         except Exception as e:
-            raise DatabricksRestError(
+            raise DatabricksError(
                 f'Unable to export "{workspace_path}" on "{self._host}": {e}'
             )
 

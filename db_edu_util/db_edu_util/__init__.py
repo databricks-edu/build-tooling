@@ -2,7 +2,7 @@
 Utility library used by build tools.
 """
 
-VERSION = '1.3.0'
+VERSION = '1.4.0'
 
 from typing import Callable, Iterable, Any
 from textwrap import TextWrapper
@@ -95,7 +95,7 @@ def die(msg: str) -> NoReturn:
 
     :param msg: the message
     """
-    print(msg, file=sys.stderr)
+    print(_no_prefix_wrapper.fill(msg), file=sys.stderr)
     sys.exit(1)
 
 

@@ -1,5 +1,10 @@
 # notebooktools Change Log
 
+**Version 1.4.0**
+
+- The `databricks` package now supports a `home` value in `~/.databrickscfg`
+  profiles.
+
 **Version 1.3.0**
 
 - The `db_edu_util.db_cli` package's `databricks` function has been replaced

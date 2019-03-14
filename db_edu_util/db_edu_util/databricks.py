@@ -30,6 +30,19 @@ WORKSPACE_PATH = f'{API_PATH}/workspace'
 # Private Functions
 # -----------------------------------------------------------------------------
 
+def _fix_host(host: str) -> str:
+    """
+    Remove any leading "https://" from a host
+
+    :param host: the host string
+
+    :return: possibly modified result
+    """
+    if host.startswith('https://'):
+        host = host[len('https://'):]
+    return host.replace('/', '')
+
+
 def _map_rest_error(json_data: Dict[str, str]) -> Tuple[StatusCode,
                                                         Optional[str]]:
     """
@@ -90,11 +103,42 @@ class RESTClient(object):
     Base class for exposed API classes. Right now, there's only one
     exposed API class (Workspace), but there may be more in the future.
     """
-    def __init__(self, profile: str = 'DEFAULT'):
-        (self._host, self._token) = self._get_profile(profile)
+    def __init__(self,
+                 profile: str = 'DEFAULT',
+                 config: str = "~/.databrickscfg"):
+        """
+        :param profile: the name of the Databricks profile to use.
+        :param config:  path to an alternate configuration to use, instead of
+                        "~/.databrickscfg". Can contain a "~", which will be
+                        expanded.
 
-    def _get_profile(self, profile: str) -> Tuple[str, str]:
-        config_file = os.path.expanduser("~/.databrickscfg")
+        :raises DatabricksError: configuration failure
+        """
+        if profile is None:
+            profile = 'DEFAULT'
+        (self._host, self._token, self._home) = self._get_profile(profile,
+                                                                  config)
+        self._profile = profile
+
+    @property
+    def host(self):
+        return self._host
+
+    @property
+    def profile(self):
+        return self._profile
+
+    @property
+    def token(self):
+        return self._token
+
+    @property
+    def home(self):
+        return self._home
+
+    def _get_profile(self, profile: str,
+                     config: str) -> Tuple[str, str, Optional[str]]:
+        config_file = os.path.expanduser(config)
         if not os.path.exists(config_file):
             raise DatabricksError(
                 message=f'"{config_file}" does not exist.',
@@ -112,6 +156,12 @@ class RESTClient(object):
 
         # Note that DEFAULT is always present, but might be empty.
         try:
+            if (profile != 'DEFAULT') and (not cfg.has_section(profile)):
+                raise DatabricksError(
+                    message=f'"{config_file}" has no profile "{profile}".',
+                    code=StatusCode.CONFIG_ERROR
+                )
+
             section = cfg[profile]
             keys = set(section.keys())
             for required in ('host', 'token'):
@@ -122,12 +172,20 @@ class RESTClient(object):
                         code=StatusCode.CONFIG_ERROR
                     )
 
-            host = section['host']
-            if host.startswith('https://'):
-                host = host[len('https://'):]
-            host = host.replace('/', '')
+            host = _fix_host(section['host'])
 
-            return (host, section['token'])
+            home = os.getenv('DB_SHARD_HOME')
+            if not home:
+                home = section.get('home')
+
+            if home:
+                while home[-1] == '/':
+                    home = home[:-1]
+
+                if not home:
+                    home = None
+
+            return (host, section['token'], home)
 
         except KeyError:
             raise DatabricksError(
@@ -273,22 +331,37 @@ class ObjectInfo:
 class Workspace(RESTClient):
     """
     Provides a subset of the functionality of "databricks workspace".
+    In addition to the methods, below, instances of this class also have
+    four read-only properties from the configuration:
+
+    - host: the host name (without any leading "https://")
+    - token: the API token
+    - home: the (shard) home setting, if defined, or None
+    - profile: the Databricks profile passed into the constructor
     """
-    def __init__(self, profile: str = 'DEFAULT'):
+    def __init__(self,
+                 profile: str = 'DEFAULT',
+                 config: str = '~/.databrickscfg'):
         """
         Create a new Workspace object.
 
-        :param profile: the name of the "~/.databrickscfg" profile to use.
+        :param profile: the name of the Databricks profile to use.
+        :param config:  path to an alternate configuration to use, instead of
+                        "~/.databrickscfg". Can contain a "~", which will be
+                        expanded.
 
         :raises DatabricksError: configuration failure
         """
-        super().__init__(profile)
+        super().__init__(profile, config)
 
     def ls(self, workspace_path: str):
         """
         List a path in the configuration.
 
-        :param workspace_path: the remote path (full path)
+        :param workspace_path: the remote path. If this path is relative, and
+                               "home" is defined, the path will be created
+                               from "home" + "workspace_path". Otherwise,
+                               an error will be thrown.
 
         :return: the list of files/folders
 
@@ -296,7 +369,7 @@ class Workspace(RESTClient):
                 code field will be set appropriately.
         """
         url = self._workspace_url('list')
-        payload = {'path': workspace_path}
+        payload = {'path': self._adjust_remote_path(workspace_path)}
         try:
             resp = self._issue_get(url, payload)
             data = resp.json()
@@ -324,7 +397,11 @@ class Workspace(RESTClient):
         """
         Remove a path on the remote workspace.
 
-        :param workspace_path: the path to remove
+        :param workspace_path: the remote path. If this path is relative, and
+                               "home" is defined or "DB_SHARD_HOME" is set in
+                               the environment, the path will be created
+                               from "home" + "workspace_path". Otherwise,
+                               an error will be thrown.
         :param recursive:      if the path is a directory, do a recursive
                                removal if True, otherwise don't.
 
@@ -332,7 +409,10 @@ class Workspace(RESTClient):
                 code field will be set appropriately.
         """
         url = self._workspace_url('delete')
-        payload = {'path': workspace_path, 'recursive': recursive}
+        payload = {
+            'path': self._adjust_remote_path(workspace_path),
+            'recursive': recursive
+        }
         try:
             self._issue_post(url, payload)
 
@@ -350,15 +430,19 @@ class Workspace(RESTClient):
         they do not exist. If there exists an object (not a directory) at any
         prefix of the input path, an exception is raised.
 
-        :param workspace_path: path to folder to create
+        :param workspace_path: the remote path. If this path is relative, and
+                               "home" is defined, the path will be created
+                               from "home" + "workspace_path". Otherwise,
+                               an error will be thrown.
 
         :raises DatabricksError: on error. The code field will be set
             to StatusCode.ALREADY_EXISTS if something exists in any
-            prefix of the input path. Otherwise, it'll be set to
-            StatusCode.UNKNOWN_ERROR.
+            prefix of the input path. It'll be set to StatusCode.CONFIG_ERROR
+            if the path is relative and "home" isn't set. Otherwise, it'll be
+            set to StatusCode.UNKNOWN_ERROR.
         """
         url = self._workspace_url('mkdirs')
-        payload = {'path': workspace_path}
+        payload = {'path': self._adjust_remote_path(workspace_path)}
         try:
             self._issue_post(url, payload)
 
@@ -380,20 +464,25 @@ class Workspace(RESTClient):
         :param local_path:     the path to the local file
         :param workspace_path: the path to the target file in the Databricks
                                workspace. If this file has an extension, the
-                               extension is stripped.
+                               extension is stripped. If the path is relative,
+                               and "home" is defined, the path will be created
+                               from "home" + "workspace_path". Otherwise,
+                               an error will be thrown.
         :param overwrite:      whether or not to overwrite existing files
 
         :raises DatabricksError: on error. The code field will be set
             to StatusCode.ALREADY_EXISTS if the remote folder exists already.
-            It will be set to StatusCode.NOT_FOUND if the local directory
-            doesn't exist. It'll be set to something else otherwise.
+            It will be set to StatusCode.CONFIG_ERROR if the path is relative
+            and "home" isn't set. It will be set to StatusCode.NOT_FOUND if the
+            local directory doesn't exist. It'll be set to something else
+            otherwise.
         """
 
         path, ext = os.path.splitext(workspace_path)
         language = NotebookLanguage.from_path(local_path)
         format = self._format_for_ext(ext)
         payload = {
-            "path": path,
+            "path": self._adjust_remote_path(path),
             "format": format,
             "language": language.value,
             "overwrite": overwrite
@@ -423,12 +512,18 @@ class Workspace(RESTClient):
                                workspace. If the folder already exists, and
                                there are name clashes in what is being uploaded,
                                and overwrite is False, the import will fail.
+                               If the path is relative, and "home" is defined,
+                               the path will be created from "home" +
+                               "workspace_path". Otherwise, an error will be
+                               thrown.
         :param overwrite:      whether or not to overwrite existing files
 
         :raises DatabricksError: on error. The code field will be set
             to StatusCode.ALREADY_EXISTS if the remote folder exists already.
             It will be set to StatusCode.NOT_FOUND if the local directory
-            doesn't exist. It'll be set to something else otherwise.
+            doesn't exist. It will be set to StatusCode.CONFIG_ERROR if the
+            path is relative and "home" isn't set. It'll be set to something
+            else otherwise.
         """
         if not os.path.isdir(local_dir):
             raise DatabricksError(
@@ -441,6 +536,7 @@ class Workspace(RESTClient):
         filenames = os.listdir(local_dir)
         filenames = [f for f in filenames if not f.startswith('.')]
 
+        workspace_path = self._adjust_remote_path(workspace_path)
         self.mkdirs(workspace_path)
         for filename in filenames:
             cur_src = os.path.join(local_dir, filename)
@@ -464,17 +560,26 @@ class Workspace(RESTClient):
         Imports a DBC into a remote folder.
 
         :param dbc_path:         the path to the (local) DBC
-        :param workspace_folder: the path to the (nonexistent) remote folder
+        :param workspace_folder: the path to the (nonexistent) remote folder.
+                                 If the path is relative, and "home" is defined,
+                                 the path will be created from "home" +
+                                 "workspace_path". Otherwise, an error will be
+                                 thrown.
 
         :raises DatabricksError: on error. The code field will be set
             to StatusCode.ALREADY_EXISTS if the remote folder exists already.
             It will be set to StatusCode.NOT_FOUND if the local directory
-            doesn't exist. It'll be set to something else otherwise.
+            doesn't exist. It will be set to StatusCode.CONFIG_ERROR if the
+            path is relative and "home" isn't set. It'll be set to something
+            else otherwise.
         """
 
         try:
             url = self._workspace_url('import')
-            params = {'path': workspace_folder, 'format': 'DBC'}
+            params = {
+                'path': self._adjust_remote_path(workspace_folder),
+                'format': 'DBC'
+            }
             self._issue_post(url, params, file=dbc_path)
 
         except DatabricksError:
@@ -489,10 +594,18 @@ class Workspace(RESTClient):
         """
         Export a remote directory to a local directory.
 
-        :param workspace_path: the remote path
+        :param workspace_path: the remote path. If the path is relative, and
+                               "home" is defined, the path will be created from
+                               "home" + "workspace_path". Otherwise, an error
+                               will be thrown.
         :param local_dir:      the local directory, which may or may not exist.
 
-        :raises DatabricksError: on error
+        :raises DatabricksError: on error. The code field will be set
+            to StatusCode.ALREADY_EXISTS if the local directory exists but
+            isn't actually a directory. It will be set to StatusCode.NOT_FOUND
+            if the remote path doesn't exist. It will be set to
+            StatusCode.CONFIG_ERROR if the path is relative and "home" isn't
+            set. It'll be set to something else otherwise.
         """
 
         # This code is adapted from the databricks-cli
@@ -521,15 +634,23 @@ class Workspace(RESTClient):
         """
         Export a remote Databricks notebook to a local file.
 
-        :param workspace_path: the path to the remote notebook
+        :param workspace_path: the path to the remote notebook. If the path is
+                               relative, and "home" is defined, the path will
+                               be created from "home" + "workspace_path".
+                               Otherwise, an error will be thrown.
         :param local_path:     the local path
 
-        :raises DatabricksError: on error, including if the local path
-            already exists
+        :raises DatabricksError: on error. The code field will be set
+            to StatusCode.ALREADY_EXISTS if the remote folder exists already.
+            It will be set to StatusCode.CONFIG_ERROR if the path is relative
+            and "home" isn't set.
         """
         url = self._workspace_url('export')
         try:
-            params = {"path": workspace_path, "format": "SOURCE"}
+            params = {
+                "path": self._adjust_remote_path(workspace_path),
+                "format": "SOURCE"
+            }
             resp = self._issue_get(url, params)
             data = resp.json()
             if 'content' not in data:
@@ -544,6 +665,21 @@ class Workspace(RESTClient):
             raise DatabricksError(
                 f'Unable to export "{workspace_path}" on "{self._host}": {e}'
             )
+
+    def _adjust_remote_path(self, path: str) -> str:
+        if path[0] == '/':
+            return path
+
+        if self.home:
+            return f'{self.home}/{path}'
+
+        raise DatabricksError(
+            code=StatusCode.CONFIG_ERROR,
+            message=f'Path "{path}" is relative, but profile "{self.profile} '
+                    'has no "home" variable, and "DB_SHARD_HOME" is not set '
+                    'in the environment.'
+        )
+
 
     def _format_for_ext(self, ext: str) -> str:
         return 'JUPYTER' if ext == '.ipynb' else 'SOURCE'

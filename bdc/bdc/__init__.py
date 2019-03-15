@@ -40,7 +40,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.32.0"
+VERSION = "1.32.1"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -744,7 +744,7 @@ class BuildData(DefaultStrMixin):
         :param notebooks:           list of parsed Notebook objects
         :param slides:              parsed SlideInfo object
         :param datasets:            parsed DatasetData object
-        :param misc_files:          parsed MiscFileData object
+        :param misc_files:          parsed MiscFileData objects
         :param keep_lab_dirs:       value of keep_lab_dirs setting
         :param notebook_heading:    parsed NotebookHeading object
         :param markdown_cfg:        parsed MarkdownInfo object
@@ -1205,6 +1205,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                 is_template=obj.get('template', False),
                 only_in_profile=obj.get('only_in_profile', None)
             )
+
             # Sanity checks: A Markdown file can be translated to Markdown,
             # PDF or HTML. An HTML file can be translated to HTML or PDF.
             # is_template is disallowed for non-text files.
@@ -1286,7 +1287,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
             return DatasetData(src=src, dest=adj_dest, license=license,
                                readme=readme)
 
-    def parse_file_section(section: Dict[str, Any],
+    def parse_file_section(section: Sequence[Dict[str, Any]],
                            parse: Callable[[Any, *Any], Any],
                            *args: Any) -> Tuple:
         # Use the supplied parse function to parse each element in the
@@ -1424,6 +1425,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
     def parse_profiles(contents: Dict[str, Any]) -> Set[master_parse.Profile]:
         profiles = contents.get('profiles')
         use_profiles = bool_field(contents, 'use_profiles', False)
+
         if profiles and use_profiles:
             raise BuildConfigError(
                 'You cannot specify both "use_profiles" and "profiles".'
@@ -1455,10 +1457,12 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                     f'Profile "{thing}" is neither a simple string nor a ' +
                     '"name: value"'
                 )
-        else:
+        elif use_profiles:
             warn('"use_profiles" is deprecated. Use explicit profiles.')
             res = {master_parse.Profile(name='amazon', value='Amazon'),
                    master_parse.Profile(name='azure', value='azure')}
+        else:
+            res = set()
 
         return res
 
@@ -1517,16 +1521,6 @@ def load_build_yaml(yaml_file: str) -> BuildData:
         notebooks = parse_file_section(notebooks_cfg, parse_notebook,
                                        notebook_defaults, variables,
                                        profiles, build_yaml_dir)
-
-        # If there are any profiles in the notebooks, but no profiles in the
-        # build, abort.
-        nb_profiles = {n.only_in_profile for n in notebooks if n.only_in_profile}
-        if (len(profiles) == 0) and (len(nb_profiles) > 0):
-            raise BuildConfigError(
-                'At least one notebook has "only_in_profile" set, but the ' +
-                'build does not specify any profiles.'
-            )
-
     else:
         notebooks = None
 
@@ -1942,7 +1936,7 @@ def copy_notebooks(build: BuildData,
     for notebook in build.notebooks:
         src_path = joinpath(build.source_base, notebook.src)
         if (profile and notebook.only_in_profile and
-                notebook.only_in_profile != profile):
+                notebook.only_in_profile != profile.name):
             info(
                 f'Suppressing notebook "{src_path}", which is ' +
                 f'{profile.name}-only.'
@@ -2078,7 +2072,7 @@ def copy_misc_files(build: BuildData,
     """
     if build.misc_files:
         for f in build.misc_files:
-            if f.only_in_profile and (f.only_in_profile != profile):
+            if f.only_in_profile and (f.only_in_profile != profile.name):
                 continue
 
             s = joinpath(build.course_directory, f.src)
@@ -2246,7 +2240,7 @@ def build_course(build: BuildData,
     if path.isdir(dest_dir):
         if not overwrite:
             raise BuildError(
-                f'Directory "{dest_dir}" already exists, and you did not ' +
+                f'Directory "{dest_dir}" already exists, and you did not '
                 'specify overwrite.'
             )
 
@@ -2264,7 +2258,7 @@ def build_course(build: BuildData,
         raise BuildError(f"{errors} error(s).")
 
     print(
-        f'\nPublished {build.course_info.name}, ' +
+        f'\nPublished {build.course_info.name}, '
         f'version {build.course_info.version} to {dest_dir}\n'
     )
 
@@ -2572,6 +2566,25 @@ def validate_build(build: BuildData) -> BuildData:
     footers = set()
 
     new_notebooks = []
+
+    # If there are any profiles in the notebooks or misc. files, but no
+    # profiles in the build, abort.
+    if len(build.profiles) == 0:
+        nb_profiles = {n.only_in_profile for n in build.notebooks
+                                         if n.only_in_profile}
+        if len(nb_profiles) > 0:
+            raise BuildConfigError(
+                'At least one notebook has "only_in_profile" set, but the '
+                'build does not specify any profiles.'
+            )
+
+        misc_profiles = {m.only_in_profile for m in build.misc_files
+                                           if m.only_in_profile}
+        if len(misc_profiles) > 0:
+            raise BuildConfigError(
+                'At least one miscellaneous file has "only_in_profile" set, '
+                'but the build does not specify any profiles.'
+            )
 
     for notebook in build.notebooks:
         src_path = rel_to_src_base(notebook.src)

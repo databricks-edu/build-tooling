@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+**Version 1.32.1**
+
+- Fixed a bug in the handling of `only_in_profile` in `notebook` and
+  `misc_file` sections, leading to files so marked not being copied.
+
 **Version 1.32.0**
 
 - Removed direct support for `DB_SHARD_HOME` and the `home` configuration 

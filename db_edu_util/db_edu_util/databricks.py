@@ -184,9 +184,7 @@ class RESTClient(object):
                     home = f'/Users/{username}'
 
             if home:
-                while home[-1] == '/':
-                    home = home[:-1]
-
+                home = home.rstrip('/')
                 if not home:
                     home = None
 

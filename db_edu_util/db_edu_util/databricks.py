@@ -155,48 +155,41 @@ class RESTClient(object):
             )
 
         # Note that DEFAULT is always present, but might be empty.
-        try:
-            if (profile != 'DEFAULT') and (not cfg.has_section(profile)):
+        if (profile != 'DEFAULT') and (not cfg.has_section(profile)):
+            raise DatabricksError(
+                message=f'"{config_file}" has no profile "{profile}".',
+                code=StatusCode.CONFIG_ERROR
+            )
+
+        section = cfg[profile]
+        keys = set(section.keys())
+        for required in ('host', 'token'):
+            if required not in keys:
                 raise DatabricksError(
-                    message=f'"{config_file}" has no profile "{profile}".',
+                    message=f'[{profile}] in "{config_file}" is missing a '
+                    f'value for "{required}".',
                     code=StatusCode.CONFIG_ERROR
                 )
 
-            section = cfg[profile]
-            keys = set(section.keys())
-            for required in ('host', 'token'):
-                if required not in keys:
-                    raise DatabricksError(
-                        message=f'[{profile}] in "{config_file}" is missing a '
-                                f'value for "{required}".',
-                        code=StatusCode.CONFIG_ERROR
-                    )
+        host = _fix_host(section['host'])
 
-            host = _fix_host(section['host'])
+        home = os.getenv('DB_SHARD_HOME')
+        if not home:
+            home = section.get('home')
 
-            home = os.getenv('DB_SHARD_HOME')
+        if not home:
+            username = section.get('username')
+            if username:
+                home = f'/Users/{username}'
+
+        if home:
+            home = home.rstrip('/')
             if not home:
-                home = section.get('home')
+                # Stripped away all the '/' and got an empty string.
+                # So, just make it the top.
+                home = '/'
 
-            if not home:
-                username = section.get('username')
-                if username:
-                    home = f'/Users/{username}'
-
-            if home:
-                home = home.rstrip('/')
-                if not home:
-                    # Stripped away all the '/' and got an empty string.
-                    # So, just make it the top.
-                    home = '/'
-
-            return (host, section['token'], home)
-
-        except KeyError:
-            raise DatabricksError(
-                message=f'"{config_file}" has no "{profile}" profile.',
-                code=StatusCode.CONFIG_ERROR
-            )
+        return (host, section['token'], home)
 
     def _issue_get(self, url: str, params: Dict[str, Any]) -> requests.Response:
         resp = requests.get(url, params=params, headers=self._auth_header())
@@ -234,7 +227,6 @@ class RESTClient(object):
     def _ensure_json(self, resp: requests.Response) -> NoReturn:
         content_type = resp.headers.get('Content-Type', '<unknown>').split(';')
         if content_type[0] not in ['application/json', 'text/json']:
-            print(resp.text)
             raise DatabricksError(
                 f"Got back unknown content object_type: {content_type}"
             )

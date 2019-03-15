@@ -1,5 +1,10 @@
 # notebooktools Change Log
 
+**Version 1.6.1**
+
+- Cleaned up configuration-reading code in `databricks` and removed stray
+  print statement.
+
 **Version 1.6.0**
 
 - Added `Workspace.export_dbc()` to the `databricks` package.

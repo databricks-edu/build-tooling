@@ -1,5 +1,9 @@
 # Change log for `course`
 
+**Version 2.5.0**
+
+- Added `databricks_cli` version back to `course toolversions`.
+
 **Version 2.4.0**
 
 - Removed direct support for `DB_SHARD_HOME` and the `home` configuration 

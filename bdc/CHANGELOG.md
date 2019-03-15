@@ -4,6 +4,7 @@
 
 - Added the ability to mark a notebook as not to be built. The notebook is
   excluded from all build profiles, but _included_ in uploads and downloads.
+  This change addresses [Issue #73](https://github.com/databricks-edu/build-tooling/issues/73).
 
 **Version 1.32.1**
 

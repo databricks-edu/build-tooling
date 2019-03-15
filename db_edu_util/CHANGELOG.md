@@ -1,5 +1,15 @@
 # notebooktools Change Log
 
+**Version 1.6.0**
+
+- Added `Workspace.export_dbc()` to the `databricks` package.
+
+**Version 1.5.0**
+
+- If `home` is not set in `~/.databrickscfg`, and the `DB_SHARD_HOME`
+  environment variable isn't set, try to determine home from a
+  `username` value in the profile.
+
 **Version 1.4.0**
 
 - The `databricks` package now supports a `home` value in `~/.databrickscfg`

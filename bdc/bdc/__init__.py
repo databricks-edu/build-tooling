@@ -40,7 +40,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.32.1"
+VERSION = "1.33.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -656,29 +656,34 @@ class NotebookData(DefaultStrMixin):
                  src: str,
                  dest: str,
                  upload_download: bool = True,
+                 include_in_build: bool = True,
                  master: Optional[MasterParseInfo] = None,
                  variables: Optional[Dict[AnyStr, AnyStr]] = None,
                  only_in_profile: Optional[AnyStr] = None):
         """
         Captures parsed notebook data.
 
-        :param src:             Partial or full path to the notebook
-        :param dest:            Destination for the notebook, which can
-                                contain variables. This value can be set
-                                to `None`, as long as a destination is
-                                available in the notebook defaults.
-        :param upload_download: Whether upload and download are enabled
-                                for this notebook.
-        :param master:          The master parse data.
-        :param variables:       Any variables for the notebook.
-        :param only_in_profile: Profile to which notebook is restricted, if
-                                any.
+        :param src:               Partial or full path to the notebook
+        :param dest:              Destination for the notebook, which can
+                                  contain variables. This value can be set
+                                  to `None`, as long as a destination is
+                                  available in the notebook defaults.
+        :param upload_download:   Whether upload and download are enabled
+                                  for this notebook.
+        :params include_in_build: True to include the file in the build,
+                                  False to exclude it. This setting has no
+                                  bearing on upload/download.
+        :param master:            The master parse data.
+        :param variables:         Any variables for the notebook.
+        :param only_in_profile:   Profile to which notebook is restricted, if
+                                  any.
         """
         super(NotebookData, self).__init__()
         self.src = src
         self.dest = dest
         self.master = master
         self.upload_download = upload_download
+        self.include_in_build = include_in_build
         self.variables = variables or {}
         self.only_in_profile = only_in_profile
 
@@ -1117,6 +1122,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
             dest=dest,
             master=master,
             upload_download=bool_field(obj, 'upload_download', True),
+            include_in_build=bool_field(obj, 'include_in_build', True),
             variables=variables,
             only_in_profile=prof
         )
@@ -1938,8 +1944,15 @@ def copy_notebooks(build: BuildData,
         if (profile and notebook.only_in_profile and
                 notebook.only_in_profile != profile.name):
             info(
-                f'Suppressing notebook "{src_path}", which is ' +
+                f'Suppressing notebook "{src_path}", which is '
                 f'{profile.name}-only.'
+            )
+            continue
+
+        if (not notebook.include_in_build):
+            info(
+                f'Suppressing notebook "{src_path}", because include_in_build '
+                'is set to "false".'
             )
             continue
 
@@ -2142,7 +2155,7 @@ def bundle_course(build: BuildData,
 
     t = StringTemplate(joinpath(dest_dir, build.bundle_info.zipfile))
     zip_path = t.safe_substitute(vars)
-    print(f'Writing bundle {zip_path}')
+    verbose(f'Writing bundle {zip_path}')
 
     with ZipFile(zip_path, 'w') as z:
         for file in build.bundle_info.files:
@@ -2220,6 +2233,7 @@ def do_build(build: BuildData,
         rm_rf(labs_full_path)
         rm_rf(instructor_labs)
 
+
 def build_course(build: BuildData,
                  dest_dir: str,
                  overwrite: bool) -> NoReturn:
@@ -2251,7 +2265,10 @@ def build_course(build: BuildData,
     else:
         for profile in build.profiles:
             info('')
-            info(f"Building profile {profile.name}")
+            msg = f"Building profile {profile.name}"
+            info('-' * len(msg))
+            info(msg)
+            info('-' * len(msg))
             do_build(build, dest_dir, profile)
 
     if errors > 0:

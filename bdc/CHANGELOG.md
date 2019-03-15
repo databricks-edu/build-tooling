@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+**Version 1.33.0**
+
+- Added the ability to mark a notebook as not to be built. The notebook is
+  excluded from all build profiles, but _included_ in uploads and downloads.
+
 **Version 1.32.1**
 
 - Fixed a bug in the handling of `only_in_profile` in `notebook` and

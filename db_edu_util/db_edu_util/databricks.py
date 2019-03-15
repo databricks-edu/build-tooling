@@ -186,7 +186,9 @@ class RESTClient(object):
             if home:
                 home = home.rstrip('/')
                 if not home:
-                    home = None
+                    # Stripped away all the '/' and got an empty string.
+                    # So, just make it the top.
+                    home = '/'
 
             return (host, section['token'], home)
 

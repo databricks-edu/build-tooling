@@ -155,43 +155,41 @@ class RESTClient(object):
             )
 
         # Note that DEFAULT is always present, but might be empty.
-        try:
-            if (profile != 'DEFAULT') and (not cfg.has_section(profile)):
+        if (profile != 'DEFAULT') and (not cfg.has_section(profile)):
+            raise DatabricksError(
+                message=f'"{config_file}" has no profile "{profile}".',
+                code=StatusCode.CONFIG_ERROR
+            )
+
+        section = cfg[profile]
+        keys = set(section.keys())
+        for required in ('host', 'token'):
+            if required not in keys:
                 raise DatabricksError(
-                    message=f'"{config_file}" has no profile "{profile}".',
+                    message=f'[{profile}] in "{config_file}" is missing a '
+                    f'value for "{required}".',
                     code=StatusCode.CONFIG_ERROR
                 )
 
-            section = cfg[profile]
-            keys = set(section.keys())
-            for required in ('host', 'token'):
-                if required not in keys:
-                    raise DatabricksError(
-                        message=f'[{profile}] in "{config_file}" is missing a '
-                                f'value for "{required}".',
-                        code=StatusCode.CONFIG_ERROR
-                    )
+        host = _fix_host(section['host'])
 
-            host = _fix_host(section['host'])
+        home = os.getenv('DB_SHARD_HOME')
+        if not home:
+            home = section.get('home')
 
-            home = os.getenv('DB_SHARD_HOME')
+        if not home:
+            username = section.get('username')
+            if username:
+                home = f'/Users/{username}'
+
+        if home:
+            home = home.rstrip('/')
             if not home:
-                home = section.get('home')
+                # Stripped away all the '/' and got an empty string.
+                # So, just make it the top.
+                home = '/'
 
-            if home:
-                while home[-1] == '/':
-                    home = home[:-1]
-
-                if not home:
-                    home = None
-
-            return (host, section['token'], home)
-
-        except KeyError:
-            raise DatabricksError(
-                message=f'"{config_file}" has no "{profile}" profile.',
-                code=StatusCode.CONFIG_ERROR
-            )
+        return (host, section['token'], home)
 
     def _issue_get(self, url: str, params: Dict[str, Any]) -> requests.Response:
         resp = requests.get(url, params=params, headers=self._auth_header())
@@ -229,7 +227,6 @@ class RESTClient(object):
     def _ensure_json(self, resp: requests.Response) -> NoReturn:
         content_type = resp.headers.get('Content-Type', '<unknown>').split(';')
         if content_type[0] not in ['application/json', 'text/json']:
-            print(resp.text)
             raise DatabricksError(
                 f"Got back unknown content object_type: {content_type}"
             )
@@ -665,6 +662,45 @@ class Workspace(RESTClient):
             raise DatabricksError(
                 f'Unable to export "{workspace_path}" on "{self._host}": {e}'
             )
+
+    def export_dbc(self, workspace_path: str, local_path: str):
+        """
+
+        :param workspace_path: the remote path. If the path is relative, and
+                               "home" is defined, the path will be created from
+                               "home" + "workspace_path". Otherwise, an error
+                               will be thrown.
+        :param local_path:     the local path. If it exists, it'll be
+                               overwritten.
+
+        :raises DatabricksError: on error. The code field will be set
+            to StatusCode.ALREADY_EXISTS if the local file exists but is
+            a directory. It will be set to StatusCode.NOT_FOUND
+            if the remote path doesn't exist. It will be set to
+            StatusCode.CONFIG_ERROR if the path is relative and "home" isn't
+            set. It'll be set to something else otherwise.
+        """
+        url = self._workspace_url('export')
+        try:
+            params = {
+                "path": self._adjust_remote_path(workspace_path),
+                "format": "DBC"
+            }
+            resp = self._issue_get(url, params)
+            data = resp.json()
+            if 'content' not in data:
+                raise DatabricksError('No "content" in JSON response.')
+            with open(local_path, 'wb') as f:
+                f.write(base64.b64decode(data['content']))
+
+        except DatabricksError:
+            raise
+
+        except Exception as e:
+            raise DatabricksError(
+                f'Unable to export "{workspace_path}" on "{self._host}": {e}'
+            )
+
 
     def _adjust_remote_path(self, path: str) -> str:
         if path[0] == '/':

@@ -23,7 +23,7 @@ from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.4.0'
+VERSION = '2.5.0'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -1060,13 +1060,17 @@ def print_tool_versions() -> NoReturn:
     import gendbc
     import master_parse
     import db_edu_util
-    from db_edu_util import databricks
+    from databricks_cli.version import version as dbcli_version
+
+
+
 
     print(f"course:                {VERSION}")
     print(f"bdc:                   {bdc.VERSION}")
     print(f"gendbc:                {gendbc.VERSION}")
     print(f"master_parse:          {master_parse.VERSION}")
     print(f"db_edu_util (library): {db_edu_util.VERSION}")
+    print(f"databricks:            {dbcli_version}")
 
 
 def which(cfg: Dict[str, str]) -> NoReturn:

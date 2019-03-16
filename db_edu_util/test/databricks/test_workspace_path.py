@@ -17,6 +17,10 @@ def config() -> str:
                    |host: https://bar.cloud.databricks.com
                    |token: kjhadsfkjhasdflkjhasdf
                    |home: /Users/someone@example.com
+                   |[baz]
+                   |host: https://baz.cloud.databricks.com
+                   |token: kjhadsfkjhasdflkjhasdf
+                   |username: baz@databricks.com
                    |'''
             ))
         yield path
@@ -58,3 +62,14 @@ def test_relative_path_cfg_and_env_home(config: str):
     p = w._adjust_remote_path(path)
     # Environment should be preferred over the config.
     assert p == f'{home}/{path}'
+
+
+def test_relative_path_and_username_default(config: str):
+    home = '/Users/foo@example.com'
+    if os.environ.get('DB_SHARD_HOME'):
+        del os.environ['DB_SHARD_HOME']
+    path = 'SomeFolder'
+    w = Workspace('baz', config)
+    p = w._adjust_remote_path(path)
+    assert w.home == '/Users/baz@databricks.com'
+    assert p == f'{w.home}/{path}'

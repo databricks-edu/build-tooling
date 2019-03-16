@@ -29,6 +29,10 @@ def base_config():
            |# Missing token
            |token: sadfuiy23894uihjksafdhkjl
            |host: https://home.cloud.databricks.com
+           |[has_user_not_home]
+           |token: sadfuiy23894uihjksafdhkjl
+           |host: https://home.cloud.databricks.com
+           |username: user@databricks.com
            |'''
     )
 
@@ -160,3 +164,12 @@ def test_default(config_with_default):
     assert w.token == default['token']
     assert w.home == default['home']
     assert w.host == databricks._fix_host(default['host'])
+
+
+def test_user_home_default(config):
+    cfg = ConfigParser()
+    cfg.read(config)
+    section = cfg['has_user_not_home']
+    user = section['username']
+    w = Workspace(config=config, profile='has_user_not_home')
+    assert w.home == f'/Users/{user}'

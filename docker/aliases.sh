@@ -92,4 +92,7 @@ function course {
   rm -f $TMP_ENV
 }
 
+function update_tools {
+  curl -L https://git.io/fhaLg | bash
+}
 

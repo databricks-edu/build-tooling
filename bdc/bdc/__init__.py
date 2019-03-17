@@ -40,7 +40,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.33.0"
+VERSION = "1.34.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -405,6 +405,12 @@ class CourseInfo(DefaultStrMixin):
     title: Optional[str] = None
 
     @property
+    def course_title(self):
+        if self.title:
+            return self.title
+        return self.name.replace('-', ' ').replace('_', ' ')
+
+    @property
     def course_id(self) -> str:
         """
         The course ID, which is a combination of the course name and the
@@ -487,6 +493,8 @@ class MasterParseInfo(DefaultStrMixin):
         :param answers:          whether to generate answer notebooks
         :param exercises:        whether to generate exercises notebook
         :param instructor:       whether to generate instructor notebooks
+        :param instructor_notes: where to write notebook instructor notes (a
+                                 Markdown file)
         :param heading:          heading information (a NotebookHeading object)
         :param footer:           footer information (a NotebookFooter object)
         :param encoding_in:      the encoding of the source notebooks
@@ -1836,12 +1844,13 @@ def process_master_notebook(dest_root: str,
                     copied += 1
 
                 if copied == 0:
-                    error(
-                        f'Found no generated {lang} {notebook_type.value} ' +
+                    raise BuildError(
+                        f'Found no generated {lang} {notebook_type.value} '
                         f'notebooks for "{notebook.src}"!'
                     )
 
-    def copy_instructor_notes(temp_file: str, final_dest: str) -> NoReturn:
+    def copy_generated_instructor_notes(temp_file: str,
+                                        final_dest: str) -> NoReturn:
         # Need to do some substitution here. We need to get a fully-substituted
         # destination, from which we can then extract the base file name.
         lang = list(EXT_LANG.values())[0] # Just choose one. It doesn't matter.
@@ -1875,6 +1884,7 @@ def process_master_notebook(dest_root: str,
         markdown_to_html(final_dest, html_path,
                          stylesheet=build.markdown.html_stylesheet)
         html_to_pdf(html_path, pdf_path)
+
 
     verbose(f"Running master parse on {src_path}")
     master = notebook.master
@@ -1920,7 +1930,7 @@ def process_master_notebook(dest_root: str,
             move_master_notebooks(master, tempdir)
 
             if temp_instructor_notes and os.path.exists(temp_instructor_notes):
-                copy_instructor_notes(
+                copy_generated_instructor_notes(
                     temp_instructor_notes,
                     os.path.join(dest_root, notebook.master.instructor_notes)
                 )
@@ -1929,6 +1939,58 @@ def process_master_notebook(dest_root: str,
             e_cls = e.__class__.__name__
             error(f"Failed to process {src_path}\n    {e_cls}: {e}")
             raise
+
+def create_consolidated_inst_notes_index(build: BuildData,
+                                         dest_root: str) -> NoReturn:
+    """
+    Creates an "index.html" for all HTML files in the consolidated instructor
+    notes output directory.
+
+    :param build:     The build data
+    :param dest_root: The root output directory, which is assumed to be
+                      appropriate for the current build profile
+    :param profile:   The build profile, if any
+    """
+    from glob import glob
+
+    # We can safely assume that there's only one instructor notes output
+    # directory per build profile. Find it, if it's configured.
+    for nb in build.notebooks:
+        if nb.master and nb.master.instructor_notes:
+            instructor_notes_dir = os.path.dirname(nb.master.instructor_notes)
+            break
+    else:
+        instructor_notes_dir = None
+
+    if not instructor_notes_dir:
+        return
+
+    full_path = os.path.join(dest_root, instructor_notes_dir)
+
+    if not os.path.exists(full_path):
+        verbose(f'Instructor notes directory "{full_path}" does not exist. '
+                f'Skipping index generation.')
+        return
+
+    with TemporaryDirectory() as tempdir:
+        with working_directory(full_path):
+            index_md = os.path.join(tempdir, 'index.md')
+            html_files = glob('*.html')
+            if len(html_files) == 0:
+                return
+
+            with codecs.open(index_md, mode='w', encoding='utf-8') as f:
+                print('# Instructor Notes for '
+                      f'{build.course_info.course_title}\n',
+                      file=f)
+                print(f'Version: {build.course_info.version}\n', file=f)
+                for file in sorted(html_files):
+                    name, _ = os.path.splitext(file)
+                    file = file.replace(' ', '%20')
+                    print(f'- [{name}]({file})', file=f)
+
+            markdown_to_html(index_md, 'index.html')
+
 
 def copy_notebooks(build: BuildData,
                    labs_dir: str,
@@ -1970,12 +2032,18 @@ def copy_notebooks(build: BuildData,
 
         remove_empty_subdirectories(dest_root)
 
+    create_consolidated_inst_notes_index(build, dest_root)
+
 
 def copy_instructor_notes(build: BuildData,
                           dest_root: str,
                           profile: Optional[master_parse.Profile]) -> NoReturn:
     # Starting at build.source_base, look for instructor notes and course
     # guides. Only keep the ones for the labs and slides we're using.
+    #
+    # NOTE: This function handles explicit instructor notes files in the source
+    # tree. Handling of automatically generated instructor notes is in
+    # process_master_notebook().
 
     if build.notebooks:
         notebook_dirs = set([path.dirname(n.src) for n in build.notebooks])
@@ -2603,8 +2671,9 @@ def validate_build(build: BuildData) -> BuildData:
                 'but the build does not specify any profiles.'
             )
 
-    for notebook in build.notebooks:
-        src_path = rel_to_src_base(notebook.src)
+    instructor_note_dirs = set()
+    for nb in build.notebooks:
+        src_path = rel_to_src_base(nb.src)
         if not path.exists(src_path):
             complain(f'Notebook "{src_path}" does not exist.')
             errors += 1
@@ -2616,8 +2685,8 @@ def validate_build(build: BuildData) -> BuildData:
 
         # Attempt to parse the notebook. If it has no cells, ignore it.
         try:
-            nb = parse_source_notebook(src_path, encoding='UTF-8')
-            if len(nb.cells) == 0:
+            parsed_nb = parse_source_notebook(src_path, encoding='UTF-8')
+            if len(parsed_nb.cells) == 0:
                 complain(f'Notebook "{src_path}" has no cells. Ignoring it.')
                 continue
         except NotebookError as e:
@@ -2625,15 +2694,28 @@ def validate_build(build: BuildData) -> BuildData:
             errors += 1
             continue
 
-        new_notebooks.append(notebook)
+        new_notebooks.append(nb)
 
-        master = notebook.master
+        master = nb.master
         if master and master.enabled:
             if master.heading.enabled and (master.heading.path is not None):
                 headings.add(rel_to_build(master.heading.path))
 
             if master.footer.enabled and (master.footer.path is not None):
                 footers.add(rel_to_build(master.footer.path))
+
+            if master.instructor_notes:
+                instructor_note_dirs.add(
+                    os.path.dirname(master.instructor_notes)
+                )
+
+    if len(instructor_note_dirs) > 1:
+        quoted_dirs = ', '.join([f'"{d}"' for d in instructor_note_dirs])
+        complain('Notebooks are using different instructor_notes directories '
+                 f'({quoted_dirs}). Cannot generate an index.html unless all '
+                 'instructor note files are written to the same output '
+                 'directory.')
+        errors += 1
 
     build.notebooks = new_notebooks
 

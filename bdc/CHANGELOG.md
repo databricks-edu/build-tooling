@@ -1,5 +1,10 @@
 # Change Log for BDC
 
+**Version 1.34.0**
+
+- Added generation of an `index.html` file for consolidated instructor notes,
+  as requested in [Issue 75](https://github.com/databricks-edu/build-tooling/issues/75).
+
 **Version 1.33.0**
 
 - Added the ability to mark a notebook as not to be built. The notebook is

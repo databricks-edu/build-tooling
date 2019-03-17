@@ -10,7 +10,8 @@
 
 : ${BUILD_TOOL_DOCKER_TAG:=latest}
 
-for i in bdc databricks gendbc master_parse course dbe
+for i in bdc databricks gendbc master_parse course dbe \
+         update_tools update-tools
 do
   unalias $i 2>/dev/null
   unset -f $i 2>/dev/null
@@ -95,4 +96,6 @@ function course {
 function update_tools {
   curl -L https://git.io/fhaLg | bash
 }
+
+alias update-tools=update_tools
 

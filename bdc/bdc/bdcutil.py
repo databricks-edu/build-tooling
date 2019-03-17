@@ -697,6 +697,7 @@ _VAR_SUBST_EDIT_DELIM1          = '/'
 _VAR_SUBST_EDIT_DELIM2          = '|'
 _VAR_SUBST_EDIT_GROUPREF_PREFIX = '$'
 
+
 def _replace_tokens(s: str, tokens: Dict[str, str]) -> str:
     s2 = s
     for token, replacement in list(tokens.items()):

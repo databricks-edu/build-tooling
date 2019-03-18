@@ -94,7 +94,40 @@ function course {
 }
 
 function update_tools {
-  curl -L https://git.io/fhaLg | bash
+  local usage="Usage: $0 [latest|snapshot]"
+  local tag=latest
+
+  case "$#" in
+    0)
+      ;;
+    1)
+      case "$1" in
+        latest|snapshot)
+          tag=$1
+          ;;
+        *)
+          echo $usage >&2
+          return 1
+          ;;
+      esac
+      ;;
+    *)
+      echo $usage >&2
+      return 1
+      ;;
+  esac
+
+  echo "Updating tools from $tag"
+
+  local url="https://git.io/fhaLg"
+  case "$tag" in
+    latest)
+      curl -L $url | bash
+      ;;
+    snapshot)
+      curl -L $url | bash -s snapshot
+      ;;
+  esac
 }
 
 alias update-tools=update_tools

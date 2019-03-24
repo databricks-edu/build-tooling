@@ -48,26 +48,26 @@ function dbe {
 
 function bdc {
   docker run -it --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME \
-             -e HOME=$HOME -v $HOME:$HOME \
+             -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
              databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG bdc "$@"
 }
 
 function databricks {
-  docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME \
+  docker run -it --rm -w `pwd` -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
     databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG databricks "$@"
 }
 
 function gendbc {
-  docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME \
+  docker run -it --rm -w `pwd` -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
     databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG gendbc "$@"
 }
 
 function master_parse {
-  docker run -it --rm -w `pwd` -e HOME=$HOME -v $HOME:$HOME \
+  docker run -it --rm -w `pwd` -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
     databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG master_parse "$@"
 }
 
-COURSE_ENV_VARS="DB_CONFIG_PATH DB_PROFILE DB_SHARD_HOME COURSE_NAME COURSE_REPO COURSE_HOME COURSE_YAML COURSE_MODULES COURSE_REMOTE_SOURCE COURSE_REMOTE_TARGET PREFIX SOURCE TARGET EDITOR PAGER LESS LESSCHARSET USER"
+COURSE_ENV_VARS="DB_CONFIG_PATH DB_PROFILE DB_SHARD_HOME COLUMNS COURSE_NAME COURSE_REPO COURSE_HOME COURSE_YAML COURSE_MODULES COURSE_REMOTE_SOURCE COURSE_REMOTE_TARGET PREFIX SOURCE TARGET EDITOR PAGER LESS LESSCHARSET USER"
 
 unset -f create_course_envfile 2>/dev/null
 

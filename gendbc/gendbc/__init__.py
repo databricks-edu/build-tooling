@@ -11,8 +11,6 @@ import os
 import sys
 import docopt
 import traceback
-from textwrap import TextWrapper
-from collections import namedtuple
 import codecs
 import shutil
 from zipfile import ZipFile
@@ -31,7 +29,7 @@ __all__ = ['Config', 'GendbcError', 'gendbc']
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = "2.1.1"
+VERSION = "2.1.2"
 
 PROG = os.path.basename(sys.argv[0])
 
@@ -67,7 +65,6 @@ recursively.
 DBC is the path to the DBC file to generate.
 '''.format(PROG, ' ' * len(PROG), VERSION))
 
-COLUMNS = int(os.getenv('COLUMNS', '80')) - 1
 WARNING_PREFIX = "*** WARNING: "
 DEBUG_PREFIX = "(DEBUG) "
 ERROR_PREFIX = "ERROR: "
@@ -104,21 +101,6 @@ class UsageError(Exception):
         Exception.__init__(self, msg)
         self.message = msg
 
-
-class LocalTextWrapper(TextWrapper):
-    def __init__(self, width: int = COLUMNS, subsequent_indent: str = ''):
-        TextWrapper.__init__(self,
-                             width=width,
-                             subsequent_indent=subsequent_indent)
-
-    def fill(self, msg: str) -> str:
-        wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
-        return '\n'.join(wrapped)
-
-
-# -----------------------------------------------------------------------------
-# Globals
-# -----------------------------------------------------------------------------
 
 # -----------------------------------------------------------------------------
 # Internal functions

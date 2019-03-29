@@ -1,5 +1,10 @@
 # Change Log for gendbc
 
+**Version 2.1.2**
+
+- Fixed bug causing an abort if the `COLUMNS` environment variable contains
+  a non-numeric value.
+
 **Version 2.1.1**
 
 - Fixed bug arising from missing import of `TemporaryDirectory`.

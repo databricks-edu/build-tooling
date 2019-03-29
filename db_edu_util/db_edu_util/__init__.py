@@ -41,9 +41,11 @@ class EnhancedTextWrapper(TextWrapper):
                 width = int(columns) - 1
             except ValueError:
                 print(
-                    f'*** Ignoring non-numeric value of COLUMNS ({columns})',
+                    f'*** Ignoring non-numeric COLUMNS value of "{columns}"". '
+                    'Defaulting to 80.',
                     file=sys.stderr
                 )
+                os.environ['COLUMNS'] = '80'
                 width = 79
 
         TextWrapper.__init__(self,

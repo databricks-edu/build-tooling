@@ -93,7 +93,6 @@ h4 {
 }
 """
 
-COLUMNS = int(os.getenv('COLUMNS', '80')) - 1
 WARNING_PREFIX = "*** WARNING: "
 DEBUG_PREFIX = "(DEBUG) "
 

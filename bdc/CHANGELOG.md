@@ -8,6 +8,11 @@
   [Issue #83](https://github.com/databricks-edu/build-tooling/issues/83).
 - Fixed rendering of copyright symbol in generated version notebook. Addresses  
   [Issue #77](https://github.com/databricks-edu/build-tooling/issues/77).
+- The generated version notebook now contains the most recent Git commit
+  from the current branch of the repository that contains the build file.
+  If the build file isn't in a repository, then `bdc` emits an error, but
+  keeps going, writing "Unknown" as the Git commit string. Addresses
+  [Issue #79](https://github.com/databricks-edu/build-tooling/issues/79)
 
 **Version 1.34.0**
 

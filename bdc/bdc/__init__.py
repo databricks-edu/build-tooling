@@ -136,6 +136,7 @@ VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
 // MAGIC %md # Course: ${course_name}
 // MAGIC * Version ${version}
 // MAGIC * Built ${build_timestamp}
+// MAGIC * Git revision: ${git_commit}
 // MAGIC
 // MAGIC Copyright \u00a9 ${year} Databricks, Inc.
 """
@@ -2294,6 +2295,8 @@ def bundle_course(build: BuildData,
 def do_build(build: BuildData,
              base_dest_dir: str,
              profile: Optional[master_parse.Profile] = None) -> NoReturn:
+    import git
+
     if profile:
         dest_dir = joinpath(base_dest_dir, profile.name)
     else:
@@ -2302,12 +2305,27 @@ def do_build(build: BuildData,
     for d in (build.output_info.instructor_dir, build.output_info.student_dir):
         mkdirp(joinpath(dest_dir, d))
 
+    try:
+        # Get a Git Repo object. Since we don't really know where the
+        # root of the repo is, let GitPython figure it out from the
+        # directory containing the build file.
+        repo = git.Repo(os.path.dirname(build.build_file_path),
+                        search_parent_directories=True)
+        # This will get the latest commit on the current head (which will
+        # be the top of whatever branch is currently selected).
+        git_commit = repo.head.reference.commit.hexsha
+    except Exception as e:
+        error(f'Unable to get Git commit info: {e}')
+        git_commit = "Unknown"
+
+
     version = build.course_info.version
     fields = merge_dicts(build.variables, {
         'course_name':     build.course_info.name,
         'version':         version,
         'build_timestamp': datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC'),
         'year':            build.course_info.copyright_year,
+        'git_commit':      git_commit
     })
     version_notebook = VariableSubstituter(
         VERSION_NOTEBOOK_TEMPLATE

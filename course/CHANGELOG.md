@@ -1,5 +1,10 @@
 # Change log for `course`
 
+**Version 2.6.0**
+
+- `course --name CourseName` now works again. Addresses
+  [Issue #85](https://github.com/databricks-edu/build-tooling/issues/85).
+
 **Version 2.5.0**
 
 - Added `databricks_cli` version back to `course toolversions`.

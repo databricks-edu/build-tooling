@@ -23,7 +23,7 @@ from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.5.0'
+VERSION = '2.6.0'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -1125,6 +1125,9 @@ def main():
             if cmd in ('-n', '--name'):
                 try:
                     i += 1
+                    # Changing the name of the course has to reset the
+                    # build.yaml name.
+                    del cfg['COURSE_YAML']
                     cfg['COURSE_NAME'] = args[i]
                     cfg = update_config(cfg)
                 except IndexError:

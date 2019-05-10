@@ -137,7 +137,7 @@ VERSION_NOTEBOOK_TEMPLATE = """// Databricks notebook source
 // MAGIC * Version ${version}
 // MAGIC * Built ${build_timestamp}
 // MAGIC
-// MAGIC Copyright \\u00a9 ${year} Databricks, Inc.
+// MAGIC Copyright \u00a9 ${year} Databricks, Inc.
 """
 
 # The version notebook file name. Use as a format string, with {0} as the

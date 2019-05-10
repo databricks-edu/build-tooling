@@ -6,6 +6,8 @@
   emits a proper message, instead of confusing skipped notebooks with extra
   notebooks not in the build file. Addresses
   [Issue #83](https://github.com/databricks-edu/build-tooling/issues/83).
+- Fixed rendering of copyright symbol in generated version notebook. Addresses  
+  [Issue #77](https://github.com/databricks-edu/build-tooling/issues/77).
 
 **Version 1.34.0**
 

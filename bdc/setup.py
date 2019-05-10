@@ -33,8 +33,8 @@ setup(
     install_requires=[
         'docopt == 0.6.2',
         'markdown2 == 2.3.7',
-        'grizzled-python == 2.1.0',
-        'PyYAML >= 4.2b1',
+        'grizzled-python == 2.2.0',
+        'PyYAML >= 5.1',
         'pystache == 0.5.4',
         'parsimonious==0.8.1',
         'WeasyPrint==45'

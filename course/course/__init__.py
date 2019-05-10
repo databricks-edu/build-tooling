@@ -893,9 +893,9 @@ def git_diff(cfg: Dict[str, str]) -> NoReturn:
     pager = cfg['PAGER']
     with working_directory(course_repo):
         if not pager:
-            cmd("git status")
+            cmd("git diff")
         else:
-            cmd(f"git status | {pager}")
+            cmd(f"git diff | {pager}")
 
 
 def git_difftool(cfg: Dict[str, str]) -> NoReturn:

@@ -4,6 +4,8 @@
 
 - `course --name CourseName` now works again. Addresses
   [Issue #85](https://github.com/databricks-edu/build-tooling/issues/85).
+- `course diff` now invokes `git diff`, not `git status`. Partially addresses
+  [Issue #82](https://github.com/databricks-edu/build-tooling/issues/82).
 
 **Version 2.5.0**
 

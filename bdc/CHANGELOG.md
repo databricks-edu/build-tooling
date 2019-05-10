@@ -1,5 +1,12 @@
 # Change Log for BDC
 
+**Version 1.35.0**
+
+- `bdc --download` now detects notebooks that are marked `skip: true` and
+  emits a proper message, instead of confusing skipped notebooks with extra
+  notebooks not in the build file. Addresses
+  [Issue #83](https://github.com/databricks-edu/build-tooling/issues/83).
+
 **Version 1.34.0**
 
 - Added generation of an `index.html` file for consolidated instructor notes,

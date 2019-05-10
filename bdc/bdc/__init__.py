@@ -40,7 +40,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.34.0"
+VERSION = "1.35.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -254,6 +254,24 @@ class NotebookType(Enum):
 
     def __repr__(self):
         return f'NotebookType.{self.name}'
+
+
+@dataclass
+class UploadDownloadMapping:
+    """
+    Stores the source-path to target paths mapping for a source notebook.
+    A given source notebook can map to multiple targets on the remote
+    Databricks instance.
+
+    Fields:
+
+    notebook:       the NotebookData object for the source notebook
+    source_path:    full path to the source notebook on the local machine
+    remote_targets: list of remote targets (partial paths)
+    """
+    notebook: NotebookData
+    source_path: str
+    remote_targets: Sequence[str] = dataclasses.field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -667,7 +685,8 @@ class NotebookData(DefaultStrMixin):
                  include_in_build: bool = True,
                  master: Optional[MasterParseInfo] = None,
                  variables: Optional[Dict[AnyStr, AnyStr]] = None,
-                 only_in_profile: Optional[AnyStr] = None):
+                 only_in_profile: Optional[AnyStr] = None,
+                 skip: bool = False):
         """
         Captures parsed notebook data.
 
@@ -685,6 +704,7 @@ class NotebookData(DefaultStrMixin):
         :param variables:         Any variables for the notebook.
         :param only_in_profile:   Profile to which notebook is restricted, if
                                   any.
+        :param skip:              Whether or not to skip the notebook.
         """
         super(NotebookData, self).__init__()
         self.src = src
@@ -694,6 +714,7 @@ class NotebookData(DefaultStrMixin):
         self.include_in_build = include_in_build
         self.variables = variables or {}
         self.only_in_profile = only_in_profile
+        self.skip = skip
 
     def master_enabled(self) -> bool:
         """
@@ -770,7 +791,7 @@ class BuildData(DefaultStrMixin):
         super(BuildData, self).__init__()
         self.build_file_path = build_file_path
         self.course_directory = path.dirname(build_file_path)
-        self.notebooks = notebooks
+        self._notebooks = notebooks
         self.course_info = course_info
         self.source_base = source_base
         self.output_info = output_info
@@ -811,6 +832,36 @@ class BuildData(DefaultStrMixin):
         ).substitute(
             folder_vars
         )
+
+    @property
+    def notebooks(self):
+        """
+        Get a list of all non-skipped notebooks. If you want all notebooks,
+        including the skipped ones, use all_notebooks.
+
+        :return: a list of NotebookData objects
+        """
+        return [n for n in self._notebooks if not n.skip]
+
+    @notebooks.setter
+    def notebooks(self, new_notebooks: Sequence[NotebookData]):
+        """
+        Replace the notebooks in the build. Note that no special processing of
+        skipped notebooks is done here.
+
+        :param new_notebooks: the new notebooks
+        """
+        self._notebooks = new_notebooks
+
+    @property
+    def all_notebooks(self):
+        """
+        Get a list of all non-skipped notebooks. If you want all notebooks,
+        including the skipped ones, use all_notebooks.
+
+        :return: a list of NotebookData objects
+        """
+        return list(self._notebooks)
 
     @property
     def course_type(self) -> master_parse.CourseType:
@@ -1062,9 +1113,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
         all_extra_vars = merge_dicts(extra_vars, variables)
         dest = do_parse_level_substitutions(dest, src,
                                             extra_vars=all_extra_vars)
-        if bool_field(obj, 'skip'):
-            verbose(f'Skipping notebook {src}')
-            return None
+        skip = bool_field(obj, 'skip', False)
 
         master = MasterParseInfo() # defaults
         master.update_from_dict(notebook_defaults.master)
@@ -1132,7 +1181,8 @@ def load_build_yaml(yaml_file: str) -> BuildData:
             upload_download=bool_field(obj, 'upload_download', True),
             include_in_build=bool_field(obj, 'include_in_build', True),
             variables=variables,
-            only_in_profile=prof
+            only_in_profile=prof,
+            skip=skip
         )
 
         return nb
@@ -2386,10 +2436,16 @@ def notebook_is_transferrable(nb: NotebookData, build: BuildData) -> bool:
         )
         return False
 
+    # if nb.skip:
+    #     info(
+    #         f'Skipping notebook "{nb_full_path}" (marked "skip")'
+    #     )
+    #     return False
+
     return True
 
 
-def get_sources_and_targets(build: BuildData) -> Dict[str, str]:
+def get_sources_and_targets(build: BuildData) -> Sequence[UploadDownloadMapping]:
     """
     Get the list of source notebooks to be uploaded/downloaded and map them
     to their target names on the shard.
@@ -2436,8 +2492,9 @@ def get_sources_and_targets(build: BuildData) -> Dict[str, str]:
 
         return p
 
-    res = {}
-    notebooks = [nb for nb in build.notebooks
+    buf = {}
+
+    notebooks = [nb for nb in build.all_notebooks
                  if notebook_is_transferrable(nb, build)]
     leading_slashes = re.compile(r'^/+')
 
@@ -2459,44 +2516,58 @@ def get_sources_and_targets(build: BuildData) -> Dict[str, str]:
             ext = ext[1:] # remove the leading "."
         dest = map_notebook_dest(nb)
 
-        res[nb_full_path] = res.get(nb_full_path, []) + [dest]
+        mapping = buf.get(
+            nb_full_path,
+            UploadDownloadMapping(notebook=nb,
+                                  source_path=nb_full_path)
+        )
 
-    return res
+        mapping.remote_targets = mapping.remote_targets + [dest]
+        buf[nb_full_path] = mapping
+
+    return list(buf.values())
 
 
-def check_for_extra_up_down_mappings(notebooks: Dict[str, str]) -> Sequence[Tuple[str, str]]:
+def check_for_extra_up_down_mappings(mappings: Sequence[UploadDownloadMapping]) -> Dict[str, Sequence[str]]:
     """
     Check the result returned by get_sources_and_targets() for sources that
     map to multiple targets.
 
-    :param notebooks: the result of get_sources_and_targets()
+    :param mappings: the result of get_sources_and_targets()
 
-    :return: A sequence of (source, targets) tuples of only those results that
-             map to multiple targets. The iterator might be empty.
+    :return: A sequence of tuples listing the multiple mappings.
     """
     res = {}
-    for src, targets in list(notebooks.items()):
-        if len(targets) == 1:
+    for mapping in list(mappings):
+        if len(mapping.remote_targets) == 1:
             continue
-        res[src] = targets
+        res[mapping.source_path] = mapping.remote_targets
 
-    return tuple(res.items())
+    return res
 
 
 def upload_notebooks(build: BuildData,
                      shard_path: str,
                      db_profile: Optional[str]) -> NoReturn:
-    notebooks = get_sources_and_targets(build)
+    mappings = get_sources_and_targets(build)
 
-    def do_upload(notebooks: Dict[str, str]) -> NoReturn:
+    def do_upload(notebooks: Sequence[UploadDownloadMapping]) -> NoReturn:
         ensure_shard_path_does_not_exist(shard_path, db_profile)
 
         with TemporaryDirectory() as tempdir:
             info("Copying notebooks to temporary directory.")
-            for nb_full_path, partial_paths in list(notebooks.items()):
+            for mapping in notebooks:
+                nb_full_path = mapping.source_path
+                partial_paths = mapping.remote_targets
+
                 if not path.exists(nb_full_path):
                     warn(f'Skipping nonexistent notebook "{nb_full_path}".')
                     continue
+
+                if mapping.notebook.skip:
+                    info(f'Skipping "{nb_full_path}".')
+                    continue
+
                 for partial_path in partial_paths:
                     temp_path = joinpath(tempdir, partial_path)
                     dir = path.dirname(temp_path)
@@ -2515,20 +2586,20 @@ def upload_notebooks(build: BuildData,
                     raise UploadDownloadError(f'Upload failed: {e}')
 
     try:
-        do_upload(notebooks)
+        do_upload(mappings)
     except UploadDownloadError as e:
         w = databricks.Workspace(profile=db_profile)
         w.rm(shard_path)
         raise
 
-    multiple_mappings = check_for_extra_up_down_mappings(notebooks)
+    multiple_mappings = check_for_extra_up_down_mappings(mappings)
     if len(multiple_mappings) > 0:
         wrap2stdout('\n********')
         wrap2stdout('CAUTION:')
         wrap2stdout('********\n')
         wrap2stdout('Some source files have been copied to multiple destinations!\n')
 
-        for src, targets in multiple_mappings:
+        for src, targets in multiple_mappings.items():
             wrap2stdout(
                 f'\n"{src}" has been uploaded to multiple places. Only edits ' +
                 f'to "{shard_path}/{targets[0]}" will be applied on download.'
@@ -2543,7 +2614,7 @@ def download_notebooks(build: BuildData,
                        db_profile: Optional[str]) -> NoReturn:
     notebooks = get_sources_and_targets(build)
 
-    def do_download(notebooks):
+    def do_download(notebooks: Sequence[UploadDownloadMapping]) -> NoReturn:
         # remote_to_local is assumed to be a 1-1 mapping of remote paths to
         # local paths.
         ensure_shard_path_exists(shard_path, db_profile)
@@ -2556,17 +2627,27 @@ def download_notebooks(build: BuildData,
                 except DatabricksError as e:
                     raise UploadDownloadError(f"Download failed: {e}")
 
-                for local, remotes in list(notebooks.items()):
+                info(f'Download complete.\n')
+
+                for mapping in notebooks:
                     # We only ever download the first one.
-                    remote = remotes[0]
+                    remote = mapping.remote_targets[0]
+                    local = mapping.source_path
                     if not path.exists(remote):
                         warn('Cannot find downloaded version of course ' +
                              f'notebook "{local}".')
+                        continue
+
+                    if mapping.notebook.skip:
+                        print(f'"{remote}" -> SKIPPED')
+                        os.unlink(remote)
+                        continue
+
                     print(f'"{remote}" -> {local}')
                     # Make sure there's a newline at the end of each file.
                     move(remote, local, ensure_final_newline=True)
                     # Remove any others, so they're not treated as leftovers.
-                    for r in remotes[1:]:
+                    for r in mapping.remote_targets[1:]:
                         if path.exists(r):
                             os.unlink(r)
 
@@ -2583,19 +2664,18 @@ def download_notebooks(build: BuildData,
                     for f in leftover_files:
                         print(f"    {f}")
 
-    # get_sources_and_targets() returns a dict of
-    # local-path -> remote-partial-paths. Reverse it. If there are duplicate
-    # (remote) keys, keep only the first one. See upload_notebooks()
+    # get_sources_and_targets() returns a list of UploadDownloadMapping objects.
+    # If there are duplicate remotes, keep the first one.
     remote_to_local = {}
-    for local, remotes in list(notebooks.items()):
+    for mapping in notebooks:
         # We only ever download the first one.
-        remote = remotes[0]
+        remote = mapping.remote_targets[0]
         if remote in remote_to_local:
             raise BDCError(
                 f'(BUG): Found multiple instances of remote path "{remote}"'
             )
 
-        remote_to_local[remote] = local
+        remote_to_local[remote] = mapping.source_path
 
     do_download(notebooks)
 
@@ -2606,7 +2686,7 @@ def download_notebooks(build: BuildData,
         wrap2stdout('********\n')
         wrap2stdout('Some source files exist more than once in the build file!')
 
-        for src, targets in multiple_mappings:
+        for src, targets in multiple_mappings.items():
             wrap2stdout(f'\n"{src}" has ONLY been downloaded from ' +
                         f"{shard_path}/{targets[0]}.")
 
@@ -2672,7 +2752,12 @@ def validate_build(build: BuildData) -> BuildData:
             )
 
     instructor_note_dirs = set()
-    for nb in build.notebooks:
+    for nb in build.all_notebooks:
+        if nb.skip:
+            # Keep, but don't validate.
+            new_notebooks.append(nb)
+            continue
+
         src_path = rel_to_src_base(nb.src)
         if not path.exists(src_path):
             complain(f'Notebook "{src_path}" does not exist.')

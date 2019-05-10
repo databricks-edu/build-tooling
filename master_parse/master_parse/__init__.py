@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import (Sequence, Optional, Dict, Set, NoReturn, Pattern, Match,
                     Tuple, List, TextIO, Any)
 
-VERSION = "1.20.0"
+VERSION = "1.21.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -70,6 +70,8 @@ class CommandLabel(Enum):
     ILT_ONLY          = 'ILT_ONLY'
     SELF_PACED_ONLY   = 'SELF_PACED_ONLY'
     PROFILES          = 'PROFILES'
+
+INSTRUCTOR_ONLY   = 'INSTRUCTOR_ONLY' # alias for INSTRUCTOR_NOTE
 
 class CommandCode(Enum):
     SCALA             = 'scala'
@@ -428,8 +430,9 @@ class NotebookGenerator(object):
 
         # In kept cells, remove the following labels from the content
         self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
-                       _all_notebooks, _instructor_note, _video, _profiles,
-                       _azure_only, _amazon_only, _ilt_only, _self_paced_only]
+                       _all_notebooks, _instructor_note, _instructor_only,
+                       _video, _profiles, _azure_only, _amazon_only, _ilt_only,
+                       _self_paced_only]
 
         self.replace = [(_ipythonReplaceRemoveLine, ''),
                         _rename_public_test,
@@ -1410,6 +1413,7 @@ _new_part = or_magic(r'NEW_PART')
 _inline = or_magic(CommandLabel.INLINE.value)
 _all_notebooks = or_magic(CommandLabel.ALL_NOTEBOOKS.value)
 _instructor_note = or_magic(CommandLabel.INSTRUCTOR_NOTE.value)
+_instructor_only = or_magic(INSTRUCTOR_ONLY)
 _video = or_magic(CommandLabel.VIDEO.value)
 _test = or_magic(CommandLabel.TEST.value)
 _profiles = or_magic(CommandLabel.PROFILES.value)
@@ -1607,6 +1611,7 @@ class Parser:
                         (_r_only, CommandLabel.R_ONLY),
                         (_all_notebooks, CommandLabel.ALL_NOTEBOOKS),
                         (_instructor_note, CommandLabel.INSTRUCTOR_NOTE),
+                        (_instructor_only, CommandLabel.INSTRUCTOR_NOTE),
                         (_file_system, CommandLabel.ALL_NOTEBOOKS),
                         (_shell, CommandLabel.ALL_NOTEBOOKS),
                         (_video, CommandLabel.VIDEO),

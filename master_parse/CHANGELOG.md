@@ -1,5 +1,10 @@
 # Change Log for Master Parse Tool
 
+**Version 1.21.0**
+
+- Added `INSTRUCTOR_ONLY` alias for `INSTRUCTOR_NOTE`. Addresses
+  [Issue #86](https://github.com/databricks-edu/build-tooling/issues/86).
+
 **Version 1.20.0**
 
 - Added support for a new `PROFILES` tag that allows arbitrary profiles, not

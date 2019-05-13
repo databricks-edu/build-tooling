@@ -113,6 +113,9 @@ SUBCOMMANDS
   {1}                    dumped to standard output.
   {0} difftool         * Run "git difftool" (with "opendiff") on
   {1}                    the repository clone. 
+  {0} tag                Tag the Git repo with the current course and version.
+  {1}                    Applies the tag to the top-most commit on the current
+  {1}                    repo branch.
   {0} home             * Open the folder containing the build.yaml.
   {0} modules          * Open the folder containing the course modules.
   {0} repo             * Open the root of the training repo in git.

@@ -1,5 +1,11 @@
 # Change log for `course`
 
+**Version 2.7.0**
+
+- Added ability to tag the Git repo with a tag constructed from the current
+  course's name and version. See 
+  [Issue #78](https://github.com/databricks-edu/build-tooling/issues/78)
+
 **Version 2.6.0**
 
 - `course --name CourseName` now works again. Addresses

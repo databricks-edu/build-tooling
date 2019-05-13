@@ -1,5 +1,11 @@
 # Change Log for BDC
 
+**Version 1.36.0**
+
+- Added ability to tag the Git repo with a tag constructed from the
+  course's name and version, as found in `build.yaml`. See 
+  [Issue #78](https://github.com/databricks-edu/build-tooling/issues/78)
+
 **Version 1.35.0**
 
 - `bdc --download` now detects notebooks that are marked `skip: true` and

@@ -23,7 +23,7 @@ from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.6.0'
+VERSION = '2.7.0'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -914,6 +914,18 @@ def git_difftool(cfg: Dict[str, str]) -> NoReturn:
         cmd("git difftool --tool=opendiff --no-prompt")
 
 
+def git_tag(cfg: Dict[str, str]) -> NoReturn:
+    """
+    Tag the git repo and branch with the course name and version.
+
+    :param cfg: the loaded config. COURSE_YAML must be set.
+
+    :return: Nothing.
+    """
+    build_file = build_file_path(cfg)
+    bdc.bdc_create_git_tag(build_file)
+
+
 def deploy_images(cfg: Dict[str, str]) -> NoReturn:
     """
     Deploy the images for a course to the appropriate S3 location.
@@ -1151,6 +1163,9 @@ def main():
                     cfg = work_on(cfg, args[i], CONFIG_PATH)
                 except IndexError:
                     die('Expected course name after "work-on".')
+
+            elif cmd == 'tag':
+                git_tag(cfg)
 
             elif cmd == 'which':
                 which(cfg)

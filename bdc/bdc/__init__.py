@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 import codecs
 import shutil
+import git
 
 from typing import (Sequence, Any, Type, TypeVar, Set, Optional, Dict,
                     AnyStr, Tuple, NoReturn, Generator, Union, Callable, Set)
@@ -40,7 +41,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.35.0"
+VERSION = "1.36.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -51,6 +52,7 @@ USAGE = f"""
 Usage:
   {PROG} (--version)
   {PROG} --info [--shell] [BUILD_YAML]
+  {PROG} --tag [BUILD_YAML]
   {PROG} (-C | --check) [BUILD_YAML]
   {PROG} (-h | --help)
   {PROG} [-o | --overwrite] [-v | --verbose] [-d DEST | --dest DEST] [BUILD_YAML] 
@@ -78,6 +80,10 @@ Options:
   --shell                  Used with --info, this option causes the course
                            name and version to be emitted as shell variables.
   --list-notebooks         List the full paths of all notebooks in a course
+  --tag                    Create a Git tag from the course name and version
+                           in the build.yaml. Applies the tag to the topmost
+                           (i.e., HEAD) commit on the current branch of the
+                           repository containing the build.yaml.
   --upload                 Upload all notebooks to a folder on Databricks.
   --download               Download all notebooks from a folder on Databricks,
                            copying them into their appropriate locations on the 
@@ -2295,8 +2301,6 @@ def bundle_course(build: BuildData,
 def do_build(build: BuildData,
              base_dest_dir: str,
              profile: Optional[master_parse.Profile] = None) -> NoReturn:
-    import git
-
     if profile:
         dest_dir = joinpath(base_dest_dir, profile.name)
     else:
@@ -2990,6 +2994,42 @@ def bdc_download(build_file: str,
     download_notebooks(build, shard_path, databricks_profile)
 
 
+def bdc_create_git_tag(build_file: str) -> NoReturn:
+    """
+    Fashion a git tag from the course name and version in the build file, and
+    create the tag in the repository containing the build file. The tag will
+    point to the top-most revision on the current branch.
+
+    :param build_file: path to the build file
+    """
+    # Allow load_and_validate() to bail with an exception on error.
+    build = load_and_validate(build_file)
+    tag = build.course_id.replace(' ', '-')
+
+    try:
+        repo = git.Repo(os.path.abspath(build_file),
+                        search_parent_directories=True)
+        head = repo.head.reference
+        branch = head.path.replace('refs/heads/', '')
+        existing_tags = {t.path.replace('refs/tags/', '') : t for t in repo.tags}
+
+        existing = existing_tags.get(tag)
+        if existing:
+            error(f'Repo {repo.working_dir}: Tag {tag} already exists on '
+                  f'branch {branch}. It points to commit '
+                  f'{existing.commit.hexsha}.')
+
+        else:
+            commit = head.commit.hexsha
+            repo.create_tag(tag, head)
+            info(f'Repo {repo.working_dir}: Created tag {tag} on branch '
+                 f'{branch}, pointing to commit {commit}.')
+
+    except Exception as e:
+        error(f"Failed to create git tag {tag}: {e}")
+        raise
+
+
 def bdc_output_directory_for_build(build_file: str) -> str:
     """
     Determine the default output directory for a particular course.
@@ -3048,6 +3088,8 @@ def main():
             bdc_print_info(course_config, opts['--shell'])
         elif opts['--list-notebooks']:
             bdc_list_notebooks(course_config)
+        elif opts['--tag']:
+            bdc_create_git_tag(course_config)
         elif opts['--upload']:
             bdc_upload(course_config, opts['SHARD_PATH'], opts['--dprofile'],
                        opts['--verbose'])

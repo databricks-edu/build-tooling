@@ -14,7 +14,8 @@ from termcolor import colored
 from string import Template as StringTemplate
 import functools
 from subprocess import Popen
-from db_edu_util import die, error, warn, debug, info, set_debug, databricks
+from db_edu_util import (die, error, warn, debug, info, set_debug, databricks,
+                         working_directory)
 from db_edu_util.databricks import DatabricksError
 from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
                     Dict, TextIO)
@@ -23,7 +24,7 @@ from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.7.0'
+VERSION = '2.7.1'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -32,7 +33,7 @@ USER = os.environ['USER'] # required
 PAGER_DEFAULT = 'less --RAW-CONTROL-CHARS'
 EDITOR_DEFAULT = 'open -a textedit'
 SOURCE_DEFAULT = '_Source'
-TARGET_DEFAULT = 'Target'
+TARGET_DEFAULT = '_Build'
 AWS_PROFILE_DEFAULT = 'default'
 DB_PROFILE_DEFAULT = 'DEFAULT'
 COURSE_REPO_DEFAULT = os.path.expanduser('~/repos/training')
@@ -220,25 +221,6 @@ class CourseError(Exception):
 # -----------------------------------------------------------------------------
 # Internal functions
 # -----------------------------------------------------------------------------
-
-@contextmanager
-def working_directory(dir: str) -> Generator[None, None, None]:
-    """
-    Run a block of code (in a "with" statement) within a specific working
-    directory. When the "with" statement ends, cd back to the original
-    directory.
-
-    :param dir:  the directory
-
-    :return: None
-    """
-    cur = os.getcwd()
-    os.chdir(dir)
-    try:
-        yield
-    finally:
-        os.chdir(cur)
-
 
 @contextmanager
 def noop(result: Any, *args: Any, **kw: Any) -> Any:
@@ -701,7 +683,9 @@ def upload(cfg: Dict[str, str]) -> NoReturn:
                    verbose=False)
 
 
-def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
+def import_dbcs(cfg:        Dict[str, str],
+                build_dir:  str,
+                build_file: str) -> NoReturn:
     """
     Find all DBC files under the build output directory for the current course,
     and upload them (import them) into the Databricks instance.
@@ -716,25 +700,31 @@ def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
     remote_target = cfg['COURSE_REMOTE_TARGET']
     db_profile = cfg['DB_PROFILE']
 
-    def import_dbc(dbc: str) -> NoReturn:
+    def import_dbc(dbc: str, build: bdc.BuildData) -> NoReturn:
         '''
         Import a single DBC.
 
         Assumes (a) the working directory is the build directory, and
         (b) that the remote target path has already been created.
-
-        :param dbc:
-        :return:
         '''
-        parent_subpath = os.path.dirname(dbc)
-        dir_to_make = f'{remote_target}/{os.path.dirname(parent_subpath)}'
         w = databricks.Workspace(profile=db_profile)
-        w.mkdirs(dir_to_make)
-        w.import_dbc(dbc, f'{remote_target}/{parent_subpath}')
+        if build.has_profiles:
+            parent_subpath = os.path.dirname(dbc)
+            dir_to_make = f'{remote_target}/{os.path.dirname(parent_subpath)}'
+            w.mkdirs(dir_to_make)
+            remote_path = f'{remote_target}/{parent_subpath}'
+        else:
+            remote_path = remote_target
 
-    print(f'Importing all DBCs under "{build_dir}"')
+        info(f'Importing "{dbc}" to "{remote_path}"...')
+        w.import_dbc(dbc, remote_path)
+
+    # Get the build information. We'll need it later.
+    build = bdc.bdc_load_build(build_file)
+
+    print(f'Importing all DBCs under "{build_dir}" to remote "{remote_target}"')
     dbcs = []
-    with working_directory(build_dir):
+    with working_directory(build_dir) as pwd:
         for dirpath, _, filenames in os.walk('.'):
             for filename in filenames:
                 _, ext = os.path.splitext(filename)
@@ -747,10 +737,17 @@ def import_dbcs(cfg: Dict[str, str], build_dir: str) -> NoReturn:
         else:
             clean(cfg)
             w = databricks.Workspace(profile=db_profile)
-            w.mkdirs(remote_target)
+            # If we're doing a profile-based build, create the remote target.
+            # The import operations will implicitly create the remote
+            # subfolders. However, if we're not doing profile-based builds,
+            # then creating the remote target ahead of time will cause the
+            # import to fail, so don't do that.
+            if build.has_profiles:
+                w.mkdirs(remote_target)
+
             for dbc in dbcs:
-                print('\nImporting {}\n'.format(os.path.join(build_dir, dbc)))
-                import_dbc(dbc)
+                info(f'\nIn "{pwd}":')
+                import_dbc(dbc, build)
 
 
 def build_local(cfg: Dict[str, str]) -> str:
@@ -789,7 +786,7 @@ def build_and_upload(cfg: Dict[str, str]) -> NoReturn:
     check_config(cfg)
     build_file = build_local(cfg)
     build_dir = bdc.bdc_output_directory_for_build(build_file)
-    import_dbcs(cfg, build_dir)
+    import_dbcs(cfg, build_dir, build_file)
 
 
 def upload_build(cfg: Dict[str, str]) -> NoReturn:

@@ -28,7 +28,7 @@ from typing import (Sequence, Any, Set, Optional, Dict, Tuple,
                     Callable, Type, no_type_check)
 
 __all__ = ['read_yaml_file', 'parse_version_string', 'flatten',
-           'merge_dicts', 'bool_value', 'bool_field', 'working_directory',
+           'merge_dicts', 'bool_value', 'bool_field',
            'find_in_path', 'ensure_parent_dir_exists', 'move', 'joinpath',
            'rm_rf', 'mkdirp', 'copy', 'has_extension', 'is_html', 'is_pdf',
            'is_text_file', 'is_markdown', 'markdown_to_html',
@@ -258,22 +258,6 @@ def bool_field(d: Dict[str, Any],
     :raise ValueError on error
     """
     return bool_value(d.get(key, default))
-
-
-# Regarding the typing: See https://stackoverflow.com/a/49736916/53495
-@contextlib.contextmanager
-def working_directory(dirpath: str) -> Generator[None, None, None]:
-    """
-    Simple context manager that runs the code under "with" in a specified
-    directory, returning to the original directory when the "with" exits.
-    """
-    prev = os.getcwd()
-    try:
-        os.chdir(dirpath)
-        yield
-    finally:
-        os.chdir(prev)
-
 
 def find_in_path(command: str) -> str:
     """

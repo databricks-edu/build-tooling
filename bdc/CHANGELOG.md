@@ -1,5 +1,12 @@
 # Change Log for BDC
 
+**Version 1.37.0**
+
+- Added `bdc_load_build()` function, to allow other tools (like `course`)
+  to extract build information.
+- Moved `working_directory()` function to `db_edu_util` library, to remove
+  duplication between `bdc` and `course`.
+
 **Version 1.36.0**
 
 - Added ability to tag the Git repo with a tag constructed from the

@@ -1,5 +1,12 @@
 # Change log for `course`
 
+**Version 2.7.1**
+
+- Fixed a bug: `course build` failed to import the built DBC if build profiles
+  are not being used.
+- Moved `working_directory()` function to `db_edu_util` library, to remove
+  duplication between `bdc` and `course`.
+
 **Version 2.7.0**
 
 - Added ability to tag the Git repo with a tag constructed from the current

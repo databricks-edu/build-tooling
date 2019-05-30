@@ -1,5 +1,25 @@
 # Change log for `course`
 
+**Version 2.7.1**
+
+- Fixed a bug: `course build` failed to import the built DBC if build profiles
+  are not being used.
+- Moved `working_directory()` function to `db_edu_util` library, to remove
+  duplication between `bdc` and `course`.
+
+**Version 2.7.0**
+
+- Added ability to tag the Git repo with a tag constructed from the current
+  course's name and version. See 
+  [Issue #78](https://github.com/databricks-edu/build-tooling/issues/78)
+
+**Version 2.6.0**
+
+- `course --name CourseName` now works again. Addresses
+  [Issue #85](https://github.com/databricks-edu/build-tooling/issues/85).
+- `course diff` now invokes `git diff`, not `git status`. Partially addresses
+  [Issue #82](https://github.com/databricks-edu/build-tooling/issues/82).
+
 **Version 2.5.0**
 
 - Added `databricks_cli` version back to `course toolversions`.

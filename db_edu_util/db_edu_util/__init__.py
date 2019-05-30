@@ -2,19 +2,21 @@
 Utility library used by build tools.
 """
 
-VERSION = '1.6.1'
+VERSION = '1.6.2'
 
 from typing import Callable, Iterable, Any
 from textwrap import TextWrapper
 import os
 import sys
 from itertools import dropwhile
-from typing import Optional, NoReturn
+from typing import Optional, NoReturn, Generator
 import itertools
+from contextlib import contextmanager
 
-__all__ = ['all_pred', 'notebooktools', 'databricks', 'EnhancedTextWrapper', 'die',
-           'set_verbosity', 'verbosity_is_enabled', 'wrap2stdout', 'verbose',
-           'debug', 'error', 'warn', 'info', 'set_debug', 'debug_is_enabled']
+__all__ = ['all_pred', 'notebooktools', 'databricks', 'EnhancedTextWrapper',
+           'die','set_verbosity', 'verbosity_is_enabled', 'wrap2stdout',
+           'verbose', 'debug', 'error', 'warn', 'info', 'set_debug',
+           'debug_is_enabled', 'working_directory']
 
 # -----------------------------------------------------------------------------
 # Classes
@@ -208,6 +210,26 @@ def error(msg: str) -> NoReturn:
     :param msg: The message
     """
     print(_error_wrapper.fill(f"{_ERROR_PREFIX}{msg}"))
+
+
+# Regarding the typing: See https://stackoverflow.com/a/49736916/53495
+@contextmanager
+def working_directory(dir: str) -> Generator[None, None, None]:
+    """
+    Run a block of code (in a "with" statement) within a specific working
+    directory. When the "with" statement ends, cd back to the original
+    directory.
+
+    :param dir:  the directory
+
+    :yields: the full path of the directory
+    """
+    cur = os.getcwd()
+    os.chdir(dir)
+    try:
+        yield os.path.abspath(dir)
+    finally:
+        os.chdir(cur)
 
 
 def strip_margin(s: str, margin_char: str = '|') -> str:

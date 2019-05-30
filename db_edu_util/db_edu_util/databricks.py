@@ -410,6 +410,7 @@ class Workspace(RESTClient):
             'path': self._adjust_remote_path(workspace_path),
             'recursive': recursive
         }
+
         try:
             self._issue_post(url, payload)
 

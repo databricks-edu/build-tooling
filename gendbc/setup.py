@@ -30,7 +30,7 @@ setup(
     description='Generate a Databricks DBC from source notebooks',
     install_requires=[
         'docopt === 0.6.2',
-        'grizzled-python == 2.1.0',
+        'grizzled-python == 2.2.0',
     ],
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',

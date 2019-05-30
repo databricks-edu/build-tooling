@@ -1,5 +1,32 @@
 # Change Log for BDC
 
+**Version 1.37.0**
+
+- Added `bdc_load_build()` function, to allow other tools (like `course`)
+  to extract build information.
+- Moved `working_directory()` function to `db_edu_util` library, to remove
+  duplication between `bdc` and `course`.
+
+**Version 1.36.0**
+
+- Added ability to tag the Git repo with a tag constructed from the
+  course's name and version, as found in `build.yaml`. See 
+  [Issue #78](https://github.com/databricks-edu/build-tooling/issues/78)
+
+**Version 1.35.0**
+
+- `bdc --download` now detects notebooks that are marked `skip: true` and
+  emits a proper message, instead of confusing skipped notebooks with extra
+  notebooks not in the build file. Addresses
+  [Issue #83](https://github.com/databricks-edu/build-tooling/issues/83).
+- Fixed rendering of copyright symbol in generated version notebook. Addresses  
+  [Issue #77](https://github.com/databricks-edu/build-tooling/issues/77).
+- The generated version notebook now contains the most recent Git commit
+  from the current branch of the repository that contains the build file.
+  If the build file isn't in a repository, then `bdc` emits an error, but
+  keeps going, writing "Unknown" as the Git commit string. Addresses
+  [Issue #79](https://github.com/databricks-edu/build-tooling/issues/79)
+
 **Version 1.34.0**
 
 - Added generation of an `index.html` file for consolidated instructor notes,

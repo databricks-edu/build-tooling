@@ -1,5 +1,10 @@
 # notebooktools Change Log
 
+**Version 1.6.2**
+
+- Moved `working_directory()` function to `db_edu_util` library, to remove
+  duplication between `bdc` and `course`.
+
 **Version 1.6.1**
 
 - Cleaned up configuration-reading code in `databricks` and removed stray

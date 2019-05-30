@@ -47,7 +47,7 @@ function dbe {
 }
 
 function bdc {
-  docker run -it --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME \
+  docker run -i --rm -w `pwd` -e DB_SHARD_HOME=$DB_SHARD_HOME \
              -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
              databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG bdc "$@"
 }

@@ -28,6 +28,9 @@ bundle:
 
 #top_dbc_folder_name: ${course_name}
 
+student_dbc: Lessons.dbc
+#student_dbc: ${course_id}.dbc
+
 notebook_type_name:
   exercises: ""
   answers: Solutions

@@ -1,5 +1,12 @@
 # Change Log for BDC
 
+**Version 1.38.0**
+
+- Can now substitute `$course_name`, `$course_version` and/or
+  `$course_id` (which is `$course_name-$course_version`) into the
+  `student_dbc` and `instructor_dbc` fields. Addresses
+  [Issue #93](https://github.com/databricks-edu/build-tooling/issues/93).
+
 **Version 1.37.0**
 
 - Added `bdc_load_build()` function, to allow other tools (like `course`)

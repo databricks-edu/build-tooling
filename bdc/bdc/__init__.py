@@ -41,7 +41,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.37.0"
+VERSION = "1.38.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -1474,7 +1474,8 @@ def load_build_yaml(yaml_file: str) -> BuildData:
             copyright_year=copyright_year
         )
 
-    def parse_output_info(contents: Dict[str, Any]) -> OutputInfo:
+    def parse_output_info(contents: Dict[str, Any],
+                          course_info: CourseInfo) -> OutputInfo:
         student_dir = contents.get('student_dir', DEFAULT_STUDENT_FILES_SUBDIR)
         instructor_dir = contents.get('instructor_dir',
                                       DEFAULT_INSTRUCTOR_FILES_SUBDIR)
@@ -1496,10 +1497,22 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                 f'"instructor_dir" is "{instructor_dir}".'
             )
 
+        # Allow substitution of ${course_name}, {course_version} and/or
+        # ${course_id} in the file names.
+
+        fields = {
+            'course_name': course_info.name,
+            'course_version': course_info.version,
+            'course_id': course_info.course_id
+        }
+
+        def sub(filename: str) -> str:
+            return VariableSubstituter(filename).substitute(fields)
+
         return OutputInfo(student_dir=student_dir,
                           instructor_dir=instructor_dir,
-                          student_dbc=student_dbc,
-                          instructor_dbc=instructor_dbc)
+                          student_dbc=sub(student_dbc),
+                          instructor_dbc=sub(instructor_dbc))
 
 
     def parse_profiles(contents: Dict[str, Any]) -> Set[master_parse.Profile]:
@@ -1622,7 +1635,7 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                 f"{master_parse.VERSION}."
             )
 
-    output_info = parse_output_info(contents)
+    output_info = parse_output_info(contents, course_info)
     bundle_info = parse_bundle(contents.get('bundle'), output_info,
                                course_info, variables)
 

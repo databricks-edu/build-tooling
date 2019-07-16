@@ -1,5 +1,10 @@
 # Change Log for Master Parse Tool
 
+**Version 1.22.0**
+
+- Added `INSTRUCTOR_NOTES` alias for `INSTRUCTOR_NOTE`. Addresses
+  [Issue #92](https://github.com/databricks-edu/build-tooling/issues/92).
+
 **Version 1.21.0**
 
 - Added `INSTRUCTOR_ONLY` alias for `INSTRUCTOR_NOTE`. Addresses

@@ -5,6 +5,6 @@
 # -----------------------------------------------------------------------------
 
 here=`pwd`
-up=`(cd ..; pwd)`
 
-PYTHONPATH=.:$up/db_edu_util:$up/master_parse:$up/gendbc:$up/bdc python course/__init__.py "$@"
+export PYTHONPATH=.:db_edu_util:master_parse:gendbc:bdc
+python course/__init__.py "$@"

@@ -18,7 +18,7 @@ import os
 import sys
 from contextlib import contextmanager
 
-VERSION = '1.15.0'
+VERSION = '1.16.0'
 
 @contextmanager
 def chdir(dir):
@@ -41,27 +41,75 @@ def run_cmd(command_string):
         print(f'Command failed: {e}', file=sys.stderr)
 
 
+PACKAGES = [
+    'bdc',
+    'course',
+    'db_edu_util',
+    'gendbc',
+    'master_parse',
+]
+
+class TestCommand(Command):
+    description = 'run all tests'
+
+    user_options = []
+
+    def __init__(self, dist):
+        Command.__init__(self, dist)
+
+
+    def initialize_options(self):
+        pass
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        import pytest
+        os.environ['PYTHONPATH'] = '.'
+        success = True
+        for pkg in PACKAGES:
+            test_dir = os.path.join(pkg, 'tests')
+            if os.path.exists(test_dir):
+                with chdir(test_dir):
+                    print(f"\n*** Running tests in {pkg}\n")
+                    args = ['-W', 'ignore', '-ra', '--cache-clear', '.']
+                    rc = pytest.main(args)
+                    if rc != 0:
+                        success = False
+        if not success:
+            raise Exception("Some tests failed.")
+
 setup(
     name='db-build-tooling',
-    packages=[],
+    packages=PACKAGES,
+    cmdclass={
+        'test': TestCommand
+    },
     install_requires=[
+        'docopt == 0.6.2',
+        'GitPython == 2.1.11',
+        'grizzled-python == 2.2.0',
+        'markdown2 == 2.3.7',
+        'parsimonious == 0.8.1',
+        'pystache == 0.5.4',
+        'PyYAML >= 5.1',
+        'nbformat >= 4.4.0',
+        'requests == 2.22.0',
+        'termcolor >= 1.1.0',
+        'WeasyPrint == 45',
     ],
+    entry_points={
+        'console_scripts': [
+            'bdc=bdc:main',
+            'course=course:main',
+            'gendbc=gendbc:main',
+            'master_parse=master_parse:main'
+        ]
+    },
     version=VERSION,
     description='Wrapper package for Databricks Training build tools',
     author='Databricks Education Team',
     author_email='training-logins@databricks.com',
     license="Creative Commons Attribution-NonCommercial 4.0 International",
 )
-
-
-top_dir = os.path.dirname(os.path.abspath(__file__))
-
-if (len(sys.argv) > 1 and
-    (sys.argv[1] == 'install') or (sys.argv[1].startswith('bdist'))):
-    print('Installing/upgrading databricks-cli')
-    run_cmd('pip install --upgrade databricks-cli')
-
-    for d in ('db_edu_util', 'master_parse', 'bdc', 'gendbc', 'course'):
-        print('Installing {0}...'.format(d))
-        with chdir(os.path.join(top_dir, d)):
-            run_cmd('python setup.py install')

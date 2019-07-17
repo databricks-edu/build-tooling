@@ -5,7 +5,6 @@
 # -----------------------------------------------------------------------------
 
 here=`pwd`
-up=`(cd ..; pwd)`
 
-export PYTHONPATH=.:$up/db_edu_util:$up/master_parse:$up/gendbc
+export PYTHONPATH=.:db_edu_util:master_parse:gendbc
 python bdc/__init__.py "$@"

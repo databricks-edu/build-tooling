@@ -41,7 +41,7 @@ __all__ = ['bdc_check_build', 'bdc_list_notebooks', 'bdc_build_course',
 # (Some constants are below the class definitions.)
 # ---------------------------------------------------------------------------
 
-VERSION = "1.38.0"
+VERSION = "1.39.0"
 
 DEFAULT_BUILD_FILE = 'build.yaml'
 PROG = os.path.basename(sys.argv[0])
@@ -963,8 +963,8 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                                      src: str,
                                      allow_lang: bool = True,
                                      extra_vars: Dict[str, Any] = None) -> str:
-        # Handles parse-time variable substitution. Some variables are
-        # substituted later.
+        # Handles parse-time variable substitution, primarily for the notebook
+        # section. Some variables are substituted later.
         if extra_vars is None:
             extra_vars = {}
         base_with_ext = path.basename(src)
@@ -995,10 +995,15 @@ def load_build_yaml(yaml_file: str) -> BuildData:
                     m = matches_variable_ref(pats, adj_dest)
 
         fields = {
-            'basename':    base_no_ext,
-            'extension':   ext[1:] if ext.startswith('') else ext,
-            'filename':    base_with_ext,
+            'basename':        base_no_ext,
+            'extension':       ext[1:] if ext.startswith('') else ext,
+            'filename':        base_with_ext,
         }
+        if not os.path.isabs(src):
+            # If the source path is not absolute, then allow it to be
+            # substituted into the destination.
+            fields['source_path_no_ext'] = os.path.splitext(src)[0]
+
         if allow_lang:
             fields['lang'] = EXT_LANG.get(ext, "???")
 

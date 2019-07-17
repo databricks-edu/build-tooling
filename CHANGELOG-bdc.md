@@ -1,5 +1,17 @@
 # Change Log for BDC
 
+**Version 1.39.0**
+
+- Within the a notebook section in `build.yaml`, you can now substitute 
+  `${source_path_no_ext}` into `${dest}`, as long as the source path is 
+  relative and not absolute. For instance, if your source is
+  `Day-1/Lesson-01.py`, you can use a `dest` value of
+  `$target_lang/source_path_no_ext.$target_extension` to produce the
+  destination path, which (in a typical build) will expand to
+  `Scala/Day-1/Lesson-01.scala` and `Python/Day-1/Lesson-01.py`.
+  This addresses
+  [Issue #90](https://github.com/databricks-edu/build-tooling/issues/90).
+  
 **Version 1.38.0**
 
 - Can now substitute `$course_name`, `$course_version` and/or

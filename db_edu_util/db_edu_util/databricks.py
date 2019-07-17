@@ -6,11 +6,8 @@ Databricks REST API, without using the databricks-cli package at all.
 """
 from __future__ import annotations # PEP 563 (allows annotation forward refs)
 
-import sys
 import os
-import re
 import json
-from io import StringIO
 from dataclasses import dataclass
 from configparser import ConfigParser
 import requests
@@ -193,7 +190,7 @@ class RESTClient(object):
 
     def _issue_get(self, url: str, params: Dict[str, Any]) -> requests.Response:
         resp = requests.get(url, params=params, headers=self._auth_header())
-        self._ensure_json(resp)
+        self._check_response(resp)
         data = resp.json()
         if resp.status_code != 200:
             (code, message) = _map_rest_error(data)
@@ -216,7 +213,7 @@ class RESTClient(object):
             payload = json.dumps(params)
             resp = requests.post(url, data=payload, headers=headers)
 
-        self._ensure_json(resp)
+        self._check_response(resp)
         data = resp.json()
         if resp.status_code != 200:
             (code, message) = _map_rest_error(data)
@@ -224,12 +221,49 @@ class RESTClient(object):
 
         return resp
 
-    def _ensure_json(self, resp: requests.Response) -> NoReturn:
-        content_type = resp.headers.get('Content-Type', '<unknown>').split(';')
-        if content_type[0] not in ['application/json', 'text/json']:
-            raise DatabricksError(
-                f"Got back unknown content object_type: {content_type}"
+    def _check_response(self, resp: requests.Response) -> NoReturn:
+        """
+        Ensure that the response has a valid status code (200 series) and
+        is JSON. Raises an exception on error. Returns quietly if all is
+        well.
+
+        :param resp: the response to check
+        """
+        def get_text():
+            return resp.content.decode(encoding='utf-8').replace('\n', '')
+
+        # Content-type is of the form "text/html" or "text/json; charset=utf-8"
+        content_type = (
+            resp
+                .headers
+                .get('Content-Type', '<unknown>')
+                .split(';')[0]
+        )
+
+        if resp.status_code in [401, 403]:
+            msg = (
+                f"REST API returned HTTP status code {resp.status_code}. "
+                "Perhaps your API token is invalid."
             )
+            if content_type == 'text/html':
+                raise DatabricksError(f"{msg}\nResponse text: {get_text()}")
+
+            raise DatabricksError(msg)
+
+
+        if content_type[0] in  ['application/json', 'text/json']:
+            return None
+
+        if content_type[0] == 'text/html':
+            raise DatabricksError(
+                f"REST API error. HTTP status code is {resp.status_code}, "
+                f"content: {get_text()}"
+            )
+
+        raise DatabricksError(
+            f"REST API Error: Got back unexpected content type {content_type}. "
+            f"HTTP status code is {resp.status_code} "
+        )
 
 
     def _auth_header(self):

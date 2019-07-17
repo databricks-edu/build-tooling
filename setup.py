@@ -87,6 +87,7 @@ setup(
         'test': TestCommand
     },
     install_requires=[
+        'databricks-cli == 0.8.7',
         'docopt == 0.6.2',
         'GitPython == 2.1.11',
         'grizzled-python == 2.2.0',

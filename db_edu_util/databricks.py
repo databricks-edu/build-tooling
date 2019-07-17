@@ -251,10 +251,10 @@ class RESTClient(object):
             raise DatabricksError(msg)
 
 
-        if content_type[0] in  ['application/json', 'text/json']:
+        if content_type in  ['application/json', 'text/json']:
             return None
 
-        if content_type[0] == 'text/html':
+        if content_type == 'text/html':
             raise DatabricksError(
                 f"REST API error. HTTP status code is {resp.status_code}, "
                 f"content: {get_text()}"

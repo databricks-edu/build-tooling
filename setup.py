@@ -65,20 +65,7 @@ class TestCommand(Command):
         pass
 
     def run(self):
-        import pytest
-        os.environ['PYTHONPATH'] = '.'
-        success = True
-        for pkg in PACKAGES:
-            test_dir = os.path.join(pkg, 'tests')
-            if os.path.exists(test_dir):
-                with chdir(test_dir):
-                    print(f"\n*** Running tests in {pkg}\n")
-                    args = ['-W', 'ignore', '-ra', '--cache-clear', '.']
-                    rc = pytest.main(args)
-                    if rc != 0:
-                        success = False
-        if not success:
-            raise Exception("Some tests failed.")
+        run_cmd("./run-tests.sh")
 
 setup(
     name='db-build-tooling',

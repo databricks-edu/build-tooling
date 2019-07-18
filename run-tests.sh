@@ -37,9 +37,9 @@ packages="bdc gendbc db_edu_util course master_parse"
 test_dirs=
 for p in $packages
 do
-  if [ -d $p/test ]
+  if [ -d $p/tests ]
   then
-    test_dirs="$test_dirs $p/test"
+    test_dirs="$test_dirs $p/tests"
   fi
 done
 

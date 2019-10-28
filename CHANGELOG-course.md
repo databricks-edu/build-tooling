@@ -1,5 +1,9 @@
 # Change log for `course`
 
+**Version 2.8.0**
+
+- course.cfg variables can override OS environment if `FORCE_[VARNAME]` flag is set.
+
 **Version 2.7.1**
 
 - Fixed a bug: `course build` failed to import the built DBC if build profiles

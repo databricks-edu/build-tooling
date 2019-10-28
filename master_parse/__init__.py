@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from typing import (Sequence, Optional, Dict, Set, NoReturn, Pattern, Match,
                     Tuple, List, TextIO, Any)
 
-VERSION = "1.22.0"
+VERSION = "1.23.0"
 
 # -----------------------------------------------------------------------------
 # Enums. (Implemented as classes, rather than using the Enum functional
@@ -430,7 +430,8 @@ class NotebookGenerator(object):
         self.discard_labels = base_keep - self.keep_labels
 
         # In kept cells, remove the following labels from the content
-        self.remove = [_dbc_only, _scala_only, _python_only, _new_part, _inline,
+        self.remove = [_scala_only, _python_only, _r_only, _sql_only,
+                       _dbc_only, _new_part, _inline,
                        _all_notebooks, _instructor_note, _instructor_notes,
                        _instructor_only, _video, _profiles, _azure_only,
                        _amazon_only, _ilt_only, _self_paced_only]
@@ -686,6 +687,14 @@ class NotebookGenerator(object):
                     discard_labels = self.discard_labels
 
                     all_notebooks = CommandLabel.ALL_NOTEBOOKS in labels
+
+                    # If a cell has more than one LANGUAGE_ONLY (e.g. SQL_ONLY and PYTHON_ONLY) and any of
+                    # them match the target language of the notebook, keep the cell.
+                    if (NotebookGenerator.param_to_label[self.notebook_code] & labels):
+                        for lang in CODE_CELL_TYPES:
+                            labels = labels - NotebookGenerator.param_to_label[lang]
+                        all_notebooks = True
+
                     if all_notebooks:
                         # There are some exceptions here. A cell marked
                         # ALL_NOTEBOOKS will still not be copied if it's

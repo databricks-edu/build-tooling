@@ -1,5 +1,10 @@
 # Change Log for Master Parse Tool
 
+**Version 1.23.0**
+
+- If a cell has multiple LANGUAGE_ONLY (e.g. PYTHON_ONLY and SCALA_ONLY), it will include it if the notebook
+  language matches any of them.
+
 **Version 1.22.0**
 
 - Added `INSTRUCTOR_NOTES` alias for `INSTRUCTOR_NOTE`. Addresses

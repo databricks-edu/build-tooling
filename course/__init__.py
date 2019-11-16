@@ -24,7 +24,7 @@ from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.7.1'
+VERSION = '2.8.0'
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
@@ -420,10 +420,10 @@ def load_config(config_path: str,
         # appropriate, and apply defaults.
         for e, default, _ in setting_keys_and_defaults:
             v = os.environ.get(e)
-            if v is not None:
+            if v is not None and ("FORCE_" + e) not in cfg:
                 cfg[e] = v
 
-            if (cfg.get(e) is None) and default:
+            if not cfg.get(e) and default:
                 t = StringTemplate(default)
                 cfg[e] = t.substitute(cfg)
 

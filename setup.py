@@ -76,7 +76,7 @@ setup(
     install_requires=[
         'databricks-cli == 0.8.7',
         'docopt == 0.6.2',
-        'GitPython == 2.1.11',
+        'GitPython == 3.1.2',
         'grizzled-python == 2.2.0',
         'markdown2 == 2.3.7',
         'parsimonious == 0.8.1',

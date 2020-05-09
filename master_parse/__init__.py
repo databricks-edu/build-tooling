@@ -86,6 +86,8 @@ class CommandCode(Enum):
     RUN               = 'run'
     FS                = 'fs'
     SH                = 'sh'
+    PIP               = 'pip'
+    CONDA             = 'conda'
 
     def is_markdown(self):
         return self.name in ['MARKDOWN', 'MARKDOWN_SANDBOX']
@@ -388,6 +390,8 @@ class NotebookGenerator(object):
 
     param_to_label = {
         CommandCode.PYTHON: {CommandLabel.PYTHON_ONLY},
+        CommandCode.PIP: {CommandLabel.PYTHON_ONLY},
+        CommandCode.CONDA: {CommandLabel.PYTHON_ONLY},
         CommandCode.SCALA: {CommandLabel.SCALA_ONLY},
         CommandCode.SQL: {CommandLabel.SQL_ONLY},
         CommandCode.R: {CommandLabel.R_ONLY},

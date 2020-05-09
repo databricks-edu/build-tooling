@@ -74,18 +74,18 @@ setup(
         'test': TestCommand
     },
     install_requires=[
-        'databricks-cli == 0.8.7',
-        'docopt == 0.6.2',
-        'GitPython == 3.1.2',
-        'grizzled-python == 2.2.0',
-        'markdown2 == 2.3.7',
-        'parsimonious == 0.8.1',
-        'pystache == 0.5.4',
+        'databricks-cli >= 0.8.7',
+        'docopt >= 0.6.2',
+        'GitPython >= 3.1.2',
+        'grizzled-python >= 2.2.0',
+        'markdown2 >= 2.3.7',
+        'parsimonious >= 0.8.1',
+        'pystache >= 0.5.4',
         'PyYAML >= 5.1',
         'nbformat >= 4.4.0',
-        'requests == 2.22.0',
+        'requests >= 2.22.0',
         'termcolor >= 1.1.0',
-        'WeasyPrint == 45',
+        'WeasyPrint >= 45',
     ],
     entry_points={
         'console_scripts': [

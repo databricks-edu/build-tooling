@@ -101,6 +101,8 @@ class CellType(Enum):
     SCALA      = 'scala'
     R          = 'r'
     PYTHON     = 'python'
+    PIP        = 'pip'
+    CONDA      = 'conda'
     SQL        = 'sql'
     SH         = 'sh'
     FS         = 'fs'

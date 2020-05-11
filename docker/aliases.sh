@@ -82,8 +82,6 @@ function create_course_envfile {
 
 function course {
 
-  : ${BUILD_TOOL_DOCKER_TAG:=latest}
-
   TMP_ENV=/tmp/course-env.$$
 
   create_course_envfile $TMP_ENV

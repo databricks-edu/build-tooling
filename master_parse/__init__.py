@@ -225,7 +225,7 @@ VIDEO_CELL_CODE = CommandCode.MARKDOWN
 INSTRUCTOR_NOTE_HEADING = '<h2 style="color:red">Instructor Note</h2>'
 
 DEFAULT_NOTEBOOK_HEADING = """<div style="text-align: center; line-height: 0; padding-top: 9px;">
-  <img src="https://databricks.com/wp-content/uploads/2018/03/db-academy-rgb-1200px.png" alt="Databricks Learning" style="width: 1200px">
+  <img src="https://databricks.com/wp-content/uploads/2018/03/db-academy-rgb-1200px.png" alt="Databricks Learning" style="width: 600px">
 </div>"""
 
 DEFAULT_NOTEBOOK_FOOTER = """&copy; {copyright_year} Databricks, Inc. All rights reserved.<br/>

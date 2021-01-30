@@ -2,7 +2,7 @@
 Utility library used by build tools.
 """
 
-VERSION = '1.6.3'
+VERSION = "1.6.3"
 
 from typing import Callable, Iterable, Any
 from textwrap import TextWrapper
@@ -13,23 +13,37 @@ from typing import Optional, NoReturn, Generator
 import itertools
 from contextlib import contextmanager
 
-__all__ = ['all_pred', 'notebooktools', 'databricks', 'EnhancedTextWrapper',
-           'die','set_verbosity', 'verbosity_is_enabled', 'wrap2stdout',
-           'verbose', 'debug', 'error', 'warn', 'info', 'set_debug',
-           'debug_is_enabled', 'working_directory']
+__all__ = [
+    "all_pred",
+    "notebooktools",
+    "databricks",
+    "EnhancedTextWrapper",
+    "die",
+    "set_verbosity",
+    "verbosity_is_enabled",
+    "wrap2stdout",
+    "verbose",
+    "debug",
+    "error",
+    "warn",
+    "info",
+    "set_debug",
+    "debug_is_enabled",
+    "working_directory",
+]
 
 # -----------------------------------------------------------------------------
 # Classes
 # -----------------------------------------------------------------------------
+
 
 class EnhancedTextWrapper(TextWrapper):
     """
     A version of textwrap.TextWrapper that handles embedded newlines more
     appropriately.
     """
-    def __init__(self,
-                 width: Optional[int] = None,
-                 subsequent_indent: str = ''):
+
+    def __init__(self, width: Optional[int] = None, subsequent_indent: str = ""):
         """
 
         :param width:             wrap width. Defaults to environment variable
@@ -38,25 +52,24 @@ class EnhancedTextWrapper(TextWrapper):
                                   to empty string.
         """
         if not width:
-            columns = os.environ.get('COLUMNS', '80')
+            columns = os.environ.get("COLUMNS", "80")
             try:
                 width = int(columns) - 1
             except ValueError:
                 print(
                     f'*** Ignoring non-numeric COLUMNS value of "{columns}"". '
-                    'Defaulting to 80.',
-                    file=sys.stderr
+                    "Defaulting to 80.",
+                    file=sys.stderr,
                 )
-                os.environ['COLUMNS'] = '80'
+                os.environ["COLUMNS"] = "80"
                 width = 79
 
-        TextWrapper.__init__(self,
-                             width=width,
-                             subsequent_indent=subsequent_indent)
+        TextWrapper.__init__(self, width=width, subsequent_indent=subsequent_indent)
 
     def fill(self, msg):
-        wrapped = [TextWrapper.fill(self, line) for line in msg.split('\n')]
-        return '\n'.join(wrapped)
+        wrapped = [TextWrapper.fill(self, line) for line in msg.split("\n")]
+        return "\n".join(wrapped)
+
 
 # -----------------------------------------------------------------------------
 # Internal module globals
@@ -64,24 +77,24 @@ class EnhancedTextWrapper(TextWrapper):
 
 _verbose = False
 _verbose_wrapper = None
-_verbose_prefix = ''
+_verbose_prefix = ""
 _debug = False
-_ERROR_PREFIX = 'ERROR: '
-_WARNING_PREFIX = 'WARNING: '
-_DEBUG_PREFIX = '(DEBUG) '
+_ERROR_PREFIX = "ERROR: "
+_WARNING_PREFIX = "WARNING: "
+_DEBUG_PREFIX = "(DEBUG) "
 try:
-    _COLUMNS = int(os.environ.get('COLUMNS', '80')) - 1
+    _COLUMNS = int(os.environ.get("COLUMNS", "80")) - 1
 except:
     _COLUMNS = 79
 
 _debug_wrapper = EnhancedTextWrapper(
-    width=_COLUMNS, subsequent_indent=' ' * len(_DEBUG_PREFIX)
+    width=_COLUMNS, subsequent_indent=" " * len(_DEBUG_PREFIX)
 )
 _warning_wrapper = EnhancedTextWrapper(
-    width=_COLUMNS, subsequent_indent=' ' * len(_WARNING_PREFIX)
+    width=_COLUMNS, subsequent_indent=" " * len(_WARNING_PREFIX)
 )
 _error_wrapper = EnhancedTextWrapper(
-    width=_COLUMNS, subsequent_indent=' ' * len(_ERROR_PREFIX)
+    width=_COLUMNS, subsequent_indent=" " * len(_ERROR_PREFIX)
 )
 _no_prefix_wrapper = EnhancedTextWrapper(width=_COLUMNS)
 
@@ -92,6 +105,7 @@ _no_prefix_wrapper = EnhancedTextWrapper(width=_COLUMNS)
 # -----------------------------------------------------------------------------
 # Public Functions
 # -----------------------------------------------------------------------------
+
 
 def die(msg: str) -> NoReturn:
     """
@@ -123,8 +137,7 @@ def debug_is_enabled() -> bool:
     return _debug
 
 
-def set_verbosity(verbose: bool,
-                  verbose_prefix: Optional[str] = None) -> NoReturn:
+def set_verbosity(verbose: bool, verbose_prefix: Optional[str] = None) -> NoReturn:
     """
     Set or clear verbose messages.
 
@@ -138,10 +151,10 @@ def set_verbosity(verbose: bool,
 
     _verbose = verbose
     if _verbose:
-        indent = ''
+        indent = ""
         if verbose_prefix:
             _verbose_prefix = verbose_prefix
-            indent = ' ' * len(verbose_prefix)
+            indent = " " * len(verbose_prefix)
 
         _verbose_wrapper = EnhancedTextWrapper(subsequent_indent=indent)
 
@@ -232,7 +245,7 @@ def working_directory(dir: str) -> Generator[None, None, None]:
         os.chdir(cur)
 
 
-def strip_margin(s: str, margin_char: str = '|') -> str:
+def strip_margin(s: str, margin_char: str = "|") -> str:
     """
     Akin to Scala's stripMargin() method on string, this function takes a
     multiline string and strips leading white space up to a margin character.
@@ -256,14 +269,15 @@ def strip_margin(s: str, margin_char: str = '|') -> str:
     :return: the stripped string
     """
     assert len(margin_char) == 1
+
     def fix_line(line: str) -> str:
-        adj = ''.join(itertools.dropwhile(lambda c: c in [' ', '\t'], line))
+        adj = "".join(itertools.dropwhile(lambda c: c in [" ", "\t"], line))
         if (len(adj) > 0) and (adj[0] == margin_char):
             return adj[1:]
         else:
             return adj
 
-    return '\n'.join(map(fix_line, s.split('\n')))
+    return "\n".join(map(fix_line, s.split("\n")))
 
 
 def all_pred(func: Callable[[Any], bool], iterable: Iterable[Any]) -> bool:
@@ -291,11 +305,11 @@ def squeeze_blank_lines(s: str) -> str:
     any leading blank lines.
     """
     saw_blank = False
-    if len(s.strip(' \t')) == 0:
-        return s.strip(' \t')
+    if len(s.strip(" \t")) == 0:
+        return s.strip(" \t")
 
     buf = []
-    lines = dropwhile(lambda s: len(s.strip()) == 0, s.split('\n'))
+    lines = dropwhile(lambda s: len(s.strip()) == 0, s.split("\n"))
     for line in lines:
         line = line.strip()
         if len(line) == 0:
@@ -306,22 +320,24 @@ def squeeze_blank_lines(s: str) -> str:
             saw_blank = False
         buf.append(line)
 
-    res = '\n'.join(buf)
-    if (len(res) > 0) and res[-1] != '\n':
-        res += '\n'
+    res = "\n".join(buf)
+    if (len(res) > 0) and res[-1] != "\n":
+        res += "\n"
 
     # Edge case: Nothing but blank lines will look, to the above loop, like an
     # empty string. If we had at least one input line, make sure there's a
     # newline.
-    if (len(res) == 0):
-        res += '\n'
+    if len(res) == 0:
+        res += "\n"
 
     return res
+
 
 # ---------------------------------------------------------------------------
 # Fire up doctest if main()
 # ---------------------------------------------------------------------------
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     from doctest import testmod, ELLIPSIS
+
     testmod(optionflags=ELLIPSIS)

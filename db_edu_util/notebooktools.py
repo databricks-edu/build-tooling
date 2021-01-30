@@ -4,7 +4,7 @@ notebooks. Currently, this library is only used by gendbc. If we convert other
 tools to use it, this module can be moved into its own separately installable
 package.
 """
-from __future__ import annotations # PEP 563 (allows annotation forward refs)
+from __future__ import annotations  # PEP 563 (allows annotation forward refs)
 
 from collections import namedtuple
 import codecs
@@ -18,18 +18,27 @@ import dataclasses
 from dataclasses import dataclass
 from typing import Callable, Sequence, Pattern, Generator, Optional, Any, Dict
 
-__all__ = ('NotebookError', 'NotebookParseError', 'NotebookLanguage',
-           'CellType', 'NotebookCell', 'Notebook', 'parse_source_notebook')
+__all__ = (
+    "NotebookError",
+    "NotebookParseError",
+    "NotebookLanguage",
+    "CellType",
+    "NotebookCell",
+    "Notebook",
+    "parse_source_notebook",
+)
 
 # -----------------------------------------------------------------------------
 # Classes
 # -----------------------------------------------------------------------------
+
 
 class NotebookError(Exception):
     """
     Base exception class for all notebook exceptions. Instances of this class
     can also be thrown.
     """
+
     def __init__(self, msg: str):
         Exception.__init__(self, msg)
 
@@ -38,6 +47,7 @@ class NotebookParseError(NotebookError):
     """
     Thrown to indicate that a notebook could not be parsed.
     """
+
     def __init__(self, msg: str):
         Exception.__init__(self, msg)
 
@@ -47,19 +57,20 @@ class NotebookLanguage(Enum):
     An enumeration of the languages supported by notebooks, including some
     utility (class-level) functions.
     """
-    SCALA      = 'scala'
-    R          = 'r'
-    PYTHON     = 'py'
-    SQL        = 'sql'
+
+    SCALA = "scala"
+    R = "r"
+    PYTHON = "py"
+    SQL = "sql"
 
     def for_json(self) -> str:
-        '''
+        """
         Get the notebook language as it should be rendered in JSON.
 
         :returns: the language
-        '''
+        """
         if self == NotebookLanguage.PYTHON:
-            return 'python'
+            return "python"
         return self.value
 
     @classmethod
@@ -84,8 +95,8 @@ class NotebookLanguage(Enum):
         :raises NotebookError: unknown extension
         """
         ext = ext.lower()
-        values = { ('.' + k.value): k for k in cls }
-        values['.python'] = NotebookLanguage.PYTHON
+        values = {("." + k.value): k for k in cls}
+        values[".python"] = NotebookLanguage.PYTHON
         try:
             return values[ext]
         except KeyError:
@@ -96,19 +107,22 @@ class CellType(Enum):
     """
     Enumeration of the valid cell types.
     """
-    MD         = 'md'
-    MD_SANDBOX = 'md-sandbox'
-    SCALA      = 'scala'
-    R          = 'r'
-    PYTHON     = 'python'
-    PIP        = 'pip'
-    CONDA      = 'conda'
-    SQL        = 'sql'
-    SH         = 'sh'
-    FS         = 'fs'
-    RUN        = 'run'
-    TIMEIT     = 'timeit'
-    UNKNOWN    = '?'
+
+    CONDA = "conda"
+    FS = "fs"
+    LOAD_EXT = "load_ext"
+    MD = "md"
+    MD_SANDBOX = "md-sandbox"
+    PIP = "pip"
+    PYTHON = "python"
+    R = "r"
+    RUN = "run"
+    SCALA = "scala"
+    SH = "sh"
+    SQL = "sql"
+    TENSORBOARD = "tensorboard"
+    TIMEIT = "timeit"
+    UNKNOWN = "?"
 
     @classmethod
     def from_language(cls, language: NotebookLanguage) -> CellType:
@@ -127,7 +141,7 @@ class CellType(Enum):
             return CellType.R
         if language == NotebookLanguage.SQL:
             return CellType.SQL
-        raise NotebookError(f'(BUG): Unknown {language}')
+        raise NotebookError(f"(BUG): Unknown {language}")
 
     @classmethod
     def from_string(cls, s: str) -> CellType:
@@ -139,8 +153,8 @@ class CellType(Enum):
         :raises NotebookError: unknown string
         """
         s = s.lower()
-        values = { k.value: k for k in CellType }
-        s = s[1:] if s[0] == '%' else s
+        values = {k.value: k for k in CellType}
+        s = s[1:] if s[0] == "%" else s
         try:
             return values[s]
         except KeyError:
@@ -161,6 +175,7 @@ class NotebookCell:
                           string. False means it's implicitly a code cell of
                           the base notebook language.
     """
+
     command: str
     position: int
     cell_type: CellType
@@ -179,55 +194,56 @@ class NotebookCell:
         :return: a JSON-ready dict.
         """
         return {
-            'bindings':                     {},
-            'collapsed':                    False,
-            'command':                      self.command,
-            'commandTitle':                 '',
-            'commandType':                  'auto',
-            'commandVersion':               0,
-            'commentThread':                [],
-            'commentsVisible':              False,
-            'customPlotOptions':            {},
-            'datasetPreviewNameToCmdIdMap': {},
-            'diffDeletes':                  [],
-            'diffInserts':                  [],
-            'displayType':                  'table',
-            'error':                        None,
-            'errorSummary':                 None,
-            'finishTime':                   0,
-            'globalVars':                   {},
-            'guid':                         str(self.guid),
-            'height':                       'auto',
-            'hideCommandCode':              False,
-            'hideCommandResult':            False,
-            'iPythonMetadata':              None,
-            'inputWidgets':                 {},
-            'latestUser':                   '',
-            'latestUserId':                 None,
-            'nuid':                         str(uuid.uuid4()),
-            'origId':                       0,
-            'parentHierarchy':              [],
-            'pivotAggregation':             None,
-            'pivotColumns':                 None,
-            'position':                     self.position,
-            'results':                      None,
-            'showCommandTitle':             False,
-            'startTime':                    0,
-            'state':                        'finished',
-            'streamStates':                 {},
-            'submitTime':                   0,
-            'subtype':                      'command',
-            'version':                      'CommandV1',
-            'width':                        'auto',
-            'workflows':                    [],
-            'xColumns':                     None,
-            'yColumns':                     None,
+            "bindings": {},
+            "collapsed": False,
+            "command": self.command,
+            "commandTitle": "",
+            "commandType": "auto",
+            "commandVersion": 0,
+            "commentThread": [],
+            "commentsVisible": False,
+            "customPlotOptions": {},
+            "datasetPreviewNameToCmdIdMap": {},
+            "diffDeletes": [],
+            "diffInserts": [],
+            "displayType": "table",
+            "error": None,
+            "errorSummary": None,
+            "finishTime": 0,
+            "globalVars": {},
+            "guid": str(self.guid),
+            "height": "auto",
+            "hideCommandCode": False,
+            "hideCommandResult": False,
+            "iPythonMetadata": None,
+            "inputWidgets": {},
+            "latestUser": "",
+            "latestUserId": None,
+            "nuid": str(uuid.uuid4()),
+            "origId": 0,
+            "parentHierarchy": [],
+            "pivotAggregation": None,
+            "pivotColumns": None,
+            "position": self.position,
+            "results": None,
+            "showCommandTitle": False,
+            "startTime": 0,
+            "state": "finished",
+            "streamStates": {},
+            "submitTime": 0,
+            "subtype": "command",
+            "version": "CommandV1",
+            "width": "auto",
+            "workflows": [],
+            "xColumns": None,
+            "yColumns": None,
         }
 
 
 # An empty cell, used as a sentinel marker.
-EmptyCell = NotebookCell(command='', position=0,
-                         cell_type=CellType.UNKNOWN, marked_magic=True)
+EmptyCell = NotebookCell(
+    command="", position=0, cell_type=CellType.UNKNOWN, marked_magic=True
+)
 
 
 @dataclass(frozen=True)
@@ -236,6 +252,7 @@ class Notebook:
     Parsed representation of a Databricks source notebook. Does not contain
     fields that appear in JSON notebooks but not source notebooks.
     """
+
     cells: Sequence[NotebookCell]
     path: str
     guid: Optional[uuid.UUID] = dataclasses.field(default_factory=uuid.uuid4)
@@ -265,7 +282,7 @@ class Notebook:
         :return: True if the notebook is a Databricks source notebook, False
                  otherwise
         """
-        valid_extensions = {'.scala', '.r', '.py', '.sql'}
+        valid_extensions = {".scala", ".r", ".py", ".sql"}
 
         _, ext = os.path.splitext(path)
         if ext.lower() not in valid_extensions:
@@ -283,7 +300,6 @@ class Notebook:
 
         return True
 
-
     def to_source(self) -> Generator[None, str, None]:
         """
         Converts the parsed notebook to a source notebook.
@@ -292,24 +308,23 @@ class Notebook:
                  source notebook
         """
         comment_string = COMMENT_STRINGS[self.language]
-        yield f'{comment_string} Databricks notebook source'
+        yield f"{comment_string} Databricks notebook source"
         for i, cell in enumerate(self.cells):
             if i > 0:
-                yield ''
-                yield f'{comment_string} COMMAND ----------'
-                yield ''
+                yield ""
+                yield f"{comment_string} COMMAND ----------"
+                yield ""
 
-            lines = cell.command.split('\n')
+            lines = cell.command.split("\n")
             if len(lines) == 0:
                 continue
 
-            magic = (len(lines[0]) > 0) and (lines[0][0] == '%')
+            magic = (len(lines[0]) > 0) and (lines[0][0] == "%")
             for line in lines:
                 if magic:
-                    yield f'{comment_string} MAGIC {line}'
+                    yield f"{comment_string} MAGIC {line}"
                 else:
                     yield line
-
 
     def to_json(self) -> str:
         """
@@ -320,33 +335,35 @@ class Notebook:
         cell_hashes = [cell.to_json_dict() for cell in self.cells]
         return json.dumps(
             {
-                'commands':        cell_hashes,
-                'dashboards':      [],
-                'globalVars':      {},
-                'guid':            str(self.guid),
-                'iPythonMetadata': None,
-                'inputWidgets':    {},
-                'language':        self.language.for_json(),
-                'name':            self.name,
-                'origId':          0,
-                'version':         'NotebookV1',
+                "commands": cell_hashes,
+                "dashboards": [],
+                "globalVars": {},
+                "guid": str(self.guid),
+                "iPythonMetadata": None,
+                "inputWidgets": {},
+                "language": self.language.for_json(),
+                "name": self.name,
+                "origId": 0,
+                "version": "NotebookV1",
             }
         )
+
 
 # -----------------------------------------------------------------------------
 # Constants based on the above
 # -----------------------------------------------------------------------------
 
 COMMENT_STRINGS = {
-    NotebookLanguage.SCALA:  '//',
-    NotebookLanguage.R:      '#',
-    NotebookLanguage.PYTHON: '#',
-    NotebookLanguage.SQL:    '--',
+    NotebookLanguage.SCALA: "//",
+    NotebookLanguage.R: "#",
+    NotebookLanguage.PYTHON: "#",
+    NotebookLanguage.SQL: "--",
 }
 
 # -----------------------------------------------------------------------------
 # Internal Functions
 # -----------------------------------------------------------------------------
+
 
 def _read_notebook(path: str, encoding: str) -> Sequence[str]:
     """
@@ -358,14 +375,14 @@ def _read_notebook(path: str, encoding: str) -> Sequence[str]:
     :return: the list of lines
     """
     buf = []
-    with codecs.open(path, mode='r', encoding=encoding) as f:
+    with codecs.open(path, mode="r", encoding=encoding) as f:
         for line in f.readlines():
             # Don't use rstrip(), because we want to keep any trailing white
             # space, except for the trailing newline.
             if len(line) == 0:
                 buf.append(line)
                 continue
-            if line[-1] != '\n':
+            if line[-1] != "\n":
                 buf.append(line)
                 continue
             buf.append(line[:-1])
@@ -383,7 +400,7 @@ def _leading_comment_pattern(comment_string: str) -> str:
 
     :return: the pattern
     """
-    return r'^\s*{}'.format(comment_string)
+    return r"^\s*{}".format(comment_string)
 
 
 def _notebook_header_re(comment_string: str) -> Pattern:
@@ -396,7 +413,7 @@ def _notebook_header_re(comment_string: str) -> Pattern:
     :return: the parsed regular expression
     """
     return re.compile(
-        r'{}\s+Databricks\s+notebook.*$'.format(
+        r"{}\s+Databricks\s+notebook.*$".format(
             _leading_comment_pattern(comment_string)
         )
     )
@@ -419,12 +436,8 @@ def _parse_source_notebook(path: str, encoding: str) -> Notebook:
 
     leading_comment = _leading_comment_pattern(comment_string)
     header = _notebook_header_re(comment_string)
-    magic = re.compile(
-        r'{}\s+MAGIC\s?([^\s]*)(.*)$'.format(leading_comment)
-    )
-    new_cell = re.compile(
-        r'{}\s+COMMAND\s+-+.*$'.format(leading_comment)
-    )
+    magic = re.compile(r"{}\s+MAGIC\s?([^\s]*)(.*)$".format(leading_comment))
+    new_cell = re.compile(r"{}\s+COMMAND\s+-+.*$".format(leading_comment))
 
     def check_for_header(line):
         if not header.search(line):
@@ -445,7 +458,7 @@ def _parse_source_notebook(path: str, encoding: str) -> Notebook:
     saw_new_cell = True
     skip_next = False
     for i, line in enumerate(lines[1:]):
-        line_num = i + 2 # account for skipped header
+        line_num = i + 2  # account for skipped header
 
         if skip_next:
             debug(f'"{path}", line {line_num}: Skipping...')
@@ -463,7 +476,7 @@ def _parse_source_notebook(path: str, encoding: str) -> Notebook:
                 if len(command_buf[-1].strip()) == 0:
                     command_buf = command_buf[:-1]
                 cells.append(
-                    dataclasses.replace(cur_cell, command='\n'.join(command_buf))
+                    dataclasses.replace(cur_cell, command="\n".join(command_buf))
                 )
             cur_cell = EmptyCell
             saw_new_cell = True
@@ -475,7 +488,7 @@ def _parse_source_notebook(path: str, encoding: str) -> Notebook:
         # the leading MAGIC indicator.
         m = magic.search(line)
         if m:
-            line = f'{m.group(1)}{m.group(2)}'
+            line = f"{m.group(1)}{m.group(2)}"
 
         # If we didn't see the new cell marker, then keep accumulating the
         # current cell and move on to the next line.
@@ -490,12 +503,10 @@ def _parse_source_notebook(path: str, encoding: str) -> Notebook:
         if not m:
             # Not a magic line. It is, therefore, a code cell of the same
             # type as the base language of the notebook.
-            debug(f'{path}, line {line_num}: No magic')
+            debug(f"{path}, line {line_num}: No magic")
             command_buf.append(line)
             cur_cell = dataclasses.replace(
-                cur_cell,
-                cell_type=CellType.from_language(language),
-                marked_magic=False
+                cur_cell, cell_type=CellType.from_language(language), marked_magic=False
             )
             continue
 
@@ -507,33 +518,36 @@ def _parse_source_notebook(path: str, encoding: str) -> Notebook:
 
         # Extract cell type, if it exists.
         debug(f'"{path}", line {line_num}: Magic')
-        if (not token) or (token[0] != '%'):
+        if (not token) or (token[0] != "%"):
             raise NotebookParseError(
                 f'"{path}", line {line_num}: Bad first magic cell line: {line}'
             )
 
         command_buf.append(line)
         cur_cell = dataclasses.replace(
-            cur_cell, cell_type=CellType.from_string(token),
+            cur_cell,
+            cell_type=CellType.from_string(token),
         )
 
     # If there's an unfinished cell left, finish it.
     if cur_cell != EmptyCell:
-        cells.append(
-            dataclasses.replace(cur_cell, command='\n'.join(command_buf))
-        )
+        cells.append(dataclasses.replace(cur_cell, command="\n".join(command_buf)))
 
-    cells = [dataclasses.replace(cell, position=i + 1, guid=uuid.uuid4())
-             for i, cell in enumerate(cells)]
+    cells = [
+        dataclasses.replace(cell, position=i + 1, guid=uuid.uuid4())
+        for i, cell in enumerate(cells)
+    ]
     return Notebook(cells=cells, path=path)
+
 
 # -----------------------------------------------------------------------------
 # Public Functions
 # -----------------------------------------------------------------------------
 
-def parse_source_notebook(path: str,
-                          encoding: str,
-                          debugging: bool = False) -> Notebook:
+
+def parse_source_notebook(
+    path: str, encoding: str, debugging: bool = False
+) -> Notebook:
     """
     Parse a Databricks source notebook into a Notebook object.
 

@@ -6,9 +6,10 @@ from configparser import ConfigParser
 import os
 import pytest
 
+
 def base_config():
     return strip_margin(
-        '''|[foo]
+        """|[foo]
            |host: https://foo.cloud.databricks.com
            |token: kjhadsfkjhasdflkjhasdf
            |[bar]
@@ -33,66 +34,66 @@ def base_config():
            |token: sadfuiy23894uihjksafdhkjl
            |host: https://home.cloud.databricks.com
            |username: user@databricks.com
-           |'''
+           |"""
     )
 
 
 @pytest.fixture(scope="module")
 def config() -> str:
     with TemporaryDirectory() as dir:
-        path = os.path.join(dir, 'dbcfg')
-        with open(path, 'w') as f:
+        path = os.path.join(dir, "dbcfg")
+        with open(path, "w") as f:
             f.write(base_config())
 
-        if os.environ.get('DB_SHARD_HOME'):
-            del os.environ['DB_SHARD_HOME']
+        if os.environ.get("DB_SHARD_HOME"):
+            del os.environ["DB_SHARD_HOME"]
         yield path
 
 
 @pytest.fixture(scope="module")
 def config_with_default() -> str:
     with TemporaryDirectory() as dir:
-        path = os.path.join(dir, 'dbcfg2')
-        with open(path, 'w') as f:
+        path = os.path.join(dir, "dbcfg2")
+        with open(path, "w") as f:
             default = strip_margin(
-                '''|[DEFAULT]
+                """|[DEFAULT]
                    |host: https://default.cloud.databricks.com
                    |token: default_token
                    |home: /Users/bmc@example.com
-                '''
+                """
             )
             print(default + base_config())
             f.write(default + base_config())
 
-        if os.environ.get('DB_SHARD_HOME'):
-            del os.environ['DB_SHARD_HOME']
+        if os.environ.get("DB_SHARD_HOME"):
+            del os.environ["DB_SHARD_HOME"]
         yield path
 
 
 def test_missing_host(config):
     with pytest.raises(DatabricksError) as exc_info:
-        Workspace('missing_host', config)
+        Workspace("missing_host", config)
 
     assert exc_info.value.code == StatusCode.CONFIG_ERROR
 
 
 def test_missing_token(config):
     with pytest.raises(DatabricksError) as exc_info:
-        Workspace('missing_token', config)
+        Workspace("missing_token", config)
 
     assert exc_info.value.code == StatusCode.CONFIG_ERROR
 
 
 def test_missing_home_and_token(config):
     with pytest.raises(DatabricksError) as exc_info:
-        Workspace('empty', config)
+        Workspace("empty", config)
 
     assert exc_info.value.code == StatusCode.CONFIG_ERROR
 
 
 def test_missing_section(config):
     with pytest.raises(DatabricksError) as exc_info:
-        Workspace('nosuchsection', config)
+        Workspace("nosuchsection", config)
 
     assert exc_info.value.code == StatusCode.CONFIG_ERROR
 
@@ -100,76 +101,76 @@ def test_missing_section(config):
 def test_has_all_three(config):
     cfg = ConfigParser()
     cfg.read(config)
-    section = cfg['bar']
+    section = cfg["bar"]
 
-    w = Workspace('bar', config)
-    assert w.home == section['home']
-    assert w.host == databricks._fix_host(section['host'])
-    assert w.token == section['token']
+    w = Workspace("bar", config)
+    assert w.home == section["home"]
+    assert w.host == databricks._fix_host(section["host"])
+    assert w.token == section["token"]
 
 
 def test_default_with_missing_host(config_with_default):
     cfg = ConfigParser()
     cfg.read(config_with_default)
-    default = cfg['DEFAULT']
-    section = cfg['missing_host']
+    default = cfg["DEFAULT"]
+    section = cfg["missing_host"]
 
-    w = Workspace('missing_host', config_with_default)
-    assert w.token == section['token']
-    assert w.home == section['home']
-    assert w.host == databricks._fix_host(default['host'])
+    w = Workspace("missing_host", config_with_default)
+    assert w.token == section["token"]
+    assert w.home == section["home"]
+    assert w.host == databricks._fix_host(default["host"])
 
 
 def test_default_with_missing_token(config_with_default):
     cfg = ConfigParser()
     cfg.read(config_with_default)
-    default = cfg['DEFAULT']
-    section = cfg['missing_token']
+    default = cfg["DEFAULT"]
+    section = cfg["missing_token"]
 
-    w = Workspace('missing_token', config_with_default)
-    assert w.token == default['token']
-    assert w.home == section['home']
-    assert w.host == databricks._fix_host(section['host'])
+    w = Workspace("missing_token", config_with_default)
+    assert w.token == default["token"]
+    assert w.home == section["home"]
+    assert w.host == databricks._fix_host(section["host"])
 
 
 def test_default_with_missing_home(config_with_default):
     cfg = ConfigParser()
     cfg.read(config_with_default)
-    default = cfg['DEFAULT']
-    section = cfg['missing_home']
+    default = cfg["DEFAULT"]
+    section = cfg["missing_home"]
 
-    w = Workspace('missing_home', config_with_default)
-    assert w.token == section['token']
-    assert w.home == default['home']
-    assert w.host == databricks._fix_host(section['host'])
+    w = Workspace("missing_home", config_with_default)
+    assert w.token == section["token"]
+    assert w.home == default["home"]
+    assert w.host == databricks._fix_host(section["host"])
 
 
 def test_default_with_missing_all(config_with_default):
     cfg = ConfigParser()
     cfg.read(config_with_default)
-    default = cfg['DEFAULT']
+    default = cfg["DEFAULT"]
 
-    w = Workspace('empty', config_with_default)
-    assert w.token == default['token']
-    assert w.home == default['home']
-    assert w.host == databricks._fix_host(default['host'])
+    w = Workspace("empty", config_with_default)
+    assert w.token == default["token"]
+    assert w.home == default["home"]
+    assert w.host == databricks._fix_host(default["host"])
 
 
 def test_default(config_with_default):
     cfg = ConfigParser()
     cfg.read(config_with_default)
-    default = cfg['DEFAULT']
+    default = cfg["DEFAULT"]
 
     w = Workspace(config=config_with_default)
-    assert w.token == default['token']
-    assert w.home == default['home']
-    assert w.host == databricks._fix_host(default['host'])
+    assert w.token == default["token"]
+    assert w.home == default["home"]
+    assert w.host == databricks._fix_host(default["host"])
 
 
 def test_user_home_default(config):
     cfg = ConfigParser()
     cfg.read(config)
-    section = cfg['has_user_not_home']
-    user = section['username']
-    w = Workspace(config=config, profile='has_user_not_home')
-    assert w.home == f'/Users/{user}'
+    section = cfg["has_user_not_home"]
+    user = section["username"]
+    w = Workspace(config=config, profile="has_user_not_home")
+    assert w.home == f"/Users/{user}"

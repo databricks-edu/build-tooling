@@ -4,13 +4,15 @@ from tempfile import TemporaryDirectory
 import os
 import pytest
 
+
 @pytest.fixture(scope="module")
 def config() -> str:
     with TemporaryDirectory() as dir:
-        path = os.path.join(dir, 'dbcfg')
-        with open(path, 'w') as f:
-            f.write(strip_margin(
-                '''|[foo]
+        path = os.path.join(dir, "dbcfg")
+        with open(path, "w") as f:
+            f.write(
+                strip_margin(
+                    """|[foo]
                    |host: https://foo.cloud.databricks.com
                    |token: kjhadsfkjhasdflkjhasdf
                    |[bar]
@@ -21,55 +23,56 @@ def config() -> str:
                    |host: https://baz.cloud.databricks.com
                    |token: kjhadsfkjhasdflkjhasdf
                    |username: baz@databricks.com
-                   |'''
-            ))
+                   |"""
+                )
+            )
         yield path
 
 
 def test_relative_path_no_home(config: str):
     with pytest.raises(DatabricksError) as exc_info:
-        if os.environ.get('DB_SHARD_HOME'):
-            del os.environ['DB_SHARD_HOME']
-        w = Workspace('foo', config)
-        w._adjust_remote_path('foo/bar')
+        if os.environ.get("DB_SHARD_HOME"):
+            del os.environ["DB_SHARD_HOME"]
+        w = Workspace("foo", config)
+        w._adjust_remote_path("foo/bar")
 
     assert exc_info.value.code == StatusCode.CONFIG_ERROR
 
 
 def test_relative_path_env_home(config: str):
-    home = '/Users/foo@example.com'
-    os.environ['DB_SHARD_HOME'] = home
-    path = 'SomeFolder'
-    w = Workspace('foo', config)
+    home = "/Users/foo@example.com"
+    os.environ["DB_SHARD_HOME"] = home
+    path = "SomeFolder"
+    w = Workspace("foo", config)
     p = w._adjust_remote_path(path)
-    assert p == f'{home}/{path}'
+    assert p == f"{home}/{path}"
 
 
 def test_relative_path_cfg_home(config: str):
-    if os.environ.get('DB_SHARD_HOME'):
-        del os.environ['DB_SHARD_HOME']
-    path = 'SomeFolder'
-    w = Workspace('bar', config)
+    if os.environ.get("DB_SHARD_HOME"):
+        del os.environ["DB_SHARD_HOME"]
+    path = "SomeFolder"
+    w = Workspace("bar", config)
     p = w._adjust_remote_path(path)
-    assert p == f'/Users/someone@example.com/{path}'
+    assert p == f"/Users/someone@example.com/{path}"
 
 
 def test_relative_path_cfg_and_env_home(config: str):
-    home = '/Users/foo@example.com'
-    os.environ['DB_SHARD_HOME'] = home
-    path = 'SomeFolder'
-    w = Workspace('bar', config)
+    home = "/Users/foo@example.com"
+    os.environ["DB_SHARD_HOME"] = home
+    path = "SomeFolder"
+    w = Workspace("bar", config)
     p = w._adjust_remote_path(path)
     # Environment should be preferred over the config.
-    assert p == f'{home}/{path}'
+    assert p == f"{home}/{path}"
 
 
 def test_relative_path_and_username_default(config: str):
-    home = '/Users/foo@example.com'
-    if os.environ.get('DB_SHARD_HOME'):
-        del os.environ['DB_SHARD_HOME']
-    path = 'SomeFolder'
-    w = Workspace('baz', config)
+    home = "/Users/foo@example.com"
+    if os.environ.get("DB_SHARD_HOME"):
+        del os.environ["DB_SHARD_HOME"]
+    path = "SomeFolder"
+    w = Workspace("baz", config)
     p = w._adjust_remote_path(path)
-    assert w.home == '/Users/baz@databricks.com'
-    assert p == f'{w.home}/{path}'
+    assert w.home == "/Users/baz@databricks.com"
+    assert p == f"{w.home}/{path}"

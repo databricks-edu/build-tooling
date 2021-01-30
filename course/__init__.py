@@ -1,8 +1,8 @@
 #!/usr/bin/env python
-'''
+"""
 This is the "course" curriculum development workflow tool. Run "course help"
 for complete documentation.
-'''
+"""
 
 import os
 import sys
@@ -14,34 +14,41 @@ from termcolor import colored
 from string import Template as StringTemplate
 import functools
 from subprocess import Popen
-from db_edu_util import (die, error, warn, debug, info, set_debug, databricks,
-                         working_directory)
+from db_edu_util import (
+    die,
+    error,
+    warn,
+    debug,
+    info,
+    set_debug,
+    databricks,
+    working_directory,
+)
 from db_edu_util.databricks import DatabricksError
-from typing import (Generator, Sequence, Pattern, NoReturn, Optional, Any,
-                    Dict, TextIO)
+from typing import Generator, Sequence, Pattern, NoReturn, Optional, Any, Dict, TextIO
 
 # -----------------------------------------------------------------------------
 # Constants
 # -----------------------------------------------------------------------------
 
-VERSION = '2.8.0'
+VERSION = "2.8.0"
 PROG = os.path.basename(sys.argv[0])
 
 CONFIG_PATH = os.path.expanduser("~/.databricks/course.cfg")
 
-USER = os.environ['USER'] # required
-PAGER_DEFAULT = 'less --RAW-CONTROL-CHARS'
-EDITOR_DEFAULT = 'open -a textedit'
-SOURCE_DEFAULT = '_Source'
-TARGET_DEFAULT = '_Build'
-AWS_PROFILE_DEFAULT = 'default'
-DB_PROFILE_DEFAULT = 'DEFAULT'
-COURSE_REPO_DEFAULT = os.path.expanduser('~/repos/training')
-DB_CONFIG_PATH_DEFAULT = os.path.expanduser('~/.databrickscfg')
-OPEN_DIR_DEFAULT = 'open' # Mac-specific, but can be configured.
-SELF_PACED_PATH_DEFAULT = os.path.join('courses', 'Self-Paced')
+USER = os.environ["USER"]  # required
+PAGER_DEFAULT = "less --RAW-CONTROL-CHARS"
+EDITOR_DEFAULT = "open -a textedit"
+SOURCE_DEFAULT = "_Source"
+TARGET_DEFAULT = "_Build"
+AWS_PROFILE_DEFAULT = "default"
+DB_PROFILE_DEFAULT = "DEFAULT"
+COURSE_REPO_DEFAULT = os.path.expanduser("~/repos/training")
+DB_CONFIG_PATH_DEFAULT = os.path.expanduser("~/.databrickscfg")
+OPEN_DIR_DEFAULT = "open"  # Mac-specific, but can be configured.
+SELF_PACED_PATH_DEFAULT = os.path.join("courses", "Self-Paced")
 
-USAGE = '''
+USAGE = """
 {0}, version {VERSION}
 
 USAGE
@@ -189,9 +196,9 @@ SUBCOMMANDS
     Default: {PAGER_DEFAULT}
   OPEN_DIR: Program to use to open a folder
     Default: {OPEN_DIR_DEFAULT}
-'''.format(
+""".format(
     PROG,
-    ' ' * len(PROG),
+    " " * len(PROG),
     CONFIG_PATH=CONFIG_PATH,
     VERSION=VERSION,
     PAGER_DEFAULT=PAGER_DEFAULT,
@@ -203,24 +210,27 @@ SUBCOMMANDS
     TARGET_DEFAULT=TARGET_DEFAULT,
     EDITOR_DEFAULT=EDITOR_DEFAULT,
     OPEN_DIR_DEFAULT=OPEN_DIR_DEFAULT,
-    SELF_PACED_PATH_DEFAULT=SELF_PACED_PATH_DEFAULT
+    SELF_PACED_PATH_DEFAULT=SELF_PACED_PATH_DEFAULT,
 )
 
-WARNING_PREFIX = 'WARNING: '
-ERROR_PREFIX = 'ERROR: '
-DEBUG_PREFIX = '(DEBUG) '
-COLUMNS = int(os.environ.get('COLUMNS', '80')) - 1
+WARNING_PREFIX = "WARNING: "
+ERROR_PREFIX = "ERROR: "
+DEBUG_PREFIX = "(DEBUG) "
+COLUMNS = int(os.environ.get("COLUMNS", "80")) - 1
 
 # -----------------------------------------------------------------------------
 # Classes
 # -----------------------------------------------------------------------------
 
+
 class CourseError(Exception):
     pass
+
 
 # -----------------------------------------------------------------------------
 # Internal functions
 # -----------------------------------------------------------------------------
+
 
 @contextmanager
 def noop(result: Any, *args: Any, **kw: Any) -> Any:
@@ -250,7 +260,7 @@ def pager(cfg: Dict[str, str]) -> Generator[None, TextIO, None]:
     """
     # Dump to a temporary file if the pager is defined. This allows the pager
     # to use stdin to read from the terminal.
-    the_pager = cfg.get('PAGER')
+    the_pager = cfg.get("PAGER")
     if the_pager:
         opener = NamedTemporaryFile
     else:
@@ -258,14 +268,14 @@ def pager(cfg: Dict[str, str]) -> Generator[None, TextIO, None]:
         # https://docs.python.org/2/library/functools.html#functools.partial
         opener = functools.partial(noop, sys.stdout)
 
-    with opener(mode='w') as out:
+    with opener(mode="w") as out:
         yield out
         out.flush()
 
         if the_pager:
             # In this case, we know we have a NamedTemporaryFile. We can
             # send the temporary file to the pager.
-            p = Popen(f'{the_pager} <{out.name}', shell=True)
+            p = Popen(f"{the_pager} <{out.name}", shell=True)
             p.wait()
 
 
@@ -278,9 +288,7 @@ def check_for_docker(command: str) -> NoReturn:
         )
 
 
-def cmd(shell_command: str,
-        quiet: bool = False,
-        dryrun: bool = False) -> NoReturn:
+def cmd(shell_command: str, quiet: bool = False, dryrun: bool = False) -> NoReturn:
     """
     Run a shell command.
 
@@ -295,7 +303,7 @@ def cmd(shell_command: str,
     if not dryrun:
         rc = os.system(shell_command)
         if rc != 0:
-            raise CourseError(f'Command exited with {rc}')
+            raise CourseError(f"Command exited with {rc}")
 
 
 def quote_shell_arg(arg: str) -> str:
@@ -305,17 +313,17 @@ def quote_shell_arg(arg: str) -> str:
     :param arg:
     :return: possibly changed argument
     """
-    quoted = ''
+    quoted = ""
     q = arg[0]
     if q in ('"', "'"):
         # Already quoted, hopefully.
         if arg[-1] != q:
-            raise CourseError(f'Mismatched quotes in shell argument: {arg}')
+            raise CourseError(f"Mismatched quotes in shell argument: {arg}")
         quoted = arg
     elif ('"' in arg) and ("'" in arg):
         raise CourseError(
-            'Shell argument cannot be quoted, since it contains single AND '
-            f'double quotes: {arg}'
+            "Shell argument cannot be quoted, since it contains single AND "
+            f"double quotes: {arg}"
         )
     elif "'" in arg:
         quoted = '"' + arg + '"'
@@ -325,9 +333,9 @@ def quote_shell_arg(arg: str) -> str:
     return quoted
 
 
-def load_config(config_path: str,
-                apply_defaults: bool = True,
-                show_warnings: bool = False) -> Dict[str, str]:
+def load_config(
+    config_path: str, apply_defaults: bool = True, show_warnings: bool = False
+) -> Dict[str, str]:
     """
     Load the configuration file.
 
@@ -345,7 +353,7 @@ def load_config(config_path: str,
     parent_dir = os.path.dirname(config_path)
     if os.path.isfile(parent_dir):
         raise CourseError(
-            f'''"{parent_dir}" already exists, but it isn't a directory.'''
+            f""""{parent_dir}" already exists, but it isn't a directory."""
         )
     if not os.path.exists(parent_dir):
         os.makedirs(parent_dir)
@@ -358,7 +366,7 @@ def load_config(config_path: str,
                     continue
                 if comment.search(line):
                     continue
-                fields = line.split('=')
+                fields = line.split("=")
                 if len(fields) != 2:
                     bad = True
                     error(f'"{config_path}", line {lno}: Malformed line')
@@ -379,30 +387,30 @@ def load_config(config_path: str,
         # value is None, that generally means it can be overridden on the
         # command line (or depends on something else that can be), so it's
         # checked at runtime.
-        ('DB_CONFIG_PATH', DB_CONFIG_PATH_DEFAULT, True),
-        ('DB_PROFILE', DB_PROFILE_DEFAULT, True),
-        ('DB_SHARD_HOME', None, True),
-        ('PREFIX', None, True),                      # set later
-        ('COURSE_NAME', None, True),                 # can be overridden
-        ('COURSE_REPO', COURSE_REPO_DEFAULT, True),
-        ('COURSE_HOME', None, False),                # depends on COURSE_NAME
-        ('COURSE_YAML', None, True),
-        ('COURSE_MODULES', None, False),             # depends on COURSE_NAME
-        ('COURSE_REMOTE_SOURCE', None, False),       # depends on COURSE_NAME
-        ('COURSE_REMOTE_TARGET', None, False),       # depends on COURSE_NAME
-        ('COURSE_AWS_PROFILE',  AWS_PROFILE_DEFAULT, True),
-        ('SELF_PACED_PATH', SELF_PACED_PATH_DEFAULT, True),
-        ('SOURCE', SOURCE_DEFAULT, True),
-        ('TARGET', TARGET_DEFAULT, True),
-        ('EDITOR', EDITOR_DEFAULT, True),
-        ('PAGER', PAGER_DEFAULT, True),
-        ('OPEN_DIR', OPEN_DIR_DEFAULT, True),
+        ("DB_CONFIG_PATH", DB_CONFIG_PATH_DEFAULT, True),
+        ("DB_PROFILE", DB_PROFILE_DEFAULT, True),
+        ("DB_SHARD_HOME", None, True),
+        ("PREFIX", None, True),  # set later
+        ("COURSE_NAME", None, True),  # can be overridden
+        ("COURSE_REPO", COURSE_REPO_DEFAULT, True),
+        ("COURSE_HOME", None, False),  # depends on COURSE_NAME
+        ("COURSE_YAML", None, True),
+        ("COURSE_MODULES", None, False),  # depends on COURSE_NAME
+        ("COURSE_REMOTE_SOURCE", None, False),  # depends on COURSE_NAME
+        ("COURSE_REMOTE_TARGET", None, False),  # depends on COURSE_NAME
+        ("COURSE_AWS_PROFILE", AWS_PROFILE_DEFAULT, True),
+        ("SELF_PACED_PATH", SELF_PACED_PATH_DEFAULT, True),
+        ("SOURCE", SOURCE_DEFAULT, True),
+        ("TARGET", TARGET_DEFAULT, True),
+        ("EDITOR", EDITOR_DEFAULT, True),
+        ("PAGER", PAGER_DEFAULT, True),
+        ("OPEN_DIR", OPEN_DIR_DEFAULT, True),
     )
 
     # Remove anything that cannot be overridden.
 
     for e, default, allow_override in setting_keys_and_defaults:
-        if (default is not None):
+        if default is not None:
             continue
 
         v = cfg.get(e)
@@ -411,8 +419,10 @@ def load_config(config_path: str,
 
         if not allow_override:
             if show_warnings:
-                warn(f'Ignoring "{e}" in the configuration file, because ' +
-                     "it's calculated at run-time.")
+                warn(
+                    f'Ignoring "{e}" in the configuration file, because '
+                    + "it's calculated at run-time."
+                )
             del cfg[e]
 
     if apply_defaults:
@@ -441,17 +451,19 @@ def get_self_paced_courses(cfg: Dict[str, str]) -> Sequence[str]:
     :return: the names of all self-paced courses (as simple directory names)
     """
 
-    self_paced_path = cfg['SELF_PACED_PATH']
+    self_paced_path = cfg["SELF_PACED_PATH"]
 
-    for rel_path in self_paced_path.split(':'):
-        self_paced_dir = os.path.join(cfg['COURSE_REPO'], rel_path)
+    for rel_path in self_paced_path.split(":"):
+        self_paced_dir = os.path.join(cfg["COURSE_REPO"], rel_path)
         if not os.path.isdir(self_paced_dir):
-            debug(f'Directory "{self_paced_dir}" (in SELF_PACED_PATH) ' +
-                  'does not exist.')
+            debug(
+                f'Directory "{self_paced_dir}" (in SELF_PACED_PATH) '
+                + "does not exist."
+            )
             continue
 
         for f in os.listdir(self_paced_dir):
-            if f[0] == '.':
+            if f[0] == ".":
                 continue
             full_path = os.path.join(self_paced_dir, f)
 
@@ -462,7 +474,7 @@ def get_self_paced_courses(cfg: Dict[str, str]) -> Sequence[str]:
                 if os.path.isdir(p):
                     continue
                 _, ext = os.path.splitext(course_file)
-                if course_file.startswith("build") and ext == '.yaml':
+                if course_file.startswith("build") and ext == ".yaml":
                     yield f
                     break
 
@@ -477,30 +489,30 @@ def update_config(cfg: Dict[str, str]) -> Dict[str, str]:
     :return: possibly adjusted configuration
     :raises CourseError: Configuration error.
     """
-    course = cfg.get('COURSE_NAME')
+    course = cfg.get("COURSE_NAME")
     if not course:
         return cfg
 
     from os.path import join, normpath
 
     adj = cfg.copy()
-    repo = adj['COURSE_REPO']
+    repo = adj["COURSE_REPO"]
 
     self_paced = list(get_self_paced_courses(cfg))
-    prefix = 'Self-Paced' if course in self_paced else ''
+    prefix = "Self-Paced" if course in self_paced else ""
 
-    adj['PREFIX'] = prefix
-    adj['COURSE_HOME'] = normpath(join(repo, 'courses', prefix, course))
-    if not adj.get('COURSE_YAML'):
-        adj['COURSE_YAML'] = join(adj['COURSE_HOME'], 'build.yaml')
-    adj['COURSE_MODULES'] = join(repo, 'modules', prefix, course)
+    adj["PREFIX"] = prefix
+    adj["COURSE_HOME"] = normpath(join(repo, "courses", prefix, course))
+    if not adj.get("COURSE_YAML"):
+        adj["COURSE_YAML"] = join(adj["COURSE_HOME"], "build.yaml")
+    adj["COURSE_MODULES"] = join(repo, "modules", prefix, course)
 
-    db_shard_home = adj.get('DB_SHARD_HOME')
+    db_shard_home = adj.get("DB_SHARD_HOME")
     if not db_shard_home:
         # Let the databricks Workspace layer figure out the appropriate value
         # for home.
         try:
-            w = databricks.Workspace(adj['DB_PROFILE'])
+            w = databricks.Workspace(adj["DB_PROFILE"])
             db_shard_home = w.home
         except databricks.DatabricksError as e:
             # Ignore config errors. ~/.databrickscfg might not be there.
@@ -508,8 +520,8 @@ def update_config(cfg: Dict[str, str]) -> Dict[str, str]:
                 raise
 
     if db_shard_home:
-        adj['COURSE_REMOTE_SOURCE'] = f'{db_shard_home}/{adj["SOURCE"]}/{course}'
-        adj['COURSE_REMOTE_TARGET'] = f'{db_shard_home}/{adj["TARGET"]}/{course}'
+        adj["COURSE_REMOTE_SOURCE"] = f'{db_shard_home}/{adj["SOURCE"]}/{course}'
+        adj["COURSE_REMOTE_TARGET"] = f'{db_shard_home}/{adj["TARGET"]}/{course}'
 
     return adj
 
@@ -528,12 +540,12 @@ def check_config(cfg: Dict[str, str], *keys: str) -> NoReturn:
     :raises ConfigError: on error
     """
     if not keys:
-        keys = ('COURSE_NAME', 'COURSE_REPO')
+        keys = ("COURSE_NAME", "COURSE_REPO")
     for key in keys:
         if not cfg.get(key):
             raise CourseError(
-                f'{key} must be set, either in the environment or in the ' +
-                'configuration file.'
+                f"{key} must be set, either in the environment or in the "
+                + "configuration file."
             )
 
 
@@ -546,21 +558,20 @@ def build_file_path(cfg: Dict[str, str]) -> NoReturn:
 
     :return: the path to the build file
     """
-    res = cfg.get('COURSE_YAML')
+    res = cfg.get("COURSE_YAML")
     if res:
         if not os.path.sep in res:
             # Simple file name. Join it with the course home.
-            res = os.path.join(cfg['COURSE_HOME'], res)
+            res = os.path.join(cfg["COURSE_HOME"], res)
     else:
-        res = os.path.join(cfg['COURSE_HOME'], 'build.yaml')
+        res = os.path.join(cfg["COURSE_HOME"], "build.yaml")
 
     return res
 
 
-def configure(cfg: Dict[str, str],
-              config_path: str,
-              key: str,
-              value: str) -> Dict[str, str]:
+def configure(
+    cfg: Dict[str, str], config_path: str, key: str, value: str
+) -> Dict[str, str]:
     """
     Add or update a key=value setting in both the in-memory configuration and
     the stored configuration.
@@ -580,16 +591,14 @@ def configure(cfg: Dict[str, str],
     # line, and those ephemeral changes should not be saved.)
     stored_cfg = load_config(config_path, apply_defaults=False)
     stored_cfg[key] = value
-    with open(config_path, 'w') as f:
+    with open(config_path, "w") as f:
         for k, v in sorted(stored_cfg.items()):
-            f.write(f'{k}={v}\n')
+            f.write(f"{k}={v}\n")
 
     return new_cfg
 
 
-def work_on(cfg: Dict[str, str],
-            course_name: str,
-            config_path: str) -> Dict[str, str]:
+def work_on(cfg: Dict[str, str], course_name: str, config_path: str) -> Dict[str, str]:
     """
     Change the course name in the configuration. Implicitly updates the
     in-memory configuration by calling update_config().
@@ -599,9 +608,7 @@ def work_on(cfg: Dict[str, str],
     :param config_path:
     :return:
     """
-    return update_config(
-        configure(cfg, config_path, 'COURSE_NAME', course_name)
-    )
+    return update_config(configure(cfg, config_path, "COURSE_NAME", course_name))
 
 
 def clean(cfg: Dict[str, str]) -> NoReturn:
@@ -615,8 +622,8 @@ def clean(cfg: Dict[str, str]) -> NoReturn:
     :return: Nothing
     """
     check_config(cfg)
-    db_profile = cfg['DB_PROFILE']
-    remote_target = cfg['COURSE_REMOTE_TARGET']
+    db_profile = cfg["DB_PROFILE"]
+    remote_target = cfg["COURSE_REMOTE_TARGET"]
 
     # It's odd to ensure that the directory exists before removing it, but
     # it's easier (and costs no more time, really) than to issue a REST call
@@ -638,8 +645,8 @@ def clean_source(cfg: Dict[str, str]) -> NoReturn:
     :return: Nothing
     """
     check_config(cfg)
-    db_profile = cfg['DB_PROFILE']
-    remote_source = cfg['COURSE_REMOTE_SOURCE']
+    db_profile = cfg["DB_PROFILE"]
+    remote_source = cfg["COURSE_REMOTE_SOURCE"]
 
     w = databricks.Workspace(profile=db_profile)
     w.mkdirs(remote_source)
@@ -658,11 +665,13 @@ def download(cfg: Dict[str, str]) -> NoReturn:
     :return: Nothing
     """
     check_config(cfg)
-    db_profile = cfg['DB_PROFILE']
-    bdc.bdc_download(build_file=build_file_path(cfg),
-                     shard_path=cfg['COURSE_REMOTE_SOURCE'],
-                     databricks_profile=db_profile,
-                     verbose=False)
+    db_profile = cfg["DB_PROFILE"]
+    bdc.bdc_download(
+        build_file=build_file_path(cfg),
+        shard_path=cfg["COURSE_REMOTE_SOURCE"],
+        databricks_profile=db_profile,
+        verbose=False,
+    )
 
 
 def upload(cfg: Dict[str, str]) -> NoReturn:
@@ -676,16 +685,16 @@ def upload(cfg: Dict[str, str]) -> NoReturn:
     :return: Nothing
     """
     check_config(cfg)
-    db_profile = cfg['DB_PROFILE']
-    bdc.bdc_upload(build_file=build_file_path(cfg),
-                   shard_path=cfg['COURSE_REMOTE_SOURCE'],
-                   databricks_profile=db_profile,
-                   verbose=False)
+    db_profile = cfg["DB_PROFILE"]
+    bdc.bdc_upload(
+        build_file=build_file_path(cfg),
+        shard_path=cfg["COURSE_REMOTE_SOURCE"],
+        databricks_profile=db_profile,
+        verbose=False,
+    )
 
 
-def import_dbcs(cfg:        Dict[str, str],
-                build_dir:  str,
-                build_file: str) -> NoReturn:
+def import_dbcs(cfg: Dict[str, str], build_dir: str, build_file: str) -> NoReturn:
     """
     Find all DBC files under the build output directory for the current course,
     and upload them (import them) into the Databricks instance.
@@ -697,22 +706,22 @@ def import_dbcs(cfg:        Dict[str, str],
     :return: NOthing
     """
     check_config(cfg)
-    remote_target = cfg['COURSE_REMOTE_TARGET']
-    db_profile = cfg['DB_PROFILE']
+    remote_target = cfg["COURSE_REMOTE_TARGET"]
+    db_profile = cfg["DB_PROFILE"]
 
     def import_dbc(dbc: str, build: bdc.BuildData) -> NoReturn:
-        '''
+        """
         Import a single DBC.
 
         Assumes (a) the working directory is the build directory, and
         (b) that the remote target path has already been created.
-        '''
+        """
         w = databricks.Workspace(profile=db_profile)
         if build.has_profiles:
             parent_subpath = os.path.dirname(dbc)
-            dir_to_make = f'{remote_target}/{os.path.dirname(parent_subpath)}'
+            dir_to_make = f"{remote_target}/{os.path.dirname(parent_subpath)}"
             w.mkdirs(dir_to_make)
-            remote_path = f'{remote_target}/{parent_subpath}'
+            remote_path = f"{remote_target}/{parent_subpath}"
         else:
             remote_path = remote_target
 
@@ -725,15 +734,15 @@ def import_dbcs(cfg:        Dict[str, str],
     print(f'Importing all DBCs under "{build_dir}" to remote "{remote_target}"')
     dbcs = []
     with working_directory(build_dir) as pwd:
-        for dirpath, _, filenames in os.walk('.'):
+        for dirpath, _, filenames in os.walk("."):
             for filename in filenames:
                 _, ext = os.path.splitext(filename)
-                if ext != '.dbc':
+                if ext != ".dbc":
                     continue
                 dbcs.append(os.path.normpath(os.path.join(dirpath, filename)))
 
         if not dbcs:
-            warn('No DBCs found.')
+            warn("No DBCs found.")
         else:
             clean(cfg)
             w = databricks.Workspace(profile=db_profile)
@@ -758,17 +767,14 @@ def build_local(cfg: Dict[str, str]) -> str:
 
     :return: the path to the build file, for convenience
     """
-    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
-    course_name = cfg['COURSE_NAME']
+    check_config(cfg, "COURSE_NAME", "COURSE_REPO")
+    course_name = cfg["COURSE_NAME"]
     build_file = build_file_path(cfg)
     if not os.path.exists(build_file):
         die('Build file "{}" does not exist.'.format(build_file))
 
     print(f"\nBuilding {course_name} using {os.path.basename(build_file)}")
-    bdc.bdc_build_course(build_file,
-                         dest_dir='',
-                         overwrite=True,
-                         verbose=False)
+    bdc.bdc_build_course(build_file, dest_dir="", overwrite=True, verbose=False)
 
     return build_file
 
@@ -808,15 +814,15 @@ def install_tools() -> NoReturn:
     """
     Install the build tools. Doesn't work inside a Docker container.
     """
-    info('"course install-tools" is deprecated, because it is not possible '
-         'to update a Docker container from within itself. To update the '
-         'build tools, run the following command:\n\n'
-         'curl -L https://git.io/fhaLg | bash')
+    info(
+        '"course install-tools" is deprecated, because it is not possible '
+        "to update a Docker container from within itself. To update the "
+        "build tools, run the following command:\n\n"
+        "curl -L https://git.io/fhaLg | bash"
+    )
 
 
-def browse_directory(cfg: Dict[str, str],
-                     path: str,
-                     subcommand: str) -> NoReturn:
+def browse_directory(cfg: Dict[str, str], path: str, subcommand: str) -> NoReturn:
     """
     Browse a directory, using whatever tool is configured as OPEN_DIR.
     Does not work inside Docker.
@@ -828,7 +834,7 @@ def browse_directory(cfg: Dict[str, str],
     :return: Nothing.
     """
     check_for_docker(subcommand)
-    open_dir = cfg['OPEN_DIR']
+    open_dir = cfg["OPEN_DIR"]
     cmd(f'{open_dir} "{path}"')
 
 
@@ -844,8 +850,8 @@ def edit_file(cfg: Dict[str, str], path: str, subcommand: str) -> NoReturn:
 
     :return: Nothing
     """
-    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
-    editor = cfg['EDITOR']
+    check_config(cfg, "COURSE_NAME", "COURSE_REPO")
+    editor = cfg["EDITOR"]
     cmd(f'{editor} "{path}"')
 
 
@@ -861,7 +867,7 @@ def edit_config(cfg: Dict[str, str]) -> Dict[str, str]:
 
     :return: The possibly modified configuration
     """
-    edit_file(cfg, CONFIG_PATH, 'config')
+    edit_file(cfg, CONFIG_PATH, "config")
     return load_config(CONFIG_PATH, show_warnings=True)
 
 
@@ -873,8 +879,8 @@ def git_status(cfg: Dict[str, str]) -> NoReturn:
 
     :return: Nothing
     """
-    course_repo = cfg['COURSE_REPO']
-    print(f'+ cd {course_repo}')
+    course_repo = cfg["COURSE_REPO"]
+    print(f"+ cd {course_repo}")
     with working_directory(course_repo):
         cmd("git status")
 
@@ -888,9 +894,9 @@ def git_diff(cfg: Dict[str, str]) -> NoReturn:
 
     :return: Nothing
     """
-    check_config(cfg, 'COURSE_REPO')
-    course_repo = cfg['COURSE_REPO']
-    pager = cfg['PAGER']
+    check_config(cfg, "COURSE_REPO")
+    course_repo = cfg["COURSE_REPO"]
+    pager = cfg["PAGER"]
     with working_directory(course_repo):
         if not pager:
             cmd("git diff")
@@ -907,8 +913,8 @@ def git_difftool(cfg: Dict[str, str]) -> NoReturn:
 
     :return: Nothing
     """
-    check_config(cfg, 'COURSE_REPO')
-    course_repo = cfg['COURSE_REPO']
+    check_config(cfg, "COURSE_REPO")
+    course_repo = cfg["COURSE_REPO"]
     check_for_docker("difftool")
     with working_directory(course_repo):
         cmd("git difftool --tool=opendiff --no-prompt")
@@ -939,9 +945,7 @@ def deploy_images(cfg: Dict[str, str]) -> NoReturn:
     warn("'deploy-images' is not yet implemented.")
 
 
-def grep(cfg: Dict[str, str],
-         pattern: str,
-         case_blind: bool = False) -> NoReturn:
+def grep(cfg: Dict[str, str], pattern: str, case_blind: bool = False) -> NoReturn:
     """
     Searches for the specified regular expression in every notebook within
     the current course, printing the colorized matches to standard output.
@@ -959,11 +963,9 @@ def grep(cfg: Dict[str, str],
     """
 
     def grep_one(path: str, r: Pattern, out: TextIO) -> NoReturn:
-        home = os.environ['HOME']
+        home = os.environ["HOME"]
         if home:
-            printable_path = os.path.join(
-                '~', path[len(home)+1:]
-            )
+            printable_path = os.path.join("~", path[len(home) + 1 :])
         else:
             printable_path = path
 
@@ -975,19 +977,18 @@ def grep(cfg: Dict[str, str],
                     continue
 
                 # If there's a pager, colorize the match.
-                if cfg.get('PAGER'):
+                if cfg.get("PAGER"):
                     s = m.start()
                     e = m.end()
                     matches.append(
-                        line[:s] +
-                        colored(line[s:e], 'red', attrs=['bold']) +
-                        line[e:])
+                        line[:s] + colored(line[s:e], "red", attrs=["bold"]) + line[e:]
+                    )
                 else:
                     matches.append(line)
 
         if matches:
-            out.write(f'\n\n=== {printable_path}\n\n')
-            out.write(''.join(matches))
+            out.write(f"\n\n=== {printable_path}\n\n")
+            out.write("".join(matches))
 
     r = None
     try:
@@ -996,7 +997,7 @@ def grep(cfg: Dict[str, str],
     except Exception as e:
         die(f'Cannot compile regular expression "{pattern}": {e}')
 
-    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
+    check_config(cfg, "COURSE_NAME", "COURSE_REPO")
     with pager(cfg) as out:
         for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
             grep_one(nb, r, out)
@@ -1013,22 +1014,20 @@ def sed(cfg: Dict[str, str], sed_cmd: str) -> NoReturn:
 
     :return: Nothing
     """
-    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
+    check_config(cfg, "COURSE_NAME", "COURSE_REPO")
     for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
         # Quote the argument.
         q = sed_cmd[0]
         if q in ('"', "'"):
             # Already quoted, hopefully.
             if sed_cmd[-1] != q:
-                raise CourseError(
-                    f'Mismatched quotes in sed argument: {sed_cmd}'
-                )
+                raise CourseError(f"Mismatched quotes in sed argument: {sed_cmd}")
             quoted = sed_cmd
         elif ('"' in sed_cmd) and ("'" in sed_cmd):
             raise CourseError(
-                '"sed" argument cannot be quoted, since it contains ' +
-                f'single AND double quotes: {sed_cmd}'
-             )
+                '"sed" argument cannot be quoted, since it contains '
+                + f"single AND double quotes: {sed_cmd}"
+            )
         elif "'" in sed_cmd:
             quoted = '"' + sed_cmd + '"'
         else:
@@ -1037,9 +1036,9 @@ def sed(cfg: Dict[str, str], sed_cmd: str) -> NoReturn:
         cmd(f'sed -E -i "" -e {quoted} "{nb}"')
 
 
-def run_command_on_notebooks(cfg: Dict[str, str],
-                             command: str,
-                             args: Sequence[str]) -> NoReturn:
+def run_command_on_notebooks(
+    cfg: Dict[str, str], command: str, args: Sequence[str]
+) -> NoReturn:
     """
     Runs a command on every notebook in the current course.
 
@@ -1049,13 +1048,13 @@ def run_command_on_notebooks(cfg: Dict[str, str],
 
     :return: Nothing
     """
-    check_config(cfg, 'COURSE_NAME', 'COURSE_REPO')
+    check_config(cfg, "COURSE_NAME", "COURSE_REPO")
     for nb in bdc.bdc_get_notebook_paths(build_file_path(cfg)):
         if args:
-            quoted = ' '.join([quote_shell_arg(arg) for arg in args])
-            shell_command = f'{command} {quoted} {nb}'
+            quoted = " ".join([quote_shell_arg(arg) for arg in args])
+            shell_command = f"{command} {quoted} {nb}"
         else:
-            shell_command = f'{command} {nb}'
+            shell_command = f"{command} {nb}"
 
         try:
             cmd(shell_command)
@@ -1074,9 +1073,6 @@ def print_tool_versions() -> NoReturn:
     import db_edu_util
     from databricks_cli.version import version as dbcli_version
 
-
-
-
     print(f"course:                {VERSION}")
     print(f"bdc:                   {bdc.VERSION}")
     print(f"gendbc:                {gendbc.VERSION}")
@@ -1086,19 +1082,20 @@ def print_tool_versions() -> NoReturn:
 
 
 def which(cfg: Dict[str, str]) -> NoReturn:
-    course_name = cfg.get('COURSE_NAME')
+    course_name = cfg.get("COURSE_NAME")
     if course_name:
-        print(cfg['COURSE_NAME'])
+        print(cfg["COURSE_NAME"])
     else:
-        print('No course has been set.')
+        print("No course has been set.")
 
 
 # -----------------------------------------------------------------------------
 # Main program
 # -----------------------------------------------------------------------------
 
+
 def main():
-    if os.environ.get('COURSE_DEBUG', 'false') == 'true':
+    if os.environ.get("COURSE_DEBUG", "false") == "true":
         set_debug(True)
 
     try:
@@ -1108,8 +1105,8 @@ def main():
 
         # Update the environment, for subprocesses we need to invoke.
 
-        os.environ['EDITOR'] = cfg['EDITOR']
-        os.environ['PAGER'] = cfg['PAGER']
+        os.environ["EDITOR"] = cfg["EDITOR"]
+        os.environ["PAGER"] = cfg["PAGER"]
 
         # Loop over the argument list, since we need to support chaining some
         # commands (e.g., "course download build"). This logic emulates
@@ -1126,114 +1123,114 @@ def main():
         while i < len(args):
             cmd = args[i]
 
-            if cmd in ('--version', '-V'):
+            if cmd in ("--version", "-V"):
                 print(VERSION)
                 break
 
-            if cmd in ('toolversions', 'tool-versions'):
+            if cmd in ("toolversions", "tool-versions"):
                 print_tool_versions()
                 break
 
-            if cmd in ('-n', '--name'):
+            if cmd in ("-n", "--name"):
                 try:
                     i += 1
                     # Changing the name of the course has to reset the
                     # build.yaml name.
-                    del cfg['COURSE_YAML']
-                    cfg['COURSE_NAME'] = args[i]
+                    del cfg["COURSE_YAML"]
+                    cfg["COURSE_NAME"] = args[i]
                     cfg = update_config(cfg)
                 except IndexError:
                     die("Saw -n or --name without subsequent course name.")
 
-            elif cmd in ('-f', '--build-file'):
+            elif cmd in ("-f", "--build-file"):
                 try:
                     i += 1
-                    cfg['COURSE_YAML'] = args[i]
+                    cfg["COURSE_YAML"] = args[i]
                     cfg = update_config(cfg)
                 except IndexError:
                     die("Saw -f or --build-file without subsequent file name.")
 
-            elif cmd in ('-h', '--help', 'help', 'usage'):
+            elif cmd in ("-h", "--help", "help", "usage"):
                 help(cfg)
                 break
 
-            elif cmd in ('work-on', 'workon'):
+            elif cmd in ("work-on", "workon"):
                 try:
                     i += 1
                     cfg = work_on(cfg, args[i], CONFIG_PATH)
                 except IndexError:
                     die('Expected course name after "work-on".')
 
-            elif cmd == 'tag':
+            elif cmd == "tag":
                 git_tag(cfg)
 
-            elif cmd == 'which':
+            elif cmd == "which":
                 which(cfg)
 
-            elif cmd in ('install-tools', 'installtools'):
+            elif cmd in ("install-tools", "installtools"):
                 install_tools()
 
-            elif cmd == 'download':
+            elif cmd == "download":
                 download(cfg)
 
-            elif cmd == 'upload':
+            elif cmd == "upload":
                 upload(cfg)
 
-            elif cmd in ('upload-built', 'uploadbuilt'):
+            elif cmd in ("upload-built", "uploadbuilt"):
                 upload_build(cfg)
 
-            elif cmd == 'build':
+            elif cmd == "build":
                 build_and_upload(cfg)
 
-            elif cmd in ('build-local', 'buildlocal'):
+            elif cmd in ("build-local", "buildlocal"):
                 build_local(cfg)
 
-            elif cmd == 'clean':
+            elif cmd == "clean":
                 clean(cfg)
 
-            elif cmd in ('clean-source', 'cleansource'):
+            elif cmd in ("clean-source", "cleansource"):
                 clean_source(cfg)
 
-            elif cmd in ('deploy-images', 'deployimages'):
+            elif cmd in ("deploy-images", "deployimages"):
                 deploy_images(cfg)
 
-            elif cmd == 'status':
+            elif cmd == "status":
                 git_status(cfg)
 
-            elif cmd == 'diff':
+            elif cmd == "diff":
                 git_diff(cfg)
 
-            elif cmd == 'difftool':
+            elif cmd == "difftool":
                 git_difftool(cfg)
 
-            elif cmd == 'home':
-                browse_directory(cfg, cfg['COURSE_HOME'], 'home')
+            elif cmd == "home":
+                browse_directory(cfg, cfg["COURSE_HOME"], "home")
 
-            elif cmd == 'modules':
-                browse_directory(cfg, cfg['COURSE_MODULES'], 'modules')
+            elif cmd == "modules":
+                browse_directory(cfg, cfg["COURSE_MODULES"], "modules")
 
-            elif cmd == 'repo':
-                browse_directory(cfg, cfg['COURSE_REPO'], 'repo')
+            elif cmd == "repo":
+                browse_directory(cfg, cfg["COURSE_REPO"], "repo")
 
-            elif cmd == 'config':
+            elif cmd == "config":
                 cfg = edit_config(cfg)
 
-            elif cmd == 'yaml':
-                edit_file(cfg, build_file_path(cfg), 'yaml')
+            elif cmd == "yaml":
+                edit_file(cfg, build_file_path(cfg), "yaml")
 
-            elif cmd == 'guide':
-                edit_file(cfg,
-                          os.path.join(cfg['COURSE_HOME'], 'Teaching-Guide.md'),
-                          'guide')
+            elif cmd == "guide":
+                edit_file(
+                    cfg, os.path.join(cfg["COURSE_HOME"], "Teaching-Guide.md"), "guide"
+                )
 
-            elif cmd == ('deploy-images', 'deployimages'):
+            elif cmd == ("deploy-images", "deployimages"):
                 deploy_images(cfg)
 
-            elif cmd == 'grep':
+            elif cmd == "grep":
                 try:
                     i += 1
                     pattern = args[i]
-                    if pattern == '-i':
+                    if pattern == "-i":
                         case_blind = True
                         i += 1
                         pattern = args[i]
@@ -1242,16 +1239,16 @@ def main():
 
                     grep(cfg, pattern, case_blind)
                 except IndexError:
-                    die('Missing grep argument(s).')
+                    die("Missing grep argument(s).")
 
-            elif cmd == 'sed':
+            elif cmd == "sed":
                 try:
                     i += 1
                     sed(cfg, args[i])
                 except IndexError:
-                    die('Missing sed argument.')
+                    die("Missing sed argument.")
 
-            elif cmd == 'xargs':
+            elif cmd == "xargs":
                 # All the remaining arguments go to the command.
                 try:
                     i += 1
@@ -1265,26 +1262,26 @@ def main():
                     run_command_on_notebooks(cfg, command, command_args)
                     break
                 except IndexError:
-                    die('Missing command to run.')
+                    die("Missing command to run.")
 
-            elif cmd == 'set':
+            elif cmd == "set":
                 try:
                     i += 1
                     setting = args[i]
-                    fields = setting.split('=')
+                    fields = setting.split("=")
                     if len(fields) != 2:
                         die('Argument to "set" must be of the form CONF=VAL.')
                     key, value = fields
-                    value = value.replace('"', '')
+                    value = value.replace('"', "")
                     cfg = configure(cfg, CONFIG_PATH, key, value)
                 except IndexError:
                     die('Missing CONF=VAL argument to "set".')
 
             elif cmd == "showconfig":
                 hdr = "Current configuration"
-                print('-' * len(hdr))
+                print("-" * len(hdr))
                 print(hdr)
-                print('-' * len(hdr))
+                print("-" * len(hdr))
                 for key in sorted(cfg.keys()):
                     print(f'{key}="{cfg[key]}"')
 
@@ -1300,7 +1297,8 @@ def main():
         error(str(e))
 
     except KeyboardInterrupt:
-        error('\n*** Interrupted.')
+        error("\n*** Interrupted.")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

@@ -19,8 +19,8 @@ import os
 import codecs
 import re
 
-if sys.version_info[0:2] < (3,7):
-    sys.stderr.write('Requires Python 3.\n')
+if sys.version_info[0:2] < (3, 7):
+    sys.stderr.write("Requires Python 3.\n")
     sys.exit(1)
 
 if len(sys.argv) == 2:
@@ -30,19 +30,20 @@ elif len(sys.argv) == 3:
     max_level = int(sys.argv[2])
     path = sys.argv[1]
 else:
-    print(f'Usage: {os.path.basename(sys.argv[0])} markdown [maxlevel]',
-          file=sys.stderr)
+    print(
+        f"Usage: {os.path.basename(sys.argv[0])} markdown [maxlevel]", file=sys.stderr
+    )
     sys.exit(1)
 
 in_fenced_block = False
-header_re = re.compile(r'^(#+)\s*(.*)\s*$')
-for line in codecs.open(sys.argv[1], mode='r', encoding='utf-8').readlines():
+header_re = re.compile(r"^(#+)\s*(.*)\s*$")
+for line in codecs.open(sys.argv[1], mode="r", encoding="utf-8").readlines():
     if len(line.strip()) == 0:
         continue
 
     line = line.rstrip()
 
-    if line.startswith('```'):
+    if line.startswith("```"):
         in_fenced_block = not in_fenced_block
         continue
 
@@ -54,22 +55,23 @@ for line in codecs.open(sys.argv[1], mode='r', encoding='utf-8').readlines():
         continue
 
     level = len(m.group(1)) - 1
-    text = m.group(2).strip().replace('\\', '')
+    text = m.group(2).strip().replace("\\", "")
 
-    if text.lower() == 'table of contents':
+    if text.lower() == "table of contents":
         continue
 
     if level > max_level:
         continue
 
-    link_id = ''.join(
-        [c for c in text.lower().replace(' ', '-')
-         if c not in ['\\', '.', ',', '`', '`', '"', "'"]]
+    link_id = "".join(
+        [
+            c
+            for c in text.lower().replace(" ", "-")
+            if c not in ["\\", ".", ",", "`", "`", '"', "'"]
+        ]
     )
-    link = '#' + link_id
+    link = "#" + link_id
 
-    indent = ' ' * 4 * level
+    indent = " " * 4 * level
 
-    print(f'{indent}- [{text}]({link})')
-
-
+    print(f"{indent}- [{text}]({link})")

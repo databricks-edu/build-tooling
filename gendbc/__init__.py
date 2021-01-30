@@ -17,13 +17,23 @@ from zipfile import ZipFile
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 
-from typing import Union, Sequence, Optional, NoReturn, Dict, Any
+from typing import Sequence, Optional, NoReturn, Dict, Any
 
 from db_edu_util.notebooktools import *
-from db_edu_util import (error, verbose, set_verbosity, warn, set_debug, info,
-                         verbosity_is_enabled, debug, debug_is_enabled, die)
+from db_edu_util import (
+    error,
+    verbose,
+    set_verbosity,
+    warn,
+    set_debug,
+    info,
+    verbosity_is_enabled,
+    debug,
+    debug_is_enabled,
+    die,
+)
 
-__all__ = ['Config', 'GendbcError', 'gendbc']
+__all__ = ["Config", "GendbcError", "gendbc"]
 
 # -----------------------------------------------------------------------------
 # Constants
@@ -33,7 +43,7 @@ VERSION = "2.1.2"
 
 PROG = os.path.basename(sys.argv[0])
 
-USAGE = ('''
+USAGE = """
 {0}, version {2}
 
 Usage:
@@ -63,7 +73,9 @@ SRCDIR is the source directory containing the notebooks. It is scanned
 recursively.
 
 DBC is the path to the DBC file to generate.
-'''.format(PROG, ' ' * len(PROG), VERSION))
+""".format(
+    PROG, " " * len(PROG), VERSION
+)
 
 WARNING_PREFIX = "*** WARNING: "
 DEBUG_PREFIX = "(DEBUG) "
@@ -73,6 +85,7 @@ ERROR_PREFIX = "ERROR: "
 # Classes
 # -----------------------------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Config:
     """
@@ -80,24 +93,25 @@ class Config:
     the command line arguments into an instance of this class. When called
     as an API, the caller must supply one of these.
     """
+
     dbc_folder: str
     source_dir: str
     dbc: str
     debug: bool = False
     verbose: bool = False
-    encoding: str = 'UTF-8'
+    encoding: str = "UTF-8"
     flatten: bool = False
     show_stack: bool = True
 
 
 class GendbcError(Exception):
-    def __init__(self, msg: str = ''):
+    def __init__(self, msg: str = ""):
         Exception.__init__(self, msg)
         self.message = msg
 
 
 class UsageError(Exception):
-    def __init__(self, msg: str = ''):
+    def __init__(self, msg: str = ""):
         Exception.__init__(self, msg)
         self.message = msg
 
@@ -105,6 +119,7 @@ class UsageError(Exception):
 # -----------------------------------------------------------------------------
 # Internal functions
 # -----------------------------------------------------------------------------
+
 
 def _find_notebooks(dir: str, encoding: str) -> Sequence[str]:
     """
@@ -139,7 +154,7 @@ def _parse_args() -> Dict[str, Any]:
     """
     args = docopt.docopt(USAGE, version=VERSION, options_first=True)
 
-    source_dir = args['SRCDIR']
+    source_dir = args["SRCDIR"]
     if not os.path.exists(source_dir):
         error(f'Source directory "{source_dir}" does not exist.')
         raise UsageError()
@@ -147,13 +162,12 @@ def _parse_args() -> Dict[str, Any]:
         error(f'Source directory "{source_dir}" is not a directory.')
         raise UsageError()
 
-    set_verbosity(args['--verbose'])
+    set_verbosity(args["--verbose"])
 
     return args
 
 
-def _adjust_paths (notebooks: Sequence[Notebook],
-                   params: Config) -> Sequence[str]:
+def _adjust_paths(notebooks: Sequence[Notebook], params: Config) -> Sequence[str]:
     """
     Adjusts the notebook paths, which means one of two things:
 
@@ -180,23 +194,23 @@ def _adjust_paths (notebooks: Sequence[Notebook],
                 paths.add(base)
                 adj_paths.append(base)
         if len(clashes) > 0:
-            clash_str = ', '.join([i for i in clashes])
+            clash_str = ", ".join([i for i in clashes])
             raise GendbcError(
-                'There are multiple notebooks with the following base file ' +
-                f'names, so flattening is not possible: {clash_str}'
+                "There are multiple notebooks with the following base file "
+                + f"names, so flattening is not possible: {clash_str}"
             )
     else:
         # Just strip the source directory from the paths.
         for nb in notebooks:
             if not nb.path.startswith(params.source_dir):
                 raise Exception(
-                    f'''(BUG) Notebook "{nb.path}" doesn't start with ''' +
-                    f'"{params.source_dir}".'
+                    f"""(BUG) Notebook "{nb.path}" doesn't start with """
+                    + f'"{params.source_dir}".'
                 )
             if nb.path == params.source_dir:
                 raise Exception(f'(BUG) Notebook IS source path?! "{nb.path}"')
 
-            new_path = nb.path[len(params.source_dir) + 1:]
+            new_path = nb.path[len(params.source_dir) + 1 :]
             adj_paths.append(new_path)
 
     if params.dbc_folder:
@@ -210,8 +224,7 @@ def _adjust_paths (notebooks: Sequence[Notebook],
     return adj_paths
 
 
-def _write_dbc(notebooks: Sequence[Notebook],
-               params: Config) -> NoReturn:
+def _write_dbc(notebooks: Sequence[Notebook], params: Config) -> NoReturn:
     """
     Convert a list of notebooks to JSON and write them to the DBC file.
 
@@ -230,40 +243,44 @@ def _write_dbc(notebooks: Sequence[Notebook],
             json = nb.to_json()
             # Wrinkle: Python JSON notebooks end in ".python", not ".py".
             file, ext = os.path.splitext(zpath)
-            if ext == '.py':
+            if ext == ".py":
                 zpath = f"{file}.python"
             out_path = os.path.join(tempdir, zpath)
             dirname = os.path.dirname(zpath)
-            if dirname and (dirname != '.'):
+            if dirname and (dirname != "."):
                 dirpath = os.path.join(tempdir, dirname)
                 if not os.path.exists(dirpath):
                     os.makedirs(dirpath)
-            with codecs.open(out_path, mode='w', encoding=params.encoding) as w:
+            with codecs.open(out_path, mode="w", encoding=params.encoding) as w:
                 w.write(json)
             verbose(f'Wrote JSON notebook "{out_path}".')
 
         # Create the zip file.
-        shutil.make_archive(params.dbc, 'zip', root_dir=tempdir)
+        shutil.make_archive(params.dbc, "zip", root_dir=tempdir)
 
         # make_archive() just created "something.dbc.zip". Rename it.
-        os.rename(params.dbc + '.zip', params.dbc)
+        os.rename(params.dbc + ".zip", params.dbc)
 
         # Finally, make_archive() did NOT create a comment in the zip file.
         # Let's add one, to indicate who created the DBC.
-        with ZipFile(params.dbc, 'a') as z:
-            z.comment = f"gendbc (Python), version {VERSION}".encode('ascii')
+        with ZipFile(params.dbc, "a") as z:
+            z.comment = f"gendbc (Python), version {VERSION}".encode("ascii")
+
 
 # -----------------------------------------------------------------------------
 # Public Functions
 # -----------------------------------------------------------------------------
 
-def gendbc(source_dir: str,
-           encoding: str,
-           dbc_path: str,
-           dbc_folder: str,
-           flatten: bool,
-           verbose: bool,
-           debugging: bool = False) -> NoReturn:
+
+def gendbc(
+    source_dir: str,
+    encoding: str,
+    dbc_path: str,
+    dbc_folder: str,
+    flatten: bool,
+    verbose: bool,
+    debugging: bool = False,
+) -> NoReturn:
     """
     Generate a DBC from all the notebooks under a specific source directory.
 
@@ -281,19 +298,21 @@ def gendbc(source_dir: str,
 
     :return: nothing
     """
-    params = Config(debug=debugging,
-                    verbose=verbose,
-                    encoding=encoding,
-                    dbc_folder=dbc_folder,
-                    flatten=flatten,
-                    show_stack=True,
-                    source_dir=source_dir,
-                    dbc=dbc_path)
+    params = Config(
+        debug=debugging,
+        verbose=verbose,
+        encoding=encoding,
+        dbc_folder=dbc_folder,
+        flatten=flatten,
+        show_stack=True,
+        source_dir=source_dir,
+        dbc=dbc_path,
+    )
 
-    if params.dbc_folder and ('/' in params.dbc_folder):
+    if params.dbc_folder and ("/" in params.dbc_folder):
         raise UsageError(
-            f'The specified DBC top folder, "{params.dbc_folder}", must be ' +
-            'a simple directory name, not a path.'
+            f'The specified DBC top folder, "{params.dbc_folder}", must be '
+            + "a simple directory name, not a path."
         )
 
     notebook_paths = _find_notebooks(params.source_dir, params.encoding)
@@ -301,27 +320,30 @@ def gendbc(source_dir: str,
     if len(notebook_paths) == 0:
         die(f'No source notebooks found under "{params.source_dir}".')
 
-    notebooks = [parse_source_notebook(i, params.encoding, debugging)
-                 for i in notebook_paths]
+    notebooks = [parse_source_notebook(i, params.encoding, debugging) for i in notebook_paths]
     _write_dbc(notebooks, params)
+
 
 # -----------------------------------------------------------------------------
 # Main program
 # -----------------------------------------------------------------------------
+
 
 def main():
     params = None
     show_stack = False
     try:
         args = _parse_args()
-        show_stack = args['--stack']
-        gendbc(source_dir=args['SRCDIR'],
-               encoding=args['--encoding'],
-               dbc_path=args['DBC'],
-               dbc_folder=args['--folder'],
-               flatten=args['--flatten'],
-               verbose=args['--verbose'],
-               debugging=args['--debug'])
+        show_stack = args["--stack"]
+        gendbc(
+            source_dir=args["SRCDIR"],
+            encoding=args["--encoding"],
+            dbc_path=args["DBC"],
+            dbc_folder=args["--folder"],
+            flatten=args["--flatten"],
+            verbose=args["--verbose"],
+            debugging=args["--debug"],
+        )
     except UsageError as e:
         if e.message:
             error(e.message)
@@ -335,5 +357,6 @@ def main():
             error(str(e))
         sys.exit(1)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

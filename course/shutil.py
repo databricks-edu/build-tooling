@@ -8,18 +8,18 @@ params = {
     "ilt": {
         "dirs": (
             ContentDir("static", "css", True),
-            ContentDir("assets", "img", False),
+            ContentDir("work/assets", "img", False),
             ContentDir("static", "js", True),
-            ContentDir("assets", "video", False),
+            ContentDir("work/assets", "video", False),
         ),
         "target": "output/ilt",
     },
     "scorm": {
         "dirs": (
             ContentDir("static", "css", True),
-            ContentDir("assets", "img", False),
+            ContentDir("work/assets", "img", False),
             ContentDir("static", "js", True),
-            ContentDir("assets", "video", False),
+            ContentDir("work/assets", "video", False),
         ),
         "target": "output/scorm/html",
     },

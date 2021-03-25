@@ -6,3 +6,4 @@ RUN apt-get update && apt-get install -y groff jq less zip
 USER jovyan
 RUN pip install git+https://github.com/databricks-edu/build-tooling@master
 COPY course-static /home/jovyan/static
+WORKDIR /home/jovyan/work

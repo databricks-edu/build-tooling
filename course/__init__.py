@@ -3,9 +3,9 @@ import glob
 import json
 import os
 import pystache
-from build.convert import concatenate_markdown, convert, convert_quiz
-from build.shutil import copy_scorm_files, copytree
-from build.utility import generate_output_path, load_course_info
+from course.convert import concatenate_markdown, convert, convert_quiz
+from course.shutil import copy_scorm_files, copytree
+from course.utility import generate_output_path, load_course_info
 
 
 @click.command()

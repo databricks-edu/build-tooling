@@ -25,8 +25,8 @@ function run_command_via_image {
   docker run -it --rm \
     -p 8888:8888 \
     -v `pwd`:/home/jovyan/work \
-    -v $HOME/.aws:$HOME/.aws \
-    -v $HOME/.databricks:$HOME/.databricks \
+    -v $HOME/.aws:/home/jovyan/.aws \
+    -v $HOME/.databricks:/home/jovyan/.databricks \
     databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG $COMMAND "$@"
 }
 

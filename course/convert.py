@@ -3,7 +3,7 @@ import os
 import shutil
 
 from bs4 import BeautifulSoup
-import pymustache
+import pystache
 import pypandoc
 
 
@@ -135,7 +135,7 @@ def convert_quiz(filename: str):
     """
 
     output = "\n".join(
-        [pymustache.render(template, quizQuestion) for quizQuestion in quizQuestions]
+        [pystache.render(template, quizQuestion) for quizQuestion in quizQuestions]
     )
 
     with open(f"output/scorm/html/quiz/questions-{section}.js", "w") as question_file:

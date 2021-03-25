@@ -2,7 +2,7 @@ import click
 import glob
 import json
 import os
-import pymustache
+import pystache
 from build.convert import concatenate_markdown, convert, convert_quiz
 from build.shutil import copy_scorm_files, copytree
 from build.utility import generate_output_path, load_course_info
@@ -60,7 +60,7 @@ def main(format: str, copy_large_assets: bool):
         ) as launch_html_file:
 
             head_template = head_template_file.read()
-            head_html = pymustache.render(
+            head_html = pystache.render(
                 head_template, {"title": course_info["title"]}
             )
 
@@ -74,7 +74,7 @@ def main(format: str, copy_large_assets: bool):
 
             for section_number, section_info in enumerate(file_titles):
                 section_page_number, section_title = section_info[0]
-                navbar_items += pymustache.render(
+                navbar_items += pystache.render(
                     navbar_item_template,
                     {
                         "page_number": section_page_number,
@@ -85,7 +85,7 @@ def main(format: str, copy_large_assets: bool):
                 list_group_item_anchors = ""
                 for i, lesson in enumerate(section_info[1:]):
                     lesson_page_number, lesson_title = lesson
-                    list_group_item_anchors += pymustache.render(
+                    list_group_item_anchors += pystache.render(
                         list_group_item_anchor_template,
                         {
                             "page_number": lesson_page_number,
@@ -94,7 +94,7 @@ def main(format: str, copy_large_assets: bool):
                         },
                     )
 
-                list_group_items += pymustache.render(
+                list_group_items += pystache.render(
                     list_group_item_template,
                     {
                         "section_page_number": section_page_number,
@@ -104,7 +104,7 @@ def main(format: str, copy_large_assets: bool):
                 )
 
             body_template = body_template_file.read()
-            body_html = pymustache.render(
+            body_html = pystache.render(
                 body_template,
                 {
                     "title": course_info["title"],
@@ -115,7 +115,7 @@ def main(format: str, copy_large_assets: bool):
             )
 
             launch_template = launch_template_file.read()
-            launch_html = pymustache.render(
+            launch_html = pystache.render(
                 launch_template, {"body": body_html, "head": head_html}
             )
 

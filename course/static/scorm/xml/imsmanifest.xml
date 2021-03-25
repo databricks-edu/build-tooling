@@ -1,0 +1,45 @@
+<?xml version="1.0" standalone="no" ?>
+<manifest identifier="com.databricks.academy.introdevworkflows" version="1"
+         xmlns="http://www.imsproject.org/xsd/imscp_rootv1p1p2"
+         xmlns:adlcp="http://www.adlnet.org/xsd/adlcp_rootv1p2"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://www.imsproject.org/xsd/imscp_rootv1p1p2 imscp_rootv1p1p2.xsd
+                             http://www.imsglobal.org/xsd/imsmd_rootv1p2p1 imsmd_rootv1p2p1.xsd
+                             http://www.adlnet.org/xsd/adlcp_rootv1p2 adlcp_rootv1p2.xsd">
+
+  <metadata>
+    <schema>ADL SCORM</schema>
+    <schemaversion>1.2</schemaversion>
+  </metadata>
+	<organizations default="databricks_academy">
+		<organization identifier="databricks_academy">
+			<title>Introduction to Development Workflows</title>
+			<item identifier="introdevworkflows" identifierref="RES">
+				<title>Introduction to Development Workflows</title>
+			</item>
+		</organization>
+	</organizations>
+	<resources>
+		<resource identifier="RES" type="webcontent" adlcp:scormtype="sco" href="launch.html">
+      <file href="launch.html" />
+      <file href="assessmenttemplate.html" />
+      <file href="html/css/theme-white.css" />
+      <file href="html/css/reset.css" />
+      <file href="html/css/databricks.css" />
+      <file href="html/css/reveal.css" />
+      <file href="html/css/launch.css" />
+      <file href="html/js/quiz/questions-5.js" />
+      <file href="html/js/quiz/questions-1.js" />
+      <file href="html/js/quiz/questions-4.js" />
+      <file href="html/js/quiz/quizmaker.js" />
+      <file href="html/js/quiz/questions-3.js" />
+      <file href="html/js/quiz/questions-7.js" />
+      <file href="html/js/quiz/questions-6.js" />
+      <file href="html/js/quiz/questions-2.js" />
+      <file href="html/js/scorm/actions.js" />
+      <file href="html/js/scorm/functions.js" />
+      <file href="html/js/scorm/timing.js" />
+      <file href="html/js/launch.js" />
+		</resource>
+	</resources>
+</manifest>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="author" content="Databricks Academy">
+  <title>$if(title-prefix)$$title-prefix$ – $endif$$pagetitle$</title>
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
+
+  <link rel="stylesheet" type="text/css" href="css/reset.css">
+  <link rel="stylesheet" type="text/css" href="css/reveal.css">
+  <link rel="stylesheet" type="text/css" href="css/theme-white.css" id="revealjs-theme">
+  <link rel="stylesheet" type="text/css" href="css/copycode.css" />
+  <link rel="stylesheet" type="text/css" href="css/arduino-light.css" id="highlight-theme">
+  <link rel="stylesheet" type="text/css" href="css/databricks.css"/>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+<!-- DO NOT INDENT THIS -->
+$body$
+<!-- I'm really serious. It will wreck all of your code blocks and drive you crazy trying to fix. -->
+
+    </div>
+  </div>
+
+  <script type="text/javascript" src="js/reveal.js/reveal.js"></script>
+  <script type="text/javascript" src="js/reveal.js/notes.js"></script>
+  <script type="text/javascript" src="js/reveal.js/zoom.js"></script>
+  <script type="text/javascript" src="js/reveal.js/math.js"></script>
+  <script type="text/javascript" src="js/reveal.js/highlight.js"></script>
+  <script type="text/javascript" src="js/reveal.js/clipboard.js"></script>
+  <script type="text/javascript" src="js/reveal.js-copycode/plugin/copycode/copycode.js"></script>
+  <script type="text/javascript" src="js/reveal.js/initialize.js"></script>
+</body>
+</html>

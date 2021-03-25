@@ -1,0 +1,150 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@700&display=swap');
+body, h1, h2, h3, h4, h5, h6, p, .slide-menu {
+  font-family: 'Barlow', sans-serif!important;
+  color: #434f54!important;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 400!important;
+  text-transform: capitalize!important;
+}
+
+h1 {
+  color: white!important;
+  font-size: 48px!important;
+  /* width: 720px!important;
+  margin: 0 auto!important; */
+}
+
+h2 {
+  font-size: 48px!important;
+  text-shadow: 1px 1px white!important;
+}
+
+h1 code, h2 code {
+  font-size: 44px!important;
+}
+
+h3 {
+  font-size: 40px!important;
+}
+
+p, li, dt {
+  text-align: left!important;
+  font-size: 24px!important;
+}
+
+a {
+  color: #1B3139;
+}
+
+a:hover {
+  text-decoration: underline!important;
+}
+
+code {
+  text-align: left!important;
+  font-size: 24px!important;
+}
+
+.column pre code {
+  font-size: 20px!important;
+}
+
+dd, dd code {
+  font-size: 16px!important;
+}
+
+dt {
+  margin-top: 16px;
+}
+
+dt {
+  margin-top: 12px;
+}
+
+img {
+    display: block!important;
+    margin: 0 auto!important;
+    max-height: 300px!important;
+}
+
+.backgrounds {
+  background-position-y: center;
+  background-repeat: no-repeat;
+}
+
+.code span.hljs-built_in {
+  color: #434f54!important;
+}
+
+.codeblock {
+  width: 90%!important;
+}
+
+.codeblock button {
+  font-size: 8px;
+  padding-top: 0px;
+}
+
+.codeblock code, .column .codeblock code {
+  font-size: 16px!important;
+  line-height: 18px!important;
+}
+
+.columns {
+  display: flex!important;
+}
+
+.column {
+  flex: 1!important;
+}
+
+.list-group.list-group-root > .list-group > .list-group-item {
+    padding-left: 30px;
+    font-size: 14px;
+}
+
+.question {
+  padding-bottom: 20px;
+}
+
+.reveal a {
+  color: #1B3139!important;
+  text-decoration: underline!important;
+}
+
+.reveal ol, .reveal ul, .reveal dl {
+  width: 80%!important;
+}
+
+.reveal pre code {
+  max-height: 250px!important;
+}
+
+.slide-section-header .slide-background-content{
+  background-image: url("../img/title.jpeg");
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.slide-lesson-header .slide-background-content{
+  background-image: url("../img/subtitle.jpeg");
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+#sidebar-wrapper, #sidebar-wrapper .list-group-item {
+  background-color: #1B3139!important;
+  color: #F3F3F3;
+  text-decoration: none;
+}
+
+.slide-menu-item-vertical, .slide-menu-toolbar, .slide-menu-overlay {
+  display: none!important;
+}
+
+.slide-menu-item-title {
+  font-size: 16px!important;
+}

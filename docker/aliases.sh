@@ -52,6 +52,11 @@ function bdc {
              databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG bdc "$@"
 }
 
+function course {
+  docker run -it --rm -w `pwd` -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
+    databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG course "$@"
+}
+
 function databricks {
   docker run -it --rm -w `pwd` -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
     databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG databricks "$@"
@@ -60,6 +65,11 @@ function databricks {
 function gendbc {
   docker run -it --rm -w `pwd` -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
     databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG gendbc "$@"
+}
+
+function jupyter {
+  docker run -it --rm -w `pwd` -p 8888:8888 -e COLUMNS=$COLUMNS -e HOME=$HOME -v $HOME:$HOME \
+    databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG
 }
 
 function master_parse {
@@ -80,13 +90,13 @@ function create_course_envfile {
 # The course tool can look at a lot of environment variables. To ease passing
 # the entire environment into the tool, this "alias" is defined as a function.
 
-function course {
+function dcourse {
 
-  TMP_ENV=/tmp/course-env.$$
+  TMP_ENV=/tmp/dcourse-env.$$
 
   create_course_envfile $TMP_ENV
 
-  docker run -it --rm -w `pwd` --env-file $TMP_ENV -e HOME=$HOME -v $HOME:$HOME databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG course "$@"
+  docker run -it --rm -w `pwd` --env-file $TMP_ENV -e HOME=$HOME -v $HOME:$HOME databrickseducation/build-tool:$BUILD_TOOL_DOCKER_TAG dcourse "$@"
 
   rm -f $TMP_ENV
 }
@@ -129,4 +139,3 @@ function update_tools {
 }
 
 alias update-tools=update_tools
-

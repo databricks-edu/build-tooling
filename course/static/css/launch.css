@@ -1,0 +1,13 @@
+iframe {
+  padding-top: 5%;
+}
+
+.assessment-header { line-height: 0.5}
+.mobile-nav { display: none; }
+
+@media (max-width:820px) {
+  .mobile-nav { display: block; }
+  .nav-link { padding: 0; }
+
+  #sidebar-wrapper { display: none; }
+}

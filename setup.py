@@ -18,7 +18,7 @@ import os
 import sys
 from contextlib import contextmanager
 
-VERSION = "1.16.0"
+VERSION = "1.17.0"
 
 
 @contextmanager
@@ -46,6 +46,7 @@ def run_cmd(command_string):
 PACKAGES = [
     "bdc",
     "course",
+    "dcourse",
     "db_edu_util",
     "gendbc",
     "master_parse",
@@ -75,12 +76,16 @@ setup(
     packages=PACKAGES,
     cmdclass={"test": TestCommand},
     install_requires=[
+        "awscli >= 1.19.36",
+        "beautifulsoup4 >= 4.9.0",
+        "click >= 7.1.2",
         "databricks-cli >= 0.8.7",
         "docopt >= 0.6.2",
         "GitPython >= 3.1.2",
         "grizzled-python >= 2.2.0",
         "markdown2 >= 2.3.7",
         "parsimonious >= 0.8.1",
+        "pypandoc >= 1.5",
         "pystache >= 0.5.4",
         "PyYAML >= 5.1",
         "nbformat >= 4.4.0",
@@ -92,6 +97,7 @@ setup(
         "console_scripts": [
             "bdc=bdc:main",
             "course=course:main",
+            "dcourse=dcourse:main",
             "gendbc=gendbc:main",
             "master_parse=master_parse:main",
         ]

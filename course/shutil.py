@@ -8,18 +8,18 @@ params = {
     "ilt": {
         "dirs": (
             ContentDir("static", "css", True),
-            ContentDir("work/assets", "img", False),
+            ContentDir("assets", "img", False),
             ContentDir("static", "js", True),
-            ContentDir("work/assets", "video", False),
+            ContentDir("assets", "video", False),
         ),
         "target": "output/ilt",
     },
     "scorm": {
         "dirs": (
             ContentDir("static", "css", True),
-            ContentDir("work/assets", "img", False),
+            ContentDir("assets", "img", False),
             ContentDir("static", "js", True),
-            ContentDir("work/assets", "video", False),
+            ContentDir("assets", "video", False),
         ),
         "target": "output/scorm/html",
     },
@@ -33,6 +33,8 @@ def copytree(output_format: str, kind: str, copy_large: bool = False):
         if dir.kind == kind and (dir.small or copy_large)
     ]
     target = params[output_format]["target"]
+    if kind == "assets":
+        kind = "work/assets"
     for dir in dirs:
         target_dir = f"{target}/{dir}"
         dir = f"/home/jovyan/{kind}/{dir}"

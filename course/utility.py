@@ -20,3 +20,10 @@ def load_course_info():
             "base_url"
         ] = f"https://files.training.databricks.com/courses/{course_info['unique_string']}/v{course_info['version']}"
         return course_info
+
+
+def read_template(name: str) -> str:
+    with open(
+        f"/home/jovyan/static/templates/launch-{name}.mustache", "r"
+    ) as template_file:
+        return template_file.read()

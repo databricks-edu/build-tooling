@@ -85,6 +85,7 @@ setup(
         "grizzled-python >= 2.2.0",
         "markdown2 >= 2.3.7",
         "parsimonious >= 0.8.1",
+        "pandocfilters >= 1.3.0",
         "pypandoc >= 1.5",
         "pystache >= 0.5.4",
         "PyYAML >= 5.1",

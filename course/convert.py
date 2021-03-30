@@ -39,8 +39,7 @@ def convert(filename: str, format: str):
     extra_args = {
         "docx": ["--resource-path=assets", "--resource-path=static"],
         "ilt": [
-            "-t",
-            "revealjs",
+            "-t", "revealjs",
             "--standalone",
             "--slide-level",
             "2",
@@ -48,6 +47,10 @@ def convert(filename: str, format: str):
             "theme=white",
             "--no-highlight",
         ],
+        "scorm" : [
+            "--shift-heading-level-by", "2",
+            "--standalone"
+        ]
     }
 
     markdown_text = load_markdown_as_html(filename)
@@ -69,6 +72,7 @@ def convert(filename: str, format: str):
             "to": "html",
             "outputfile": "output/ilt/"
             + os.path.basename(filename.replace(".md", ".html")),
+            "filters" : ["/home/jovyan/static/pandoc-filters/hr-to-header.py"],
             "extra_args": extra_args[format],
         }
     elif format == "scorm":
@@ -78,7 +82,7 @@ def convert(filename: str, format: str):
             "to": "html",
             "outputfile": "output/scorm/html/"
             + os.path.basename(filename.replace(".md", ".html")),
-            "extra_args": extra_args["ilt"],
+            "extra_args": extra_args[format],
         }
     pypandoc.convert_text(**kwargs)
     return this_title

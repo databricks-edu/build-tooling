@@ -51,6 +51,9 @@ function gendbc {
 function master_parse {
   run_command_via_image master_parse "$@"
 }
+function pandoc {
+  run_command_via_image pandoc "$@"
+}
 
 function update_tools {
   curl -L "https://git.io/fhaLg" | bash

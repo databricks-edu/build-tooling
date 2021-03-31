@@ -91,6 +91,10 @@ function goToPage(){
       document.querySelectorAll(".sub-item").forEach(a=>a.style.display = "none");
       document.querySelectorAll(".group-7").forEach(a=>a.style.display = "block");
     }
+
+    // document.querySelectorAll(".list-group a").forEach(a => a.classList.remove("active-launch"));
+    // document.querySelector("#page-" + currentPage + "-link").classList.add("active-launch");
+
 }
 
 function doUnload(pressedExit){

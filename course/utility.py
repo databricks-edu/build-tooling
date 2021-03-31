@@ -12,13 +12,16 @@ def generate_output_path(course_name: str, format: str) -> str:
     return file_handles[format]
 
 
-def load_course_info():
+def load_course_info(local: bool):
     with open("course-info.json", "r") as course_info_file:
         course_info = json.loads(course_info_file.read())
         course_info["unique_string"] = course_info["title"].lower().replace(" ", "-")
-        course_info[
-            "base_url"
-        ] = f"https://files.training.databricks.com/courses/{course_info['unique_string']}/v{course_info['version']}"
+        if local:
+            course_info["base_url"] = "html"
+        else:
+            course_info[
+                "base_url"
+            ] = f"https://files.training.databricks.com/courses/{course_info['unique_string']}/v{course_info['version']}"
         return course_info
 
 

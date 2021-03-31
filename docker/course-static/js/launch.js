@@ -21,8 +21,7 @@ function setIframeDims(navWidth) {
 
 function setIframeAttr(theIframe, boundingRect) {
     var width = boundingRect.width * .95;
-    var height = Math.round(width / 960 * 540)
-    theIframe.style.height = height + "px";
+    theIframe.style.height = "90%";
     theIframe.style.width = width + "px";
     theIframe.style.paddingLeft = Math.round((boundingRect.width - width)/2) + "px";
 }

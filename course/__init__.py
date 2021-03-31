@@ -14,9 +14,10 @@ from course.write import write_page_titles, write_scorm_launch_html
 @click.command()
 @click.option("--format", help="output format: docx, ilt, scorm")
 @click.option("--copy-large-assets/--no-copy-large-assets", default=False)
-def main(format: str, copy_large_assets: bool):
+@click.option("--local/--no-local", default=False)
+def main(format: str, copy_large_assets: bool, local: bool):
 
-    course_info = load_course_info()
+    course_info = load_course_info(local)
 
     copytree(format, "static", copy_large_assets)
     copytree(format, "assets", copy_large_assets)

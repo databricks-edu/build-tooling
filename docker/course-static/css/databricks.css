@@ -1,3 +1,7 @@
+html, body, .d-flex {
+  height: 100%;
+}
+
 @import url('https://fonts.googleapis.com/css2?family=Barlow&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@700&display=swap');
 body, h1, h2, h3, h4, h5, h6, p, .slide-menu {
@@ -70,6 +74,10 @@ img {
     max-height: 300px!important;
 }
 
+.active-launch {
+  background-color: #1C4856!important;
+}
+
 .backgrounds {
   background-position-y: center;
   background-repeat: no-repeat;
@@ -133,6 +141,10 @@ img {
   background-image: url("../img/subtitle.jpeg");
   background-repeat: no-repeat;
   background-size: contain;
+}
+
+.sidebar-heading {
+  font-size: 40px;
 }
 
 #sidebar-wrapper, #sidebar-wrapper .list-group-item {

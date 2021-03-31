@@ -7,4 +7,5 @@ USER jovyan
 RUN pip install git+https://github.com/databricks-edu/build-tooling@master
 COPY course-static /home/jovyan/static
 COPY course-static/templates/ilt.revealjs /home/jovyan/.pandoc/templates/default.revealjs
+COPY course-static/templates/scorm.html /home/jovyan/.pandoc/templates/default.html
 WORKDIR /home/jovyan/work

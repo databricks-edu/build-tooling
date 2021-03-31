@@ -48,7 +48,8 @@ def convert(filename: str, format: str):
             "--no-highlight",
         ],
         "scorm" : [
-            "--shift-heading-level-by", "2",
+            "--template", "/home/jovyan/.pandoc/templates/default.html",
+            # "--shift-heading-level-by", "2",
             "--standalone"
         ]
     }
